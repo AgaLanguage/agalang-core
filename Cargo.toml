@@ -1,0 +1,10 @@
+[package]
+name = "agalang-core"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+complex_math = { path = "ComplexMath-rs" }
+util = { path = "Util-rs" }
