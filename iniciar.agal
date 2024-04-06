@@ -1,0 +1,40 @@
+importar 'consola' como consola;
+importar 'sab' como sab;
+importar 'clases/Cadena' como Cadena;
+importar 'clases/Dicionario' como Dicionario;
+
+importar './libraries/discord/cliente/Cliente.agal' como DiscordCliente;
+importar './libraries/discord/constantes/Intenciones.agal' como Intenciones;
+importar './libraries/env/inicial.agal' como envFN;
+
+const env = sab.leerArchivo('.env')
+const test = Cadena(env);
+
+def intenciones = 0;
+
+const nombresIntencion = Dicionario.llaves(Intenciones);
+
+def i = 0;
+mien (i < nombresIntencion.largo) {
+  intenciones = intenciones + Intenciones[nombresIntencion[i]];
+  i = i + 1;
+}
+
+const Data = envFN(test)
+
+const cliente = DiscordCliente(intenciones)
+cliente.en('listo', fn (usuario) {
+  intentar {
+    consola.pintar('listo')
+  } capturar (e) {
+    consola.pintar(e)
+  }
+});
+fn mensajeCrear(mensaje) {
+  si (mensaje.autor.bot) {
+    ret vacio;
+  }
+  mensaje.responder(mensaje.autor.nombre +' dijo: ' + mensaje.contenido);
+}
+cliente.en('mensajeCrear', mensajeCrear);
+cliente.sesion(Data.TOKEN);

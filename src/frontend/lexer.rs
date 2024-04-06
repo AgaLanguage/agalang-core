@@ -1,92 +1,128 @@
-#[derive(PartialEq)]
-pub enum TokenType {
-    Identifier,
-    Number,
-    String,
-    Operator,
-    Punctuation,
-    Keyword,
-    Error,
-    None,
-    EOF,
-}
-impl std::fmt::Display for TokenType {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    match self {
-      TokenType::Identifier => write!(f, "Identifier"),
-      TokenType::Number => write!(f, "Number"),
-      TokenType::String => write!(f, "String"),
-      TokenType::Operator => write!(f, "Operator"),
-      TokenType::Punctuation => write!(f, "Punctuation"),
-      TokenType::Keyword => write!(f, "Keyword"),
-      TokenType::Error => write!(f, "Error"),
-      TokenType::None => write!(f, "None"),
-      TokenType::EOF => write!(f, "EOF"),
-    }
-  }
-}
+mod token_type;
+pub use token_type::TokenType;
+mod token_number;
+use token_number::token_number;
+mod token_string;
+use token_string::token_string;
+mod token_identifier;
+use token_identifier::token_identifier;
+use crate::internal::errors::{ErrorTypes,ErrorNames, throw_error,throw_multiple_errors};
 
 const LETTERS: &str = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 const NUMBERS: &str = "0123456789";
 const OPERATORS: &str = "+-*/%=&|<>!^~";
 
-// is for keywords and identifiers
-fn is_alpha(c: char) -> bool {
-  c.is_alphabetic() || c == '_' || c == '$' || c.is_numeric()
+fn split_meta(meta: &str) -> (&str, &str, &str) {
+    let mut meta = meta.split(";");
+    let file_name = meta.next().unwrap();
+    let data = meta.next();
+    if data == None {
+        return (file_name, "", "")
+    }
+    let mut meta = data.unwrap().split("\0");
+    let line = meta.next().unwrap();
+    let token = meta.next();
+    if token == None {
+        return (file_name, line, "")
+    }
+    let token = token.unwrap();
+    (file_name, line, token)
 }
-// only for numbers
-fn is_constant(c: char) -> bool {
-  c == 'i' || c == 'e' || c == 'π'
-}
-fn is_number(c: char, use_dot: bool) -> bool {
-  c.is_numeric() || (use_dot && c == '.') || is_constant(c)
+fn to_cyan(s: &str) -> String {
+    format!("\x1b[96m{}\x1b[0m", s)
 }
 
-fn token_number(c: char, pos: util::Position, line: String) -> (util::Token<TokenType>, usize) {
-  let col = pos.column;
-  let mut i = col;
-  let mut use_dot = c == '.';
-  while i < line.len() {
-    if !is_number(line.chars().nth(i).unwrap(), use_dot) {
-      break;
-    }
-    if line.chars().nth(i).unwrap() == '.' {
-      use_dot = false;
-    }
-    i += 1;
-  }
-  let token = util::Token { token_type: TokenType::Number, position: pos, value: line[col..i].to_string() };
-  (token, i-col-1)
-}
-fn token_identifier(c: char, pos: util::Position, line: String) -> (util::Token<TokenType>, usize) {
-  let col = pos.column;
-  let mut i = col;
-  while i < line.len() {
-    if !is_alpha(line.chars().nth(i).unwrap()) {
-      break;
-    }
-    i += 1;
-  }
-  let token = util::Token { token_type: TokenType::Identifier, position: pos, value: line[col..i].to_string() };
-  (token, i-col-1)
+fn token_error(token: &util::Token<TokenType>) -> ErrorTypes {
+    let (file_name, data_line, token_value) = split_meta(&token.meta);
+    let line = token.position.line +1;
+    let column_token = token.position.column+1;
+    let column = column_token + token_value.len();
+    let str_line = line.to_string();
+    let str_init = " ".repeat(str_line.len());
+
+    let cyan_line = to_cyan("|");
+    let cyan_arrow = to_cyan("-->");
+
+    let indicator = if token_value.len() > 0 {
+        format!("{}^","-".repeat(token_value.len()))
+    } else {
+        "^".to_string()
+    };
+    let lines = [
+        format!("{}",token.value),
+        format!("{}{cyan_arrow} {}:{}:{}", str_init, file_name, line, column),
+        format!("{} {cyan_line}", str_init),
+        format!("{} {cyan_line} {}", to_cyan(&str_line), data_line),
+        format!("{} {cyan_line} {}{}", str_init, " ".repeat(column_token-1), to_cyan(&indicator)),
+        format!("{} {cyan_line}", str_init),
+    ];
+    let joined = lines.join("\n");
+    ErrorTypes::StringError(joined)
 }
 
-pub fn tokenizer(input: String, file: String) -> Vec<util::Token<TokenType>> {
-  let tokens = util::tokenize::<TokenType>(input, vec![
-    (" \t", |c, p, _| (util::Token { token_type: TokenType::None, position: p, value: c.to_string() }, 0)),
-    ((format!("{}_$", LETTERS)).as_str(), token_identifier),
-    (NUMBERS, token_number),
-    (OPERATORS, |c, pos, line| (util::Token { token_type: TokenType::Operator, position: pos, value: c.to_string() }, 0)),
-  ]);
-  match tokens {
-    Ok(mut t) => {
-      t.push(util::Token { token_type: TokenType::EOF, position: util::Position { line: 0, column: 0 }, value: "".to_string() });
-      t.retain(|x| x.token_type != TokenType::None);
-      t
-    },
-    Err(e) => {
-      crate::throw_error("caracter invalido", crate::ErrorTypes::ErrorError(e));
-      return Vec::new();
+pub fn tokenizer(input: String, file_name: String) -> Vec<util::Token<TokenType>> {
+    let tokens = util::tokenize::<TokenType>(
+        input,
+        vec![
+            (" \t", |c, p, _, m| {
+                (
+                    util::Token {
+                        token_type: TokenType::None,
+                        position: p,
+                        value: c.to_string(),
+                        meta: m,
+                    },
+                    0,
+                )
+            }),
+            ((format!("{}_$", LETTERS)).as_str(), token_identifier),
+            (NUMBERS, token_number),
+            (OPERATORS, |c, pos, _, meta| {
+                (
+                    util::Token {
+                        token_type: TokenType::Operator,
+                        position: pos,
+                        value: c.to_string(),
+                        meta,
+                    },
+                    0,
+                )
+            }),
+            ("'\"", token_string),
+            ("(){}[],.;:", |c, pos, _, meta| {
+                (
+                    util::Token {
+                        token_type: TokenType::Punctuation,
+                        position: pos,
+                        value: c.to_string(),
+                        meta,
+                    },
+                    0,
+                )
+            }),
+        ],
+        file_name,
+    );
+    let tokens = match tokens {
+        Ok(mut t) => {
+            t.push(util::Token {
+                token_type: TokenType::EOF,
+                position: util::Position { line: 0, column: 0 },
+                value: "".to_string(),
+                meta: "".to_string(),
+            });
+            t.retain(|x| x.token_type != TokenType::None);
+            t
+        }
+        Err(e) => {
+            throw_error(ErrorNames::LexerError, ErrorTypes::ErrorError(e));
+            return Vec::new();
+        }
+    };
+    let errors = tokens.iter().filter(|x| x.token_type == TokenType::Error).map(|x| token_error(x)).collect::<Vec<ErrorTypes>>();
+    if errors.len() > 0 {
+        throw_multiple_errors(ErrorNames::LexerError, errors);
+        return Vec::new();
     }
-  }
+    tokens
 }

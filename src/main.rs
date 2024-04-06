@@ -1,26 +1,7 @@
+use crate::frontend::ast::Node;
+
 mod frontend;
-
-enum ErrorTypes {
-    FmtError(std::fmt::Error),
-    IoError(std::io::Error),
-    ErrorError(Box<dyn std::error::Error>),
-}
-
-fn throw_error(type_err: &str, err: ErrorTypes) {
-    let red_error = "\x1b[91merror\x1b[0m";
-    match err {
-        ErrorTypes::FmtError(e) => {
-            eprintln!("{}: {}: {}", red_error, type_err, e);
-        }
-        ErrorTypes::IoError(e) => {
-            eprintln!("{}: {}: {}", red_error, type_err, e);
-        }
-        ErrorTypes::ErrorError(e) => {
-            eprintln!("{}: {}: {}", red_error, type_err, e);
-        }
-    }
-    std::process::exit(1);
-}
+mod internal;
 
 fn main() {
     let args = std::env::args().collect::<Vec<String>>();
@@ -34,12 +15,10 @@ fn main() {
     let contents = match contents {
         Ok(contents) => contents,
         Err(err) => {
-            throw_error("ruta inexistente", ErrorTypes::IoError(err));
+            internal::errors::throw_error(internal::errors::ErrorNames::PathError, internal::errors::ErrorTypes::IoError(err));
             return;
         }
     };
-    let tokens = frontend::tokenizer(contents, filename.to_string());
-    for token in tokens {
-        println!("{}: {}", token.token_type, token.value);
-    }
+    let program = frontend::produce_ast(contents, false, filename.to_string());
+    println!("{}", program.to_string());
 }
