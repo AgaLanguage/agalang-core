@@ -1,5 +1,5 @@
 use super::TokenType;
-const KEYWORDS: [&str; 19] = [
+const KEYWORDS: [&str; 20] = [
     "def",
     "const",
     "fn",
@@ -19,6 +19,7 @@ const KEYWORDS: [&str; 19] = [
     "importar",
     "como",
     "con",
+    "inmut"
 ];
 fn is_alpha(c: char) -> bool {
   c.is_alphabetic() || c == '_' || c == '$' || c.is_numeric()

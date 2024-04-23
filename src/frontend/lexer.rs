@@ -5,37 +5,20 @@ use token_number::token_number;
 mod token_string;
 use token_string::token_string;
 mod token_identifier;
+use crate::{
+    internal::errors::{throw_error, throw_multiple_errors, ErrorNames, ErrorTypes},
+    util::{split_meta, to_cyan},
+};
 use token_identifier::token_identifier;
-use crate::internal::errors::{ErrorTypes,ErrorNames, throw_error,throw_multiple_errors};
 
 const LETTERS: &str = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 const NUMBERS: &str = "0123456789";
 const OPERATORS: &str = "+-*/%=&|<>!^~";
 
-fn split_meta(meta: &str) -> (&str, &str, &str) {
-    let mut meta = meta.split(";");
-    let file_name = meta.next().unwrap();
-    let data = meta.next();
-    if data == None {
-        return (file_name, "", "")
-    }
-    let mut meta = data.unwrap().split("\0");
-    let line = meta.next().unwrap();
-    let token = meta.next();
-    if token == None {
-        return (file_name, line, "")
-    }
-    let token = token.unwrap();
-    (file_name, line, token)
-}
-fn to_cyan(s: &str) -> String {
-    format!("\x1b[96m{}\x1b[0m", s)
-}
-
 fn token_error(token: &util::Token<TokenType>) -> ErrorTypes {
     let (file_name, data_line, token_value) = split_meta(&token.meta);
-    let line = token.position.line +1;
-    let column_token = token.position.column+1;
+    let line = token.position.line + 1;
+    let column_token = token.position.column + 1;
     let column = column_token + token_value.len();
     let str_line = line.to_string();
     let str_init = " ".repeat(str_line.len());
@@ -44,16 +27,21 @@ fn token_error(token: &util::Token<TokenType>) -> ErrorTypes {
     let cyan_arrow = to_cyan("-->");
 
     let indicator = if token_value.len() > 0 {
-        format!("{}^","-".repeat(token_value.len()))
+        format!("{}^", "-".repeat(token_value.len()))
     } else {
         "^".to_string()
     };
     let lines = [
-        format!("{}",token.value),
+        format!("{}", token.value),
         format!("{}{cyan_arrow} {}:{}:{}", str_init, file_name, line, column),
         format!("{} {cyan_line}", str_init),
         format!("{} {cyan_line} {}", to_cyan(&str_line), data_line),
-        format!("{} {cyan_line} {}{}", str_init, " ".repeat(column_token-1), to_cyan(&indicator)),
+        format!(
+            "{} {cyan_line} {}{}",
+            str_init,
+            " ".repeat(column_token - 1),
+            to_cyan(&indicator)
+        ),
         format!("{} {cyan_line}", str_init),
     ];
     let joined = lines.join("\n");
@@ -119,7 +107,11 @@ pub fn tokenizer(input: String, file_name: String) -> Vec<util::Token<TokenType>
             return Vec::new();
         }
     };
-    let errors = tokens.iter().filter(|x| x.token_type == TokenType::Error).map(|x| token_error(x)).collect::<Vec<ErrorTypes>>();
+    let errors = tokens
+        .iter()
+        .filter(|x| x.token_type == TokenType::Error)
+        .map(|x| token_error(x))
+        .collect::<Vec<ErrorTypes>>();
     if errors.len() > 0 {
         throw_multiple_errors(ErrorNames::LexerError, errors);
         return Vec::new();

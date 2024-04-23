@@ -1,3 +1,1 @@
-def mundo = 5 + 0$16~10;
-def hola = "Hola {mundo}";
-def hola2 = 'Hola mundo';
+def mundo;

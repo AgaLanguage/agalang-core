@@ -29,7 +29,7 @@ pub fn token_string(quote: char, pos: util::Position, line: String, meta: String
                       token_type: TokenType::Error,
                       position: pos,
                       value: "Se esperaba un caracter literal".to_string(),
-                      meta: format!("{meta};{line}\0{quote}{str}")
+                      meta: format!("{meta}\0{line}\0{quote}{str}")
                   },
                   str_length - col - 1,
               );
@@ -54,7 +54,7 @@ pub fn token_string(quote: char, pos: util::Position, line: String, meta: String
                           token_type: TokenType::Error,
                           position: pos,
                           value: "Se esperaba un numero hexadecimal".to_string(),
-                          meta: format!("{meta};{line}\0{quote}{str}")
+                          meta: format!("{meta}\0{line}\0{quote}{str}")
                       },
                       str_length - col - 1,
                   );
@@ -83,7 +83,7 @@ pub fn token_string(quote: char, pos: util::Position, line: String, meta: String
                           token_type: TokenType::Error,
                           position: pos,
                           value: "Se esperaba un numero hexadecimal".to_string(),
-                          meta: format!("{meta};{line}\0{quote}{str}")
+                          meta: format!("{meta}\0{line}\0{quote}{str}")
                       },
                       str_length - col - 1,
                   );
@@ -108,7 +108,7 @@ pub fn token_string(quote: char, pos: util::Position, line: String, meta: String
               token_type: TokenType::Error,
               position: pos,
               value: format!("Se esperaba un [{quote}] para cerrar la cadena"),
-              meta: format!("{meta};{line}\0{quote}{str}")
+              meta: format!("{meta}\0{line}\0{quote}{str}")
           },
           str_length - col - 1,
       );

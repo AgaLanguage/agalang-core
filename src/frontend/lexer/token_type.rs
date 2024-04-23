@@ -29,3 +29,21 @@ impl std::fmt::Display for TokenType {
         }
     }
 }
+impl Clone for TokenType {
+    fn clone(&self) -> TokenType {
+        match self {
+            TokenType::Identifier => TokenType::Identifier,
+            TokenType::NumberLiteral => TokenType::NumberLiteral,
+            TokenType::StringLiteral => TokenType::StringLiteral,
+            TokenType::Number => TokenType::Number,
+            TokenType::String => TokenType::String,
+            TokenType::Operator => TokenType::Operator,
+            TokenType::Punctuation => TokenType::Punctuation,
+            TokenType::Keyword => TokenType::Keyword,
+            TokenType::Error => TokenType::Error,
+            TokenType::None => TokenType::None,
+            TokenType::EOF => TokenType::EOF,
+        }
+    }
+}
+impl Copy for TokenType {}

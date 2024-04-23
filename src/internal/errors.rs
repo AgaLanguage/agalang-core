@@ -7,7 +7,7 @@ pub enum ErrorTypes {
 pub enum ErrorNames {
   PathError,
   LexerError,
-  ParserError,
+  SyntaxError,
   CustomError(String)
 }
 impl std::fmt::Display for ErrorNames {
@@ -15,7 +15,7 @@ impl std::fmt::Display for ErrorNames {
     match self {
       ErrorNames::PathError => write!(f, "Error ruta"),
       ErrorNames::LexerError => write!(f, "Error léxico"),
-      ErrorNames::ParserError => write!(f, "Error de análisis"),
+      ErrorNames::SyntaxError => write!(f, "Error sintáctico"),
       ErrorNames::CustomError(s) => write!(f, "{s}"),
     }
   }

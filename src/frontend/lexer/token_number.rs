@@ -80,7 +80,7 @@ fn number_base(
                         token_type: TokenType::Error,
                         position: pos,
                         value: "Se esperaba un número base".to_string(),
-                        meta: format!("{meta};{line}\00$"),
+                        meta: format!("{meta}\0{line}\00$"),
                     },
                     0,
                 );
@@ -100,7 +100,7 @@ fn number_base(
                         token_type: TokenType::Error,
                         position: pos,
                         value: "Se esperaba un número base".to_string(),
-                        meta: format!("{meta};{line}\00$"),
+                        meta: format!("{meta}\0{line}\00$"),
                     },
                     i - col - 1,
                 );
@@ -112,7 +112,7 @@ fn number_base(
                         token_type: TokenType::Error,
                         position: pos,
                         value: "Se esperaba un número en base 10".to_string(),
-                        meta: format!("{meta};{line}\00${base_str}"),
+                        meta: format!("{meta}\0{line}\00${base_str}"),
                     },
                     i - col - 1,
                 );
@@ -124,7 +124,7 @@ fn number_base(
                         token_type: TokenType::Error,
                         position: pos,
                         value: "La base debe estar entre 2 y 36".to_string(),
-                        meta: format!("{meta};{line}\00${base_str}"),
+                        meta: format!("{meta}\0{line}\00${base_str}"),
                     },
                     i - col - 1,
                 );
@@ -137,7 +137,7 @@ fn number_base(
                         token_type: TokenType::Error,
                         position: pos,
                         value: "Se esperaba un \"~\" para el valor".to_string(),
-                        meta: format!("{meta};{line}\00${base}"),
+                        meta: format!("{meta}\0{line}\00${base}"),
                     },
                     i - col - 1,
                 );
