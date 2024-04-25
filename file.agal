@@ -1,1 +1,1 @@
-def mundo;
+def mundo = "Hola {mundo";

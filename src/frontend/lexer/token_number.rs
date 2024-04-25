@@ -147,6 +147,8 @@ fn number_base(
             }
         }
     }
+    // save the first index of the value
+    let value_index = i;
 
     while i < line.len() {
         let c = line.chars().nth(i).unwrap();
@@ -155,10 +157,11 @@ fn number_base(
         }
         i += 1;
     }
+    let value = line[value_index..i].to_string();
     let token = util::Token {
         token_type: TokenType::Number,
         position: pos,
-        value: line[col..i].to_string(),
+        value: format!("0${}~{}", base, value),
         meta,
     };
     (token, i - col - 1)

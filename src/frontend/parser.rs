@@ -1,4 +1,5 @@
 pub mod ast;
+pub mod string;
 use util::Token;
 
 use crate::{internal::errors::ErrorTypes, util::{split_meta, to_cyan}};
@@ -14,7 +15,7 @@ fn node_error(node: &ast::Node) -> ErrorTypes {
         ast::Node::Error(error) => {
             line = error.line + 1;
             column_node = error.column + 1;
-            meta = error.file.clone();
+            meta = error.meta.clone();
             message = error.message.clone();
         }
         _ => {
@@ -71,6 +72,9 @@ impl Parser {
             index: 0,
             file_name: file_name.clone(),
         }
+    }
+    fn not_eof(&self) -> bool {
+        self.index < self.tokens.len()
     }
     fn at(&mut self) -> util::Token<super::lexer::TokenType> {
         let token = self.tokens.get(self.index);
@@ -138,7 +142,6 @@ impl Parser {
     pub fn produce_ast(&mut self, is_function: bool) -> ast::NodeProgram {
         let mut program = ast::NodeProgram {
             body: Vec::new(),
-            node_type: ast::NodeType::Program,
             column: 0,
             line: 0,
             file: self.file_name.clone(),
@@ -146,7 +149,7 @@ impl Parser {
         //let functions: Vec<Box<dyn ast::Node>> = Vec::new();
         //let code: Vec<Box<dyn ast::Node>> = Vec::new();
 
-        while self.index < self.tokens.len() {
+        while self.not_eof() {
             let (stmt, consumed) = self.parse_stmt(false, false, true);
             if let Some(stmt) = stmt {
                 match stmt {
@@ -167,7 +170,6 @@ impl Parser {
         }
         program
     }
-
     fn parse_stmt(
         &mut self,
         is_function: bool,
@@ -183,33 +185,12 @@ impl Parser {
                 return (
                     Some(ast::Node::Error(ast::NodeError {
                         message: token.value,
-                        node_type: ast::NodeType::Error,
                         column: token.position.column,
                         line: token.position.line,
-                        file: token.meta,
+                        meta: token.meta,
                     })),
                     1,
                 );
-            }
-            super::lexer::TokenType::StringLiteral => {
-                let node = ast::NodeStringLiteral {
-                    value: token.value.clone(),
-                    node_type: ast::NodeType::StringLiteral,
-                    column: token.position.column,
-                    line: token.position.line,
-                    file: token.meta.clone(),
-                };
-                return (Some(ast::Node::StringLiteral(node)), 1);
-            }
-            super::lexer::TokenType::NumberLiteral => {
-                let node = ast::NodeNumberLiteral {
-                    value: token.value.parse().unwrap(),
-                    node_type: ast::NodeType::NumberLiteral,
-                    column: token.position.column,
-                    line: token.position.line,
-                    file: token.meta.clone(),
-                };
-                return (Some(ast::Node::NumberLiteral(node)), 1);
             }
             super::lexer::TokenType::Keyword => {
                 if token.value == "def" || token.value == "const" {
@@ -223,7 +204,6 @@ impl Parser {
             }
         }
     }
-
     fn parse_var_decl(&mut self) -> (Option<ast::Node>, usize) {
         let token = self.eat();
         let is_const = token.value == "const";
@@ -239,10 +219,9 @@ impl Parser {
             return (
                 Some(ast::Node::Error(ast::NodeError {
                     message: identifier.value,
-                    node_type: ast::NodeType::Error,
                     column: identifier.position.column,
                     line: identifier.position.line,
-                    file: meta,
+                    meta,
                 })),
                 consumed,
             );
@@ -258,7 +237,6 @@ impl Parser {
                     name: identifier.value.clone(),
                     value: None,
                     is_const,
-                    node_type: ast::NodeType::VarDecl,
                     column: identifier.position.column,
                     line: identifier.position.line,
                     file: identifier.meta,
@@ -287,10 +265,9 @@ impl Parser {
             return (
                 Some(ast::Node::Error(ast::NodeError {
                     message: "Se esperaba un punto y coma".to_string(),
-                    node_type: ast::NodeType::Error,
                     column: equals_semicolon.position.column,
                     line: equals_semicolon.position.line,
-                    file: meta,
+                    meta,
                 })),
                 consumed,
             );
@@ -301,16 +278,18 @@ impl Parser {
             return (
                 Some(ast::Node::Error(ast::NodeError {
                     message: "Se esperaba una expresión".to_string(),
-                    node_type: ast::NodeType::Error,
                     column: equals_semicolon.position.column,
                     line: equals_semicolon.position.line,
-                    file: equals_semicolon.meta.clone(),
+                    meta: equals_semicolon.meta.clone(),
                 })),
                 consumed,
             );
         }
         let value = value.unwrap();
         consumed += consumed_value;
+        if value.is_error() {
+            return (Some(value), consumed);
+        }
         let semicolon = self.expect(
             super::lexer::TokenType::Punctuation,
             "Se esperaba un punto y coma",
@@ -319,10 +298,9 @@ impl Parser {
             return (
                 Some(ast::Node::Error(ast::NodeError {
                     message: semicolon.value,
-                    node_type: ast::NodeType::Error,
                     column: semicolon.position.column,
                     line: semicolon.position.line,
-                    file: semicolon.meta,
+                    meta: semicolon.meta,
                 })),
                 consumed,
             );
@@ -333,7 +311,6 @@ impl Parser {
                 name: identifier.value.clone(),
                 value: Some(Box::new(value)),
                 is_const,
-                node_type: ast::NodeType::VarDecl,
                 column: identifier.position.column,
                 line: identifier.position.line,
                 file: identifier.meta,
@@ -342,13 +319,102 @@ impl Parser {
         );
     }
 
-    fn parse_expr(&self) -> (Option<ast::Node>, usize) {
-        (Some(ast::Node::NumberLiteral(ast::NodeNumberLiteral {
-            value: "1".to_string(),
-            node_type: ast::NodeType::NumberLiteral,
-            column: 1,
-            line: 1,
-            file: self.file_name.clone(),
-        })), 1)
+    fn parse_expr(&mut self) -> (Option<ast::Node>, usize) {
+        self.parse_literal_expr()
     }
+
+    fn parse_literal_expr(&mut self) -> (Option<ast::Node>, usize) {
+        let token = self.eat();
+
+        match token.token_type {
+            super::lexer::TokenType::NumberLiteral => {
+                return (
+                    Some(ast::Node::Number(ast::NodeNumber {
+                        base: 10,
+                        value: token.value.clone(),
+                        column: token.position.column,
+                        line: token.position.line,
+                        file: token.meta,
+                    })),
+                    1,
+                );
+            }
+            super::lexer::TokenType::Number => {
+                let data = token.value.split("$").collect::<Vec<&str>>()[1];
+                let base_value = data.split("~").collect::<Vec<&str>>();
+                let base = base_value[0].parse::<i8>().unwrap();
+                let value = base_value[1].to_string();
+                return (
+                    Some(ast::Node::Number(ast::NodeNumber {
+                        base,
+                        value,
+                        column: token.position.column,
+                        line: token.position.line,
+                        file: token.meta,
+                    })),
+                    1,
+                );
+            }
+            super::lexer::TokenType::StringLiteral => {
+                return (
+                    Some(ast::Node::String(ast::NodeString {
+                        value: vec![ast::StringData::Str(token.value)],
+                        column: token.position.column,
+                        line: token.position.line,
+                        file: token.meta,
+                    })),
+                    1,
+                );
+            }
+            super::lexer::TokenType::String => {
+                let line = self.source.lines().nth(token.position.line).unwrap();
+                let node = string::complex_string(token, line);
+                match node {
+                    Ok(node) => {
+                        return (
+                            Some(ast::Node::String(node)),
+                            1,
+                        );
+                    }
+                    Err(error) => {
+                        return (
+                            Some(ast::Node::Error(error)),
+                            1,
+                        );
+                    }
+                }
+            }
+            _ => {
+                return (
+                    Some(ast::Node::Error(ast::NodeError {
+                        message: "Se esperaba un literal".to_string(),
+                        column: token.position.column,
+                        line: token.position.line,
+                        meta: token.meta,
+                    })),
+                    1,
+                );
+            }
+        }
+    }
+    /* TODO: Implementar
+    fn parse_object_expr(&self) -> (Option<ast::Node>, usize) {
+        let open_brace = self.eat();
+        if open_brace.token_type != super::lexer::TokenType::Punctuation
+            || open_brace.value != "{"
+        {
+            return (
+                Some(ast::Node::Error(ast::NodeError {
+                    message: "Se esperaba un '{'".to_string(),
+                    node_type: ast::NodeType::Error,
+                    column: open_brace.position.column,
+                    line: open_brace.position.line,
+                    file: open_brace.meta,
+                })),
+                1,
+            );
+        }
+        let mut consumed = 1;
+        let mut properties: Vec<ast::NodeProperty> = Vec::new();
+    }*/
 }

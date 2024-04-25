@@ -1,5 +1,5 @@
 use super::TokenType;
-const KEYWORDS: [&str; 20] = [
+pub const KEYWORDS: [&str; 20] = [
     "def",
     "const",
     "fn",
