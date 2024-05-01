@@ -1,2 +1,6 @@
-def mundo = 4
-3
+def mundo = 4;
+
+mundo??mon;
+mundo???mon;
+mundo!???mon;
+mundo!???&mon;
