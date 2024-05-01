@@ -5,19 +5,30 @@
   - `+(value)` transforma a numero
   - `-(value)` transforma a negativo
   - `~(value)` transforma a entero (redondea hacia abajo)
-  - `(value)?` si el valor es un error (lanzado) se transforma a nulo. Ejemplo: `1/0?` es nulo.
+  - `(value)!` si el valor es un error (lanzado) se transforma a nulo. Ejemplo: `1/0?` es nulo.
   - `(value1) && (value2)` comprueba si ambos valores son verdaderos
   - `(value1) || (value2)` comprueba si uno de los valores es verdadero
+  - `(value1) ?? (value2)` si el valor1 es nulo, devuelve el valor2
+  - `(value1) = (value2)` asigna el valor2 al valor1
   - `(value1) == (value2)` comprueba si ambos valores son iguales
   - `(value1) != (value2)` comprueba si ambos valores son diferentes
-  - `(value1) > (value2)` comprueba si el valor1 es mayor que el valor2
-  - `(value1) < (value2)` comprueba si el valor1 es menor que el valor2
   - `(value1) >= (value2)` comprueba si el valor1 es mayor o igual que el valor2
   - `(value1) <= (value2)` comprueba si el valor1 es menor o igual que el valor2
+  - `(value1) > (value2)` comprueba si el valor1 es mayor que el valor2
+  - `(value1) < (value2)` comprueba si el valor1 es menor que el valor2
   - `(value1) + (value2)` suma los valores
   - `(value1) - (value2)` resta los valores
   - `(value1) * (value2)` multiplica los valores
   - `(value1) / (value2)` divide los valores
   - `(value1) % (value2)` obtiene el residuo de la division
   - `(value1) ^ (value2)` eleva el valor1 al valor2
+  - `(value1) &&= (value2)` si el valor1 es un valor verdadero, asigna el valor2
+  - `(value1) ||= (value2)` si el valor1 es un valor falso, asigna el valor2
+  - `(value1) ??= (value2)` si el valor1 es nulo, asigna el valor2
+  - `(value1) += (value2)` suma el valor2 al valor1, y asigna el resultado
+  - `(value1) -= (value2)` resta el valor2 al valor1, y asigna el resultado
+  - `(value1) *= (value2)` multiplica el valor1 por el valor2, y asigna el resultado
+  - `(value1) /= (value2)` divide el valor1 por el valor2, y asigna el resultado
+  - `(value1) %= (value2)` obtiene el residuo de la division, y asigna el resultado
+  - `(value1) ^= (value2)` eleva el valor1 al valor2, y asigna el resultado
 
