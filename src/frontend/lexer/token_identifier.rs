@@ -14,12 +14,12 @@ pub const KEYWORDS: [&str; 20] = [
     "extiende",
     "intentar",
     "capturar",
-    "finalmente",
+    "final",
     "exportar",
     "importar",
     "como",
     "con",
-    "inmut"
+    "impl"
 ];
 fn is_alpha(c: char) -> bool {
   c.is_alphabetic() || c == '_' || c == '$' || c.is_numeric()

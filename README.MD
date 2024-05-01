@@ -1,0 +1,23 @@
+# Expreciones
+  - `?(value)` transforma a valor booleano
+  - `!(value)` niega el valor booleano
+  - `&(value)` transforma a referencia
+  - `+(value)` transforma a numero
+  - `-(value)` transforma a negativo
+  - `~(value)` transforma a entero (redondea hacia abajo)
+  - `(value)?` si el valor es un error (lanzado) se transforma a nulo. Ejemplo: `1/0?` es nulo.
+  - `(value1) && (value2)` comprueba si ambos valores son verdaderos
+  - `(value1) || (value2)` comprueba si uno de los valores es verdadero
+  - `(value1) == (value2)` comprueba si ambos valores son iguales
+  - `(value1) != (value2)` comprueba si ambos valores son diferentes
+  - `(value1) > (value2)` comprueba si el valor1 es mayor que el valor2
+  - `(value1) < (value2)` comprueba si el valor1 es menor que el valor2
+  - `(value1) >= (value2)` comprueba si el valor1 es mayor o igual que el valor2
+  - `(value1) <= (value2)` comprueba si el valor1 es menor o igual que el valor2
+  - `(value1) + (value2)` suma los valores
+  - `(value1) - (value2)` resta los valores
+  - `(value1) * (value2)` multiplica los valores
+  - `(value1) / (value2)` divide los valores
+  - `(value1) % (value2)` obtiene el residuo de la division
+  - `(value1) ^ (value2)` eleva el valor1 al valor2
+

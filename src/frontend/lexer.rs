@@ -13,7 +13,7 @@ use token_identifier::token_identifier;
 
 const LETTERS: &str = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 const NUMBERS: &str = "0123456789";
-const OPERATORS: &str = "+-*/%=&|<>!^~";
+const OPERATORS: &str = "+-*/%=&|<>!^~?";
 
 fn token_error(token: &util::Token<TokenType>) -> ErrorTypes {
     let (file_name, data_line, token_value) = split_meta(&token.meta);
@@ -93,9 +93,10 @@ pub fn tokenizer(input: String, file_name: String) -> Vec<util::Token<TokenType>
     );
     let tokens = match tokens {
         Ok(mut t) => {
+            let end_token = t.get(t.len() -1).unwrap();
             t.push(util::Token {
                 token_type: TokenType::EOF,
-                position: util::Position { line: 0, column: 0 },
+                position: util::Position { line: end_token.position.line, column: end_token.position.column + 1},
                 value: "".to_string(),
                 meta: "".to_string(),
             });

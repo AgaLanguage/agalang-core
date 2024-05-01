@@ -1,9 +1,2 @@
-def mundo = ("Hola {34}");
-
-def objeto = {
-  ['hola {mundo}']: 1,
-  'Hola': 2,
-  hola_mundo: 3,
-  mundo,
-  ..mundo
-};
+def mundo = 4
+3
