@@ -30,8 +30,8 @@ pub enum Node {
     UnaryFront(NodeUnary),
     UnaryBack(NodeUnary),
     Binary(NodeBinary),
-    // Ternary(NodeTernary),
-    // Call(NodeCall),
+    Member(NodeMember),
+    Call(NodeCall),
     // Arrow(NodeArrow),
     Error(NodeError),
 }
@@ -55,6 +55,8 @@ impl Node {
             Node::UnaryFront(node) => node.to_string(),
             Node::UnaryBack(node) => node.to_string(),
             Node::Binary(node) => node.to_string(),
+            Node::Member(node) => node.to_string(),
+            Node::Call(node) => node.to_string(),
             Node::Error(node) => node.to_string(),
         }
     }
@@ -71,6 +73,8 @@ impl Node {
             Node::UnaryFront(node) => node.column,
             Node::UnaryBack(node) => node.column,
             Node::Binary(node) => node.column,
+            Node::Member(node) => node.column,
+            Node::Call(node) => node.column,
             Node::Error(node) => node.column,
         }
     }
@@ -87,6 +91,8 @@ impl Node {
             Node::UnaryFront(node) => node.line,
             Node::UnaryBack(node) => node.line,
             Node::Binary(node) => node.line,
+            Node::Member(node) => node.line,
+            Node::Call(node) => node.line,
             Node::Error(node) => node.line,
         }
     }
@@ -103,6 +109,8 @@ impl Node {
             Node::UnaryFront(node) => node.file.clone(),
             Node::UnaryBack(node) => node.file.clone(),
             Node::Binary(node) => node.file.clone(),
+            Node::Member(node) => node.file.clone(),
+            Node::Call(node) => node.file.clone(),
             Node::Error(node) => node.meta.clone(),
         }
     }
@@ -121,6 +129,8 @@ impl Clone for Node {
             Node::UnaryFront(node) => Node::UnaryFront(node.clone()),
             Node::UnaryBack(node) => Node::UnaryBack(node.clone()),
             Node::Binary(node) => Node::Binary(node.clone()),
+            Node::Member(node) => Node::Member(node.clone()),
+            Node::Call(node) => Node::Call(node.clone()),
             Node::Error(node) => Node::Error(node.clone()),
         }
     }
@@ -155,7 +165,7 @@ impl DataNode for NodeProgram {
         let data = self
             .body
             .iter()
-            .map(|node| format!("  {}", node))
+            .map(|node| format!("{}", node))
             .collect::<Vec<String>>()
             .join("\n");
         format!("NodeProgram:\n{}", data_format(data))
@@ -252,9 +262,9 @@ impl DataNode for NodeObject {
             .properties
             .iter()
             .map(|property| match property {
-                NodeProperty::Property(name, value) => format!("  {}:\n    {}", name, value),
+                NodeProperty::Property(name, value) => format!("  {}:\n  {}", name, value),
                 NodeProperty::Iterable(object) => format!("  ...({})", object.to_string()),
-                NodeProperty::Dynamic(name, value) => format!("  [{}]:\n    {}", name, value),
+                NodeProperty::Dynamic(name, value) => format!("  [{}]:\n  {}", name, value),
                 NodeProperty::Indexable(value) => format!("  [{}]", value.to_string()),
             })
             .collect();
@@ -299,9 +309,9 @@ impl DataNode for NodeArray {
             .elements
             .iter()
             .map(|element| match element {
-                NodeProperty::Property(name, value) => format!("  {}:\n    {}", name, value),
+                NodeProperty::Property(name, value) => format!("  {}:\n  {}", name, value),
                 NodeProperty::Iterable(object) => format!("  ...({})", object.to_string()),
-                NodeProperty::Dynamic(name, value) => format!("  [{}]:\n    {}", name, value),
+                NodeProperty::Dynamic(name, value) => format!("  [{}]:\n  {}", name, value),
                 NodeProperty::Indexable(value) => format!("  {}", value.to_string()),
             })
             .collect();
@@ -344,7 +354,7 @@ impl DataNode for NodeVarDecl {
         let keyword = if self.is_const { "const" } else { "def" };
         match &self.value {
             Some(value) => format!(
-                "NodeVarDecl: {keyword} {}\n  {}",
+                "NodeVarDecl: {keyword} {}\n{}",
                 self.name,
                 data_format(value.to_string())
             ),
@@ -418,7 +428,7 @@ pub struct NodeUnary {
 }
 impl DataNode for NodeUnary {
     fn to_string(&self) -> String {
-        format!("NodeUnary: \"{}\" para ({})", self.operator, data_format(self.operand.to_string()))
+        format!("NodeUnary: \"{}\" para {{\n{}\n}}", self.operator, data_format(self.operand.to_string()))
     }
 }
 impl Clone for NodeUnary {
@@ -443,7 +453,7 @@ pub struct NodeBinary {
 impl DataNode for NodeBinary {
     fn to_string(&self) -> String {
         format!(
-            "NodeBinary:\n  {}\n  {}\n  {}",
+            "NodeBinary:\n{}\n{}\n{}",
             data_format(self.left.to_string()),
             data_format(self.operator.clone()),
             data_format(self.right.to_string())
@@ -472,7 +482,7 @@ pub struct NodeAssignment {
 impl DataNode for NodeAssignment {
     fn to_string(&self) -> String {
         format!(
-            "NodeAssignment: {}\n  {}",
+            "NodeAssignment: {}\n{}",
             self.identifier,
             data_format(self.value.to_string())
         )
@@ -483,6 +493,69 @@ impl Clone for NodeAssignment {
         NodeAssignment {
             identifier: self.identifier.clone(),
             value: self.value.clone(),
+            column: self.column,
+            line: self.line,
+            file: self.file.clone(),
+        }
+    }
+}
+
+pub struct NodeMember {
+    pub object: Box<Node>,
+    pub member: Box<Node>,
+    pub computed: bool,
+    pub column: usize,
+    pub line: usize,
+    pub file: String,
+}
+impl DataNode for NodeMember {
+    fn to_string(&self) -> String {
+        format!(
+            "NodeMember:\n{}\n{}",
+            data_format(self.object.to_string()),
+            data_format(self.member.to_string())
+        )
+    }
+}
+impl Clone for NodeMember {
+    fn clone(&self) -> Self {
+        NodeMember {
+            object: self.object.clone(),
+            member: self.member.clone(),
+            computed: self.computed,
+            column: self.column,
+            line: self.line,
+            file: self.file.clone(),
+        }
+    }
+}
+
+pub struct NodeCall {
+    pub callee: Box<Node>,
+    pub arguments: Vec<Node>,
+    pub column: usize,
+    pub line: usize,
+    pub file: String,
+}
+impl DataNode for NodeCall {
+    fn to_string(&self) -> String {
+        let str_arguments: Vec<String> = self
+            .arguments
+            .iter()
+            .map(|argument| format!("  {}", argument))
+            .collect();
+        format!(
+            "NodeCall:\n{}\n  ({})",
+            data_format(self.callee.to_string()),
+            data_format(str_arguments.join("\n"))
+        )
+    }
+}
+impl Clone for NodeCall {
+    fn clone(&self) -> Self {
+        NodeCall {
+            callee: self.callee.clone(),
+            arguments: self.arguments.iter().map(|arg| arg.clone()).collect(),
             column: self.column,
             line: self.line,
             file: self.file.clone(),

@@ -20,6 +20,6 @@ fn main() {
             return;
         }
     };
-    let program = frontend::Parser::new(contents, filename.to_string()).produce_ast(false);
+    let program = frontend::Parser::new(contents, filename.to_string()).produce_ast();
     println!("{}", program.to_string());
 }
