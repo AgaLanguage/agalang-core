@@ -13,7 +13,7 @@ pub enum Node {
     Assignment(NodeAssignment),
     // Class(NodeClass),
     // Function(NodeFunction),
-    // If(NodeIf),
+    If(NodeIf),
     // Import(NodeImport),
     // Export(NodeExport),
     // For(NodeFor),
@@ -51,6 +51,7 @@ impl Node {
             Node::VarDecl(node) => node.to_string(),
             Node::Assignment(node) => node.to_string(),
             Node::While(node) | Node::DoWhile(node) => node.to_string(),
+            Node::If(node) => node.to_string(),
             Node::UnaryFront(node) | Node::UnaryBack(node) => node.to_string(),
             Node::Binary(node) => node.to_string(),
             Node::Member(node) => node.to_string(),
@@ -69,6 +70,7 @@ impl Node {
             Node::VarDecl(node) => node.column,
             Node::Assignment(node) => node.column,
             Node::While(node)  | Node::DoWhile(node) => node.column,
+            Node::If(node) => node.column,
             Node::UnaryFront(node) | Node::UnaryBack(node) => node.column,
             Node::Binary(node) => node.column,
             Node::Member(node) => node.column,
@@ -87,6 +89,7 @@ impl Node {
             Node::VarDecl(node) => node.line,
             Node::Assignment(node) => node.line,
             Node::While(node)  | Node::DoWhile(node) => node.line,
+            Node::If(node) => node.line,
             Node::UnaryFront(node) | Node::UnaryBack(node) => node.line,
             Node::Binary(node) => node.line,
             Node::Member(node) => node.line,
@@ -105,6 +108,7 @@ impl Node {
             Node::VarDecl(node) => node.file.clone(),
             Node::Assignment(node) => node.file.clone(),
             Node::While(node)  | Node::DoWhile(node)=> node.file.clone(),
+            Node::If(node) => node.file.clone(),
             Node::UnaryFront(node) | Node::UnaryBack(node) => node.file.clone(),
             Node::Binary(node) => node.file.clone(),
             Node::Member(node) => node.file.clone(),
@@ -126,6 +130,7 @@ impl Clone for Node {
             Node::Assignment(node) => Node::Assignment(node.clone()),
             Node::While(node) => Node::While(node.clone()),
             Node::DoWhile(node) => Node::DoWhile(node.clone()),
+            Node::If(node) => Node::If(node.clone()),
             Node::UnaryFront(node) => Node::UnaryFront(node.clone()),
             Node::UnaryBack(node) => Node::UnaryBack(node.clone()),
             Node::Binary(node) => Node::Binary(node.clone()),
@@ -589,6 +594,62 @@ impl Clone for NodeWhile {
         NodeWhile {
             condition: self.condition.clone(),
             body: self.body.iter().map(|node| node.clone()).collect(),
+            column: self.column,
+            line: self.line,
+            file: self.file.clone(),
+        }
+    }
+}
+
+pub struct NodeIf {
+    pub condition: Box<Node>,
+    pub body: Vec<Node>,
+    pub else_body: Option<Vec<Node>>,
+    pub column: usize,
+    pub line: usize,
+    pub file: String,
+}
+impl DataNode for NodeIf {
+    fn to_string(&self) -> String {
+        let str_body: Vec<String> = self
+            .body
+            .iter()
+            .map(|node| node.to_string())
+            .collect();
+        match &self.else_body {
+            Some(else_body) => {
+                let str_else_body: Vec<String> = else_body
+                    .iter()
+                    .map(|node| node.to_string())
+                    .collect();
+                format!(
+                    "NodeIf:\n{}\n  <==>\n{}\n  <==>\n{}",
+                    data_format(self.condition.to_string()),
+                    data_format(str_body.join("\n")),
+                    data_format(str_else_body.join("\n"))
+                )
+            
+            },
+            None => {
+                format!(
+                    "NodeIf:\n{}\n  <==>\n{}",
+                    data_format(self.condition.to_string()),
+                    data_format(str_body.join("\n"))
+                )
+            
+            },
+        }
+    }
+}
+impl Clone for NodeIf {
+    fn clone(&self) -> Self {
+        NodeIf {
+            condition: self.condition.clone(),
+            body: self.body.iter().map(|node| node.clone()).collect(),
+            else_body: match &self.else_body {
+                Some(else_body) => Some(else_body.iter().map(|node| node.clone()).collect()),
+                None => None,
+            },
             column: self.column,
             line: self.line,
             file: self.file.clone(),

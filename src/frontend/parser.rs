@@ -260,6 +260,8 @@ impl Parser {
             TokenType::Keyword => match token.value.as_str() {
                 "def" | "const" => Some(self.parse_var_decl()),
                 "mien" => Some(self.parse_while_decl(is_function)),
+                "hacer" => Some(self.parse_do_while_decl(is_function)),
+                "si" => Some(self.parse_if_decl(is_function, is_loop)),
                 _ => {
                     self.eat();
                     None
@@ -267,6 +269,48 @@ impl Parser {
             },
             _ => Some(self.parse_stmt_expr()),
         }
+    }
+    fn parse_if_decl(&mut self, is_function: bool, is_loop: bool) -> ast::Node {
+        let token = self.eat(); // si
+        let condition = self.parse_expr();
+        if condition.is_error() {
+            return condition;
+        }
+        let block = self.parse_block_expr(is_function, is_loop);
+        if block.is_err() {
+            return block.err().unwrap();
+        }
+        let body = block.ok().unwrap();
+        let else_token = self.at(); // ent
+        if else_token.token_type == TokenType::Keyword && else_token.value == "ent" {
+            self.eat();
+            let else_block = self.parse_block_expr(is_function, is_loop);
+            if else_block.is_err() {
+                return else_block.err().unwrap();
+            }
+            let else_body = else_block.ok().unwrap();
+            let else_body = if else_body.len() == 0 {
+                None
+            } else {
+                Some(else_body)
+            };
+            return ast::Node::If(ast::NodeIf {
+                condition: Box::new(condition),
+                body,
+                else_body,
+                column: token.position.column,
+                line: token.position.line,
+                file: token.meta,
+            });
+        }
+        return ast::Node::If(ast::NodeIf {
+            condition: Box::new(condition),
+            body,
+            else_body: None,
+            column: token.position.column,
+            line: token.position.line,
+            file: token.meta,
+        });
     }
     fn parse_do_while_decl(&mut self, is_function: bool) -> ast::Node {
         let token = self.eat(); // hacer
@@ -1048,6 +1092,12 @@ impl Parser {
                         file: token.meta,
                     }));
                 }
+                _ => Err(token),
+            },
+            TokenType::Keyword => match token.value.as_str() {
+                "mien" => Ok(self.parse_while_decl(false)),
+                "hacer" => Ok(self.parse_do_while_decl(false)),
+                "si" => Ok(self.parse_if_decl(false, false)),
                 _ => Err(token),
             },
             _ => Err(token),
