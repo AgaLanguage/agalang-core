@@ -1,11 +1,12 @@
 use super::TokenType;
-pub const KEYWORDS: [&str; 20] = [
+pub const KEYWORDS: [&str; 21] = [
     "def",
     "const",
     "fn",
     "si",
     "ent",
     "ret",
+    "hacer",
     "mien",
     "rom",
     "cont",

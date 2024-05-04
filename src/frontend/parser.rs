@@ -268,6 +268,45 @@ impl Parser {
             _ => Some(self.parse_stmt_expr()),
         }
     }
+    fn parse_do_while_decl(&mut self, is_function: bool) -> ast::Node {
+        let token = self.eat(); // hacer
+        let block = self.parse_block_expr(is_function, true);
+        if block.is_err() {
+            return block.err().unwrap();
+        }
+        let body = block.ok().unwrap();
+        let while_token = self.expect(TokenType::Keyword, "Se esperaba la palabra clave 'mien'");
+        if while_token.token_type == TokenType::Error || while_token.value != "mien" {
+            let line = self.source.lines().nth(while_token.position.line).unwrap();
+            return ast::Node::Error(ast::NodeError {
+                message: "Se esperaba la palabra clave 'mien'".to_string(),
+                column: while_token.position.column,
+                line: while_token.position.line,
+                meta: format!("{}\0{}\0{}", while_token.meta, line, while_token.value),
+            });
+        }
+        let condition = self.parse_expr();
+        if condition.is_error() {
+            return condition;
+        }
+        let semicolon = self.expect(TokenType::Punctuation, "");
+        if semicolon.token_type == TokenType::Error || semicolon.value != ";" {
+            let line = self.source.lines().nth(semicolon.position.line).unwrap();
+            return ast::Node::Error(ast::NodeError {
+                message: "Se esperaba un punto y coma".to_string(),
+                column: semicolon.position.column,
+                line: semicolon.position.line,
+                meta: format!("{}\0{}\0{}", semicolon.meta, line, semicolon.value),
+            });
+        }
+        return ast::Node::DoWhile(ast::NodeWhile {
+            condition: Box::new(condition),
+            body,
+            column: token.position.column,
+            line: token.position.line,
+            file: token.meta,
+        });
+    }
     fn parse_while_decl(&mut self, is_function: bool) -> ast::Node {
         let token = self.eat(); // mien
         let condition = self.parse_expr();
