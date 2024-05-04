@@ -7,8 +7,6 @@ pub enum Node {
     Object(NodeObject),
     Array(NodeArray),
     Identifier(NodeIdentifier),
-    // Boolean(NodeBoolean),
-    // None(NodeNone),
 
     // Statements //
     VarDecl(NodeVarDecl),
@@ -19,7 +17,7 @@ pub enum Node {
     // Import(NodeImport),
     // Export(NodeExport),
     // For(NodeFor),
-    // While(NodeWhile),
+    While(NodeWhile),
     // DoWhile(NodeDoWhile),
     // Try(NodeTry),
     // Catch(NodeCatch),
@@ -39,7 +37,7 @@ impl Node {
     pub fn is_error(&self) -> bool {
         match self {
             Node::Error(_) => true,
-            _ => false,
+            _ => false
         }
     }
     pub fn to_string(&self) -> String {
@@ -52,6 +50,7 @@ impl Node {
             Node::Identifier(node) => node.to_string(),
             Node::VarDecl(node) => node.to_string(),
             Node::Assignment(node) => node.to_string(),
+            Node::While(node) => node.to_string(),
             Node::UnaryFront(node) => node.to_string(),
             Node::UnaryBack(node) => node.to_string(),
             Node::Binary(node) => node.to_string(),
@@ -70,6 +69,7 @@ impl Node {
             Node::Identifier(node) => node.column,
             Node::VarDecl(node) => node.column,
             Node::Assignment(node) => node.column,
+            Node::While(node) => node.column,
             Node::UnaryFront(node) => node.column,
             Node::UnaryBack(node) => node.column,
             Node::Binary(node) => node.column,
@@ -88,6 +88,7 @@ impl Node {
             Node::Identifier(node) => node.line,
             Node::VarDecl(node) => node.line,
             Node::Assignment(node) => node.line,
+            Node::While(node) => node.line,
             Node::UnaryFront(node) => node.line,
             Node::UnaryBack(node) => node.line,
             Node::Binary(node) => node.line,
@@ -106,6 +107,7 @@ impl Node {
             Node::Identifier(node) => node.file.clone(),
             Node::VarDecl(node) => node.file.clone(),
             Node::Assignment(node) => node.file.clone(),
+            Node::While(node) => node.file.clone(),
             Node::UnaryFront(node) => node.file.clone(),
             Node::UnaryBack(node) => node.file.clone(),
             Node::Binary(node) => node.file.clone(),
@@ -126,6 +128,7 @@ impl Clone for Node {
             Node::Identifier(node) => Node::Identifier(node.clone()),
             Node::VarDecl(node) => Node::VarDecl(node.clone()),
             Node::Assignment(node) => Node::Assignment(node.clone()),
+            Node::While(node) => Node::While(node.clone()),
             Node::UnaryFront(node) => Node::UnaryFront(node.clone()),
             Node::UnaryBack(node) => Node::UnaryBack(node.clone()),
             Node::Binary(node) => Node::Binary(node.clone()),
@@ -556,6 +559,39 @@ impl Clone for NodeCall {
         NodeCall {
             callee: self.callee.clone(),
             arguments: self.arguments.iter().map(|arg| arg.clone()).collect(),
+            column: self.column,
+            line: self.line,
+            file: self.file.clone(),
+        }
+    }
+}
+pub struct NodeWhile {
+    pub condition: Box<Node>,
+    pub body: Vec<Node>,
+    pub column: usize,
+    pub line: usize,
+    pub file: String,
+}
+impl DataNode for NodeWhile {
+    fn to_string(&self) -> String {
+        let str_body: Vec<String> = self
+            .body
+            .iter()
+            .map(|node| node.to_string())
+            .collect();
+        format!(
+            "NodeWhile:\n{}\n  <==>\n{}",
+            data_format(self.condition.to_string()),
+            data_format(str_body.join("\n"))
+        )
+    }
+}
+
+impl Clone for NodeWhile {
+    fn clone(&self) -> Self {
+        NodeWhile {
+            condition: self.condition.clone(),
+            body: self.body.iter().map(|node| node.clone()).collect(),
             column: self.column,
             line: self.line,
             file: self.file.clone(),

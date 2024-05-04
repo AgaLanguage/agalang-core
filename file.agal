@@ -1,9 +1,1 @@
-def mundo = 4;
-
-mundo??mon;
-mundo???mon;
-mundo!???mon;
-mundo!???&mon;
-
-
-mundo()!.tres()!.simon;
+mien 3 mundo();

@@ -1,6 +1,6 @@
 # Expreciones
   - `?(value)` transforma a valor booleano
-  - `!(value)` niega el valor booleano
+  - `!(value) == !?(value)` niega el valor booleano
   - `&(value)` transforma a referencia
   - `+(value)` transforma a numero
   - `-(value)` transforma a negativo

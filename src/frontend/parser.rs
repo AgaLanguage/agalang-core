@@ -10,7 +10,7 @@ use crate::{
 use super::lexer::TokenType;
 
 const ASSIGNMENT_PREV: [&str; 8] = ["+", "-", "*", "/", "%", "&&", "||", "??"];
-const COMPARISON: [&str; 6] = ["==", "!=", "<", ">", "<=", ">="];
+const COMPARISON: [&str; 4] = ["=", "!", "<", ">"];
 const MISSING_TOKEN: &str = "\x1b[81mToken desaparecido\x1b[0m";
 
 struct SemiToken {
@@ -211,7 +211,7 @@ impl Parser {
         //let code: Vec<Box<dyn ast::Node>> = Vec::new();
 
         while self.not_eof() {
-            let stmt = self.parse_stmt(false, false, true);
+            let stmt = self.parse_stmt(true, false, false, false);
             if let Some(stmt) = stmt {
                 match stmt {
                     ast::Node::Error(error) => {
@@ -232,9 +232,10 @@ impl Parser {
     }
     fn parse_stmt(
         &mut self,
+        is_global_scope: bool,
         is_function: bool,
         is_class_decl: bool,
-        is_global_scope: bool,
+        is_loop: bool,
     ) -> Option<ast::Node> {
         let token = self.at();
         match token.token_type {
@@ -257,7 +258,8 @@ impl Parser {
                 }));
             }
             TokenType::Keyword => match token.value.as_str() {
-                "def" | "const" => self.parse_var_decl(),
+                "def" | "const" => Some(self.parse_var_decl()),
+                "mien" => Some(self.parse_while_decl(is_function)),
                 _ => {
                     self.eat();
                     None
@@ -266,7 +268,81 @@ impl Parser {
             _ => Some(self.parse_stmt_expr()),
         }
     }
-    fn parse_var_decl(&mut self) -> Option<ast::Node> {
+    fn parse_while_decl(&mut self, is_function: bool) -> ast::Node {
+        let token = self.eat(); // mien
+        let condition = self.parse_expr();
+        if condition.is_error() {
+            return condition;
+        }
+        let block = self.parse_block_expr(is_function, true);
+        if block.is_err() {
+            return block.err().unwrap();
+        }
+        let body = block.ok().unwrap();
+        return ast::Node::While(ast::NodeWhile {
+            condition: Box::new(condition),
+            body,
+            column: token.position.column,
+            line: token.position.line,
+            file: token.meta,
+        });
+    }
+    fn parse_block_expr(&mut self, is_function: bool, is_loop: bool) -> Result<Vec<ast::Node>, ast::Node> {
+        let open_brace = self.at();
+        if open_brace.token_type == TokenType::Error {
+            let line = self.source.lines().nth(open_brace.position.line).unwrap();
+            return Err(ast::Node::Error(ast::NodeError {
+                message: "Se esperaba un bloque".to_string(),
+                column: open_brace.position.column,
+                line: open_brace.position.line,
+                meta: format!("{}\0{}\0{}", open_brace.meta, line, open_brace.value),
+            }));
+        }
+        if self.at().token_type != TokenType::Punctuation || self.at().value != "{" {
+            let expr = self.parse_stmt(false, is_function, false, is_loop);
+            if expr.is_none() {
+                let line = self.source.lines().nth(open_brace.position.line).unwrap();
+                return Err(ast::Node::Error(ast::NodeError {
+                    message: "Se esperaba un bloque".to_string(),
+                    column: open_brace.position.column,
+                    line: open_brace.position.line,
+                    meta: format!("{}\0{}\0{}", open_brace.meta, line, open_brace.value),
+                }));
+            }
+            let expr = expr.unwrap();
+            if expr.is_error() {
+                return Err(expr);
+            }
+            return Ok(vec![expr]);
+        }
+        self.eat();
+        let mut body: Vec<ast::Node> = Vec::new();
+        while self.not_eof()
+            && !(self.at().token_type == TokenType::Punctuation && self.at().value == "}")
+        {
+            let stmt = self.parse_stmt(false, false, false, false);
+            if stmt.is_none() {
+                break;
+            }
+            let stmt = stmt.unwrap();
+            if stmt.is_error() {
+                return Err(stmt);
+            }
+            body.push(stmt);
+        }
+        let close_brace = self.expect(TokenType::Punctuation, "");
+        if close_brace.token_type == TokenType::Error || close_brace.value != "}" {
+            let line = self.source.lines().nth(close_brace.position.line).unwrap();
+            return Err(ast::Node::Error(ast::NodeError {
+                message: "Se esperaba un corchete de cierre".to_string(),
+                column: close_brace.position.column,
+                line: close_brace.position.line,
+                meta: format!("{}\0{}\0{}", close_brace.meta, line, close_brace.value),
+            }));
+        }
+        Ok(body)
+    }
+    fn parse_var_decl(&mut self) -> ast::Node {
         let token = self.eat();
         let is_const = token.value == "const";
         let mut semi_token = SemiToken {
@@ -288,12 +364,12 @@ impl Parser {
         if identifier.token_type == TokenType::Error {
             let line = self.source.lines().nth(semi_token.line).unwrap();
             let meta = format!("{}\0{}\0{}", self.file_name, line, semi_token.value);
-            return Some(ast::Node::Error(ast::NodeError {
+            return ast::Node::Error(ast::NodeError {
                 message: identifier.value,
                 column: semi_token.column,
                 line: semi_token.line,
                 meta,
-            }));
+            });
         }
         semi_token.value += identifier.value.as_str();
 
@@ -308,24 +384,24 @@ impl Parser {
         semi_token.line = equals_semicolon.position.line;
         semi_token.column = equals_semicolon.position.column;
         if equals_semicolon.token_type == TokenType::Punctuation && equals_semicolon.value == ";" {
-            return Some(ast::Node::VarDecl(ast::NodeVarDecl {
+            return ast::Node::VarDecl(ast::NodeVarDecl {
                 name: identifier.value.clone(),
                 value: None,
                 is_const,
                 column: identifier.position.column,
                 line: identifier.position.line,
                 file: identifier.meta,
-            }));
+            });
         }
         if equals_semicolon.token_type != TokenType::Operator || equals_semicolon.value != "=" {
             let line = self.source.lines().nth(semi_token.line).unwrap();
             let meta = format!("{}\0{}\0{}", self.file_name, line, semi_token.value);
-            return Some(ast::Node::Error(ast::NodeError {
+            return ast::Node::Error(ast::NodeError {
                 message: "Se esperaba un punto y coma".to_string(),
                 column: semi_token.column,
                 line: semi_token.line,
                 meta,
-            }));
+            });
         }
         semi_token.value += equals_semicolon.value.as_str();
 
@@ -337,7 +413,7 @@ impl Parser {
         };
         semi_token.column = value.get_column();
         if value.is_error() {
-            return Some(value);
+            return value;
         }
         let semicolon = self.expect(TokenType::Punctuation, "");
         if semi_token.line == semicolon.position.line {
@@ -351,21 +427,21 @@ impl Parser {
         if semicolon.token_type == TokenType::Error || semicolon.value != ";" {
             let line = self.source.lines().nth(semi_token.line).unwrap();
             let meta = format!("{}\0{}\0{}", self.file_name, line, semi_token.value);
-            return Some(ast::Node::Error(ast::NodeError {
+            return ast::Node::Error(ast::NodeError {
                 message: "Se esperaba un punto y coma".to_string(),
                 column: semi_token.column,
                 line: semi_token.line,
                 meta,
-            }));
+            });
         }
-        return Some(ast::Node::VarDecl(ast::NodeVarDecl {
+        return ast::Node::VarDecl(ast::NodeVarDecl {
             name: identifier.value.clone(),
             value: Some(Box::new(value)),
             is_const,
             column: token.position.column,
             line: token.position.line,
             file: token.meta,
-        }));
+        });
     }
     fn parse_stmt_expr(&mut self) -> ast::Node {
         let node = self.parse_expr();
@@ -541,34 +617,72 @@ impl Parser {
                 file: left.get_file(),
             });
         }
-        if !ASSIGNMENT_PREV.contains(&operator) {
-            return ast::Node::Error(ast::NodeError {
-                message: "Operador no válido para asignación".to_string(),
-                column: token.position.column,
-                line: token.position.line,
-                meta: token.meta.clone(),
+        if ASSIGNMENT_PREV.contains(&operator) {
+            return ast::Node::Assignment(ast::NodeAssignment {
+                identifier: Box::new(left.clone()),
+                value: Box::new(ast::Node::Binary(ast::NodeBinary {
+                    operator: operator.to_string(),
+                    left: Box::new(left.clone()),
+                    right: Box::new(right),
+                    column: left.get_column(),
+                    line: left.get_line(),
+                    file: left.get_file(),
+                })),
+                column: left.get_column(),
+                line: left.get_line(),
+                file: left.get_file(),
             });
         }
-        ast::Node::Assignment(ast::NodeAssignment {
-            identifier: Box::new(left.clone()),
-            value: Box::new(ast::Node::Binary(ast::NodeBinary {
-                operator: operator.to_string(),
+        if COMPARISON.contains(&operator) {
+            return ast::Node::Binary(ast::NodeBinary {
+                operator: format!("{}=", operator),
                 left: Box::new(left.clone()),
                 right: Box::new(right),
                 column: left.get_column(),
                 line: left.get_line(),
                 file: left.get_file(),
-            })),
-            column: left.get_column(),
-            line: left.get_line(),
-            file: left.get_file(),
-        })
+            });
+        }
+        let line = self.source.lines().nth(token.position.line).unwrap();
+        return ast::Node::Error(ast::NodeError {
+            message: "Operador no válido para asignación".to_string(),
+            column: token.position.column,
+            line: token.position.line,
+            meta: format!("{}\0{}\0{}", token.meta, line, token.value),
+        });
     }
     fn parse_complex_expr(&mut self, left: ast::Node, operator_st: SemiToken) -> ast::Node {
         let (left, mut operator_st) = self.parse_back_unary_expr(left.clone(), operator_st);
-        let token = self.at();
-        if token.token_type != TokenType::Operator || operator_st.value == "" {
+        if left.is_error() {
             return left;
+        }
+        let token = self.at();
+        if token.token_type == TokenType::Error {
+            let line = self.source.lines().nth(token.position.line).unwrap();
+            return ast::Node::Error(ast::NodeError {
+                message: token.value.clone(),
+                column: token.position.column,
+                line: token.position.line,
+                meta: format!("{}\0{}\0{}", token.meta, line, token.value),
+            });
+        }
+        if token.token_type != TokenType::Operator && operator_st.value == "" {
+            return left;
+        }
+        if token.token_type != TokenType::Operator && (operator_st.value == ">" || operator_st.value == "<") {
+            let operator = operator_st.value;
+            let right = self.parse_expr();
+            if right.is_error() {
+                return right;
+            }
+            return ast::Node::Binary(ast::NodeBinary {
+                operator,
+                left: Box::new(left.clone()),
+                right: Box::new(right),
+                column: left.get_column(),
+                line: left.get_line(),
+                file: left.get_file(),
+            });
         }
         self.eat();
         match token.value.as_str() {
@@ -591,11 +705,12 @@ impl Parser {
                     && operator_st.value != "||"
                     && operator_st.value != "&&"
                 {
+                    let line = self.source.lines().nth(token.position.line).unwrap();
                     return ast::Node::Error(ast::NodeError {
                         message: "Operador no válido".to_string(),
                         column: token.position.column,
                         line: token.position.line,
-                        meta: token.meta.clone(),
+                        meta: format!("{}\0{}\0{}", token.meta, line, token.value),
                     });
                 }
                 if self.at().token_type == TokenType::Operator && self.at().value == "=" {
@@ -863,11 +978,12 @@ impl Parser {
                     let expr = self.parse_expr();
                     let close_paren = self.expect(TokenType::Punctuation, "");
                     if close_paren.token_type == TokenType::Error || close_paren.value != ")" {
+                        let line = self.source.lines().nth(close_paren.position.line).unwrap();
                         return Ok(ast::Node::Error(ast::NodeError {
                             message: "Se esperaba un paréntesis de cierre".to_string(),
                             column: close_paren.position.column,
                             line: close_paren.position.line,
-                            meta: close_paren.meta,
+                            meta: format!("{}\0{}\0{}", close_paren.meta, line, close_paren.value),
                         }));
                     }
                     return Ok(expr);
@@ -931,11 +1047,12 @@ impl Parser {
         }
         let close_brace = self.expect(TokenType::Punctuation, "");
         if close_brace.token_type == TokenType::Error || close_brace.value != "}" {
+            let line = self.source.lines().nth(close_brace.position.line).unwrap();
             return ast::Node::Error(ast::NodeError {
                 message: "Se esperaba una llave de cierre".to_string(),
                 column: close_brace.position.column,
                 line: close_brace.position.line,
-                meta: close_brace.meta,
+                meta: format!("{}\0{}\0{}", close_brace.meta, line, close_brace.value),
             });
         }
         ast::Node::Object(ast::NodeObject {
@@ -1115,11 +1232,12 @@ impl Parser {
         }
         let close_brace = self.expect(TokenType::Punctuation, "");
         if close_brace.token_type == TokenType::Error || close_brace.value != "]" {
+            let line = self.source.lines().nth(close_brace.position.line).unwrap();
             return ast::Node::Error(ast::NodeError {
                 message: "Se esperaba un corchete de cierre".to_string(),
                 column: close_brace.position.column,
                 line: close_brace.position.line,
-                meta: close_brace.meta,
+                meta: format!("{}\0{}\0{}", close_brace.meta, line, close_brace.value),
             });
         }
         ast::Node::Array(ast::NodeArray {
