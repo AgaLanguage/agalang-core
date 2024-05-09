@@ -1,12 +1,12 @@
 mod token_type;
-pub use token_type::TokenType;
+pub use token_type::{KeywordsType, TokenType};
 mod token_number;
 use token_number::token_number;
 mod token_string;
 use token_string::token_string;
 mod token_identifier;
 use crate::{
-    internal::errors::{throw_error, throw_multiple_errors, ErrorNames, ErrorTypes},
+    internal::errors::{show_error, show_multiple_errors, ErrorNames, ErrorTypes},
     util::{split_meta, to_cyan},
 };
 use token_identifier::token_identifier;
@@ -104,7 +104,7 @@ pub fn tokenizer(input: String, file_name: String) -> Vec<util::Token<TokenType>
             t
         }
         Err(e) => {
-            throw_error(ErrorNames::LexerError, ErrorTypes::ErrorError(e));
+            show_error(&ErrorNames::LexerError, ErrorTypes::ErrorError(e));
             return Vec::new();
         }
     };
@@ -114,7 +114,7 @@ pub fn tokenizer(input: String, file_name: String) -> Vec<util::Token<TokenType>
         .map(|x| token_error(x))
         .collect::<Vec<ErrorTypes>>();
     if errors.len() > 0 {
-        throw_multiple_errors(ErrorNames::LexerError, errors);
+        show_multiple_errors(ErrorNames::LexerError, errors);
         return Vec::new();
     }
     tokens

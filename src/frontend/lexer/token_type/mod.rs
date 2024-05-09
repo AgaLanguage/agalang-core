@@ -1,3 +1,5 @@
+mod keyword;
+pub use keyword::KeywordsType;
 #[derive(PartialEq)]
 pub enum TokenType {
     Identifier, // variable names, function names, etc
@@ -7,7 +9,7 @@ pub enum TokenType {
     String, // "hello {variable}"
     Operator, // +, -, *, /, %, &, |, ^, ~, !, =, <, >
     Punctuation, // (, ), {, }, [, ], ,, ;, :
-    Keyword,
+    Keyword(KeywordsType),
     Error,
     None,
     EOF,
@@ -22,7 +24,7 @@ impl std::fmt::Display for TokenType {
             TokenType::String => write!(f, "String"),
             TokenType::Operator => write!(f, "Operator"),
             TokenType::Punctuation => write!(f, "Punctuation"),
-            TokenType::Keyword => write!(f, "Keyword"),
+            TokenType::Keyword(key) => write!(f, "Keyword({})", key.to_string()),
             TokenType::Error => write!(f, "Error"),
             TokenType::None => write!(f, "None"),
             TokenType::EOF => write!(f, "EOF"),
@@ -39,7 +41,7 @@ impl Clone for TokenType {
             TokenType::String => TokenType::String,
             TokenType::Operator => TokenType::Operator,
             TokenType::Punctuation => TokenType::Punctuation,
-            TokenType::Keyword => TokenType::Keyword,
+            TokenType::Keyword(key) => TokenType::Keyword(*key),
             TokenType::Error => TokenType::Error,
             TokenType::None => TokenType::None,
             TokenType::EOF => TokenType::EOF,

@@ -1,4 +1,4 @@
-use super::ast::{NodeError, NodeString, StringData};
+use super::{ast::{NodeError, NodeString, StringData}, Parser};
 use crate::frontend::lexer::TokenType;
 use util::Token;
 
@@ -39,8 +39,21 @@ pub fn complex_string(token_string: Token<TokenType>, line: &str) -> Result<Node
             continue;
         }
         if is_id {
+            let node = Parser::new(current.clone(), &token_string.meta).produce_ast();
+            if node.is_error() {
+                let node = node.get_error().unwrap();
+                return Err(NodeError {
+                    message: node.message,
+                    column: token_string.position.column + i,
+                    line: token_string.position.line,
+                    meta: format!(
+                        "{}\0{}\0{}",
+                        token_string.meta, line, string
+                    ),
+                });
+            }
             if c == '}' {
-                result.push(StringData::Id(current.clone()));
+                result.push(StringData::Id(node.to_box()));
                 current.clear();
                 is_id = false;
                 continue;

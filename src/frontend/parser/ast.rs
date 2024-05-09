@@ -12,7 +12,7 @@ pub enum Node {
     VarDecl(NodeVarDecl),
     Assignment(NodeAssignment),
     // Class(NodeClass),
-    // Function(NodeFunction),
+    Function(NodeFunction),
     If(NodeIf),
     // Import(NodeImport),
     // Export(NodeExport),
@@ -30,6 +30,8 @@ pub enum Node {
     Binary(NodeBinary),
     Member(NodeMember),
     Call(NodeCall),
+    Return(NodeReturn),
+    LoopEdit(NodeLoopEdit),
     // Arrow(NodeArrow),
     Error(NodeError),
 }
@@ -39,6 +41,15 @@ impl Node {
             Node::Error(_) => true,
             _ => false
         }
+    }
+    pub fn get_error(&self) -> Option<NodeError> {
+        match self {
+            Node::Error(node) => Some(node.clone()),
+            _ => None,
+        }
+    }
+    pub fn to_box(self) -> Box<Node> {
+        Box::new(self)
     }
     pub fn to_string(&self) -> String {
         match self {
@@ -51,11 +62,14 @@ impl Node {
             Node::VarDecl(node) => node.to_string(),
             Node::Assignment(node) => node.to_string(),
             Node::While(node) | Node::DoWhile(node) => node.to_string(),
+            Node::Function(node) => node.to_string(),
             Node::If(node) => node.to_string(),
             Node::UnaryFront(node) | Node::UnaryBack(node) => node.to_string(),
             Node::Binary(node) => node.to_string(),
             Node::Member(node) => node.to_string(),
             Node::Call(node) => node.to_string(),
+            Node::Return(node) => node.to_string(),
+            Node::LoopEdit(node) => node.to_string(),
             Node::Error(node) => node.to_string(),
         }
     }
@@ -70,11 +84,14 @@ impl Node {
             Node::VarDecl(node) => node.column,
             Node::Assignment(node) => node.column,
             Node::While(node)  | Node::DoWhile(node) => node.column,
+            Node::Function(node) => node.column,
             Node::If(node) => node.column,
             Node::UnaryFront(node) | Node::UnaryBack(node) => node.column,
             Node::Binary(node) => node.column,
             Node::Member(node) => node.column,
             Node::Call(node) => node.column,
+            Node::Return(node) => node.column,
+            Node::LoopEdit(node) => node.column,
             Node::Error(node) => node.column,
         }
     }
@@ -89,11 +106,14 @@ impl Node {
             Node::VarDecl(node) => node.line,
             Node::Assignment(node) => node.line,
             Node::While(node)  | Node::DoWhile(node) => node.line,
+            Node::Function(node) => node.line,
             Node::If(node) => node.line,
             Node::UnaryFront(node) | Node::UnaryBack(node) => node.line,
             Node::Binary(node) => node.line,
             Node::Member(node) => node.line,
             Node::Call(node) => node.line,
+            Node::Return(node) => node.line,
+            Node::LoopEdit(node) => node.line,
             Node::Error(node) => node.line,
         }
     }
@@ -108,11 +128,14 @@ impl Node {
             Node::VarDecl(node) => node.file.clone(),
             Node::Assignment(node) => node.file.clone(),
             Node::While(node)  | Node::DoWhile(node)=> node.file.clone(),
+            Node::Function(node) => node.file.clone(),
             Node::If(node) => node.file.clone(),
             Node::UnaryFront(node) | Node::UnaryBack(node) => node.file.clone(),
             Node::Binary(node) => node.file.clone(),
             Node::Member(node) => node.file.clone(),
             Node::Call(node) => node.file.clone(),
+            Node::Return(node) => node.file.clone(),
+            Node::LoopEdit(node) => node.file.clone(),
             Node::Error(node) => node.meta.clone(),
         }
     }
@@ -130,12 +153,15 @@ impl Clone for Node {
             Node::Assignment(node) => Node::Assignment(node.clone()),
             Node::While(node) => Node::While(node.clone()),
             Node::DoWhile(node) => Node::DoWhile(node.clone()),
+            Node::Function(node) => Node::Function(node.clone()),
             Node::If(node) => Node::If(node.clone()),
             Node::UnaryFront(node) => Node::UnaryFront(node.clone()),
             Node::UnaryBack(node) => Node::UnaryBack(node.clone()),
             Node::Binary(node) => Node::Binary(node.clone()),
             Node::Member(node) => Node::Member(node.clone()),
             Node::Call(node) => Node::Call(node.clone()),
+            Node::Return(node) => Node::Return(node.clone()),
+            Node::LoopEdit(node) => Node::LoopEdit(node.clone()),
             Node::Error(node) => Node::Error(node.clone()),
         }
     }
@@ -188,7 +214,7 @@ impl Clone for NodeProgram {
 }
 pub enum StringData {
     Str(String),
-    Id(String),
+    Id(Box<Node>),
 }
 pub struct NodeString {
     pub value: Vec<StringData>,
@@ -203,7 +229,7 @@ impl DataNode for NodeString {
             .iter()
             .map(|data| match data {
                 StringData::Str(str) => format!("\"{}\"", str).replace("\n", "\\n"),
-                StringData::Id(id) => id.clone(),
+                StringData::Id(id) => id.to_string(),
             })
             .collect();
         format!("NodeString: {}", str_value.join(" + "))
@@ -650,6 +676,115 @@ impl Clone for NodeIf {
                 Some(else_body) => Some(else_body.iter().map(|node| node.clone()).collect()),
                 None => None,
             },
+            column: self.column,
+            line: self.line,
+            file: self.file.clone(),
+        }
+    }
+}
+
+pub struct NodeFunction {
+    pub name: String,
+    pub params: Vec<Node>,
+    pub body: Vec<Node>,
+    pub column: usize,
+    pub line: usize,
+    pub file: String,
+}
+impl DataNode for NodeFunction {
+    fn to_string(&self) -> String {
+        let str_params: Vec<String> = self
+            .params
+            .iter()
+            .map(|param| param.to_string())
+            .collect();
+        let str_body: Vec<String> = self
+            .body
+            .iter()
+            .map(|node| node.to_string())
+            .collect();
+        format!(
+            "NodeFunction: {} ({})\n{}",
+            self.name,
+            str_params.join(", "),
+            data_format(str_body.join("\n"))
+        )
+    }
+}
+impl Clone for NodeFunction {
+    fn clone(&self) -> Self {
+        NodeFunction {
+            name: self.name.clone(),
+            params: self.params.iter().map(|param| param.clone()).collect(),
+            body: self.body.iter().map(|node| node.clone()).collect(),
+            column: self.column,
+            line: self.line,
+            file: self.file.clone(),
+        }
+    }
+}
+pub struct NodeReturn {
+    pub value: Option<Box<Node>>,
+    pub column: usize,
+    pub line: usize,
+    pub file: String,
+}
+impl DataNode for NodeReturn {
+    fn to_string(&self) -> String {
+        match &self.value {
+            Some(value) => format!("NodeReturn:\n{}", data_format(value.to_string())),
+            None => "NodeReturn".to_string(),
+        }
+    }
+}
+impl Clone for NodeReturn {
+    fn clone(&self) -> Self {
+        NodeReturn {
+            value: match &self.value {
+                Some(value) => Some(value.clone()),
+                None => None,
+            },
+            column: self.column,
+            line: self.line,
+            file: self.file.clone(),
+        }
+    }
+}
+pub enum NodeLoopEditType {
+    Break,
+    Continue,
+}
+impl NodeLoopEditType {
+    pub fn to_string(&self) -> String {
+        match self {
+            NodeLoopEditType::Break => "break".to_string(),
+            NodeLoopEditType::Continue => "continue".to_string(),
+        }
+    }
+}
+impl Clone for NodeLoopEditType {
+    fn clone(&self) -> Self {
+        match self {
+            NodeLoopEditType::Break => NodeLoopEditType::Break,
+            NodeLoopEditType::Continue => NodeLoopEditType::Continue,
+        }
+    }
+}
+pub struct NodeLoopEdit {
+    pub action: NodeLoopEditType,
+    pub column: usize,
+    pub line: usize,
+    pub file: String,
+}
+impl DataNode for NodeLoopEdit {
+    fn to_string(&self) -> String {
+        format!("NodeLoopEdit: {}", self.action.to_string())
+    }
+}
+impl Clone for NodeLoopEdit {
+    fn clone(&self) -> Self {
+        NodeLoopEdit {
+            action: self.action.clone(),
             column: self.column,
             line: self.line,
             file: self.file.clone(),

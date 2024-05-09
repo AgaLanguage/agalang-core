@@ -1,35 +1,23 @@
-use super::TokenType;
-pub const KEYWORDS: [&str; 21] = [
-    "def",
-    "const",
-    "fn",
-    "si",
-    "ent",
-    "ret",
-    "hacer",
-    "mien",
-    "rom",
-    "cont",
-    "clase",
-    "est",
-    "extiende",
-    "intentar",
-    "capturar",
-    "final",
-    "exportar",
-    "importar",
-    "como",
-    "con",
-    "impl"
-];
+use super::{TokenType, KeywordsType};
+
+fn get_keyword(s: &str) -> KeywordsType {
+    for keyword in KeywordsType::iter() {
+        if keyword.as_str() == s {
+            return keyword;
+        }
+    }
+    KeywordsType::None
+}
+
 fn is_alpha(c: char) -> bool {
   c.is_alphabetic() || c == '_' || c == '$' || c.is_numeric()
 }
 fn get_type_token(s: &str) -> TokenType {
-    if KEYWORDS.contains(&s) {
-        return TokenType::Keyword;
+    let keyword = get_keyword(s);
+    if keyword == KeywordsType::None {
+        return TokenType::Identifier;
     }
-    TokenType::Identifier
+    TokenType::Keyword(keyword)
 }
 
 pub fn token_identifier(
