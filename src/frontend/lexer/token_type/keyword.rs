@@ -7,7 +7,7 @@ pub enum KeywordsType {
     Hacer, Mientras, // done
     Romper, Retornar, Continuar, // done
     Clase, Estatico, Extender, Implementar, // todo
-    Intentar, Capturar, Final, // todo
+    Intentar, Capturar, Finalmente, // todo
     Exportar, Importar, Como, Con // todo
 }
 impl KeywordsType {
@@ -30,7 +30,7 @@ impl KeywordsType {
             KeywordsType::Implementar,
             KeywordsType::Intentar,
             KeywordsType::Capturar,
-            KeywordsType::Final,
+            KeywordsType::Finalmente,
             KeywordsType::Exportar,
             KeywordsType::Importar,
             KeywordsType::Como,
@@ -56,7 +56,7 @@ impl KeywordsType {
             KeywordsType::Implementar => "impl",
             KeywordsType::Intentar => "intentar",
             KeywordsType::Capturar => "capturar",
-            KeywordsType::Final => "final",
+            KeywordsType::Finalmente => "finalmente",
             KeywordsType::Exportar => "exportar",
             KeywordsType::Importar => "importar",
             KeywordsType::Como => "como",
@@ -87,7 +87,7 @@ impl Clone for KeywordsType {
             KeywordsType::Implementar => KeywordsType::Implementar,
             KeywordsType::Intentar => KeywordsType::Intentar,
             KeywordsType::Capturar => KeywordsType::Capturar,
-            KeywordsType::Final => KeywordsType::Final,
+            KeywordsType::Finalmente => KeywordsType::Finalmente,
             KeywordsType::Exportar => KeywordsType::Exportar,
             KeywordsType::Importar => KeywordsType::Importar,
             KeywordsType::Como => KeywordsType::Como,

@@ -1,1 +1,5 @@
 mien 0 京;
+
+intentar mundo();
+capturar (e) mundo();
+finalmente mundo();

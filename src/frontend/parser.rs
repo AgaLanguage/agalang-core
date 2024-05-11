@@ -252,7 +252,8 @@ impl Parser {
                 KeywordsType::Mientras
                 | KeywordsType::Hacer
                 | KeywordsType::Si
-                | KeywordsType::Funcion => Some(self.parse_keyword_value(is_function, is_loop)),
+                | KeywordsType::Funcion
+                | KeywordsType::Intentar => Some(self.parse_keyword_value(is_function, is_loop)),
                 KeywordsType::Retornar | KeywordsType::Continuar | KeywordsType::Romper => {
                     Some(self.parse_simple_decl(is_function, is_loop))
                 }
@@ -286,7 +287,10 @@ impl Parser {
                 if semicolon.token_type == TokenType::Error || semicolon.value != ";" {
                     let line = self.source.lines().nth(semicolon.position.line).unwrap();
                     return ast::Node::Error(ast::NodeError {
-                        message: format!("Se esperaba un punto y coma ({})", KeywordsType::Retornar.to_string()),
+                        message: format!(
+                            "Se esperaba un punto y coma ({})",
+                            KeywordsType::Retornar.to_string()
+                        ),
                         column: semicolon.position.column,
                         line: semicolon.position.line,
                         meta: format!("{}\0{}\0{}", semicolon.meta, line, semicolon.value),
@@ -345,11 +349,12 @@ impl Parser {
     }
     fn parse_keyword_value(&mut self, is_function: bool, is_loop: bool) -> ast::Node {
         let token = self.at();
-        match token.value.as_str() {
-            "mien" => self.parse_while_decl(is_function),
-            "hacer" => self.parse_do_while_decl(is_function),
-            "si" => self.parse_if_decl(is_function, is_loop),
-            "fn" => self.parse_function_decl(is_loop),
+        match token.token_type {
+            TokenType::Keyword(KeywordsType::Mientras) => self.parse_while_decl(is_function),
+            TokenType::Keyword(KeywordsType::Hacer) => self.parse_do_while_decl(is_function),
+            TokenType::Keyword(KeywordsType::Si) => self.parse_if_decl(is_function, is_loop),
+            TokenType::Keyword(KeywordsType::Funcion) => self.parse_function_decl(is_loop),
+            TokenType::Keyword(KeywordsType::Intentar) => self.parse_try_decl(is_function, is_loop),
             _ => ast::Node::Error(ast::NodeError {
                 message: "Token inesperado".to_string(),
                 column: token.position.column,
@@ -357,6 +362,78 @@ impl Parser {
                 meta: format!("{}\0{}\0{}", token.meta, token.value, token.value),
             }),
         }
+    }
+    fn parse_try_decl(&mut self, is_function: bool, is_loop: bool) -> ast::Node {
+        let token = self.eat(); // intentar
+        let block = self.parse_block_expr(is_function, is_loop);
+        if block.is_err() {
+            return block.err().unwrap();
+        }
+        let body = block.ok().unwrap();
+        let catch_token = self.expect(TokenType::Keyword(KeywordsType::Capturar), "Se esperaba 'capturar'");
+        if catch_token.token_type == TokenType::Error {
+            let line = self.source.lines().nth(catch_token.position.line).unwrap();
+            return ast::Node::Error(ast::NodeError {
+                message: "Se esperaba 'capturar'".to_string(),
+                column: catch_token.position.column,
+                line: catch_token.position.line,
+                meta: format!("{}\0{}\0{}", catch_token.meta, line, catch_token.value),
+            });
+        }
+        let open_paren = self.expect(TokenType::Punctuation, "");
+        if open_paren.token_type == TokenType::Error || open_paren.value != "(" {
+            let line = self.source.lines().nth(open_paren.position.line).unwrap();
+            return ast::Node::Error(ast::NodeError {
+                message: "Se esperaba un paréntesis de apertura".to_string(),
+                column: open_paren.position.column,
+                line: open_paren.position.line,
+                meta: format!("{}\0{}\0{}", open_paren.meta, line, open_paren.value),
+            });
+        }
+        let identifier = self.expect(TokenType::Identifier, "");
+        if identifier.token_type == TokenType::Error {
+            let line = self.source.lines().nth(identifier.position.line).unwrap();
+            return ast::Node::Error(ast::NodeError {
+                message: identifier.value.clone(),
+                column: identifier.position.column,
+                line: identifier.position.line,
+                meta: format!("{}\0{}\0{}", identifier.meta, line, identifier.value),
+            });
+        }
+        let close_paren = self.expect(TokenType::Punctuation, "");
+        if close_paren.token_type == TokenType::Error || close_paren.value != ")" {
+            let line = self.source.lines().nth(close_paren.position.line).unwrap();
+            return ast::Node::Error(ast::NodeError {
+                message: "Se esperaba un paréntesis de cierre".to_string(),
+                column: close_paren.position.column,
+                line: close_paren.position.line,
+                meta: format!("{}\0{}\0{}", close_paren.meta, line, close_paren.value),
+            });
+        }
+        let block = self.parse_block_expr(is_function, is_loop);
+        if block.is_err() {
+            return block.err().unwrap();
+        }
+        let body_catch = block.ok().unwrap();
+        let finally = if self.at().token_type == TokenType::Keyword(KeywordsType::Finalmente) {
+            self.eat();
+            let block = self.parse_block_expr(is_function, is_loop);
+            if block.is_err() {
+                return block.err().unwrap();
+            }
+            Some(block.ok().unwrap())
+        } else {
+            None
+        };
+        let catch = (identifier.value.clone(), body_catch);
+        ast::Node::Try(ast::NodeTry {
+            body,
+            catch,
+            finally,
+            column: token.position.column,
+            line: token.position.line,
+            file: token.meta,
+        })
     }
     fn parse_function_decl(&mut self, is_loop: bool) -> ast::Node {
         let token = self.eat(); // fn
@@ -518,7 +595,10 @@ impl Parser {
         if semicolon.token_type == TokenType::Error || semicolon.value != ";" {
             let line = self.source.lines().nth(semicolon.position.line).unwrap();
             return ast::Node::Error(ast::NodeError {
-                message: format!("Se esperaba un punto y coma ({})", KeywordsType::Hacer.to_string()),
+                message: format!(
+                    "Se esperaba un punto y coma ({})",
+                    KeywordsType::Hacer.to_string()
+                ),
                 column: semicolon.position.column,
                 line: semicolon.position.line,
                 meta: format!("{}\0{}\0{}", semicolon.meta, line, semicolon.value),
@@ -1286,7 +1366,8 @@ impl Parser {
                 KeywordsType::Mientras
                 | KeywordsType::Hacer
                 | KeywordsType::Si
-                | KeywordsType::Funcion => Ok(self.parse_keyword_value(false, false)),
+                | KeywordsType::Funcion
+                | KeywordsType::Intentar => Ok(self.parse_keyword_value(false, false)),
                 _ => Err(token),
             },
             _ => Err(token),

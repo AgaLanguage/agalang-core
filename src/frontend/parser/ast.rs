@@ -19,9 +19,7 @@ pub enum Node {
     // For(NodeFor),
     While(NodeWhile),
     DoWhile(NodeWhile),
-    // Try(NodeTry),
-    // Catch(NodeCatch),
-    // Finally(NodeFinally),
+    Try(NodeTry),
     // Throw(NodeThrow),
 
     // Expressions //
@@ -39,7 +37,7 @@ impl Node {
     pub fn is_error(&self) -> bool {
         match self {
             Node::Error(_) => true,
-            _ => false
+            _ => false,
         }
     }
     pub fn get_error(&self) -> Option<NodeError> {
@@ -62,6 +60,7 @@ impl Node {
             Node::VarDecl(node) => node.to_string(),
             Node::Assignment(node) => node.to_string(),
             Node::While(node) | Node::DoWhile(node) => node.to_string(),
+            Node::Try(node) => node.to_string(),
             Node::Function(node) => node.to_string(),
             Node::If(node) => node.to_string(),
             Node::UnaryFront(node) | Node::UnaryBack(node) => node.to_string(),
@@ -83,7 +82,8 @@ impl Node {
             Node::Identifier(node) => node.column,
             Node::VarDecl(node) => node.column,
             Node::Assignment(node) => node.column,
-            Node::While(node)  | Node::DoWhile(node) => node.column,
+            Node::While(node) | Node::DoWhile(node) => node.column,
+            Node::Try(node) => node.column,
             Node::Function(node) => node.column,
             Node::If(node) => node.column,
             Node::UnaryFront(node) | Node::UnaryBack(node) => node.column,
@@ -105,7 +105,8 @@ impl Node {
             Node::Identifier(node) => node.line,
             Node::VarDecl(node) => node.line,
             Node::Assignment(node) => node.line,
-            Node::While(node)  | Node::DoWhile(node) => node.line,
+            Node::While(node) | Node::DoWhile(node) => node.line,
+            Node::Try(node) => node.line,
             Node::Function(node) => node.line,
             Node::If(node) => node.line,
             Node::UnaryFront(node) | Node::UnaryBack(node) => node.line,
@@ -127,7 +128,8 @@ impl Node {
             Node::Identifier(node) => node.file.clone(),
             Node::VarDecl(node) => node.file.clone(),
             Node::Assignment(node) => node.file.clone(),
-            Node::While(node)  | Node::DoWhile(node)=> node.file.clone(),
+            Node::While(node) | Node::DoWhile(node) => node.file.clone(),
+            Node::Try(node) => node.file.clone(),
             Node::Function(node) => node.file.clone(),
             Node::If(node) => node.file.clone(),
             Node::UnaryFront(node) | Node::UnaryBack(node) => node.file.clone(),
@@ -153,6 +155,7 @@ impl Clone for Node {
             Node::Assignment(node) => Node::Assignment(node.clone()),
             Node::While(node) => Node::While(node.clone()),
             Node::DoWhile(node) => Node::DoWhile(node.clone()),
+            Node::Try(node) => Node::Try(node.clone()),
             Node::Function(node) => Node::Function(node.clone()),
             Node::If(node) => Node::If(node.clone()),
             Node::UnaryFront(node) => Node::UnaryFront(node.clone()),
@@ -459,7 +462,11 @@ pub struct NodeUnary {
 }
 impl DataNode for NodeUnary {
     fn to_string(&self) -> String {
-        format!("NodeUnary: \"{}\" para {{\n{}\n}}", self.operator, data_format(self.operand.to_string()))
+        format!(
+            "NodeUnary: \"{}\" para {{\n{}\n}}",
+            self.operator,
+            data_format(self.operand.to_string())
+        )
     }
 }
 impl Clone for NodeUnary {
@@ -602,11 +609,7 @@ pub struct NodeWhile {
 }
 impl DataNode for NodeWhile {
     fn to_string(&self) -> String {
-        let str_body: Vec<String> = self
-            .body
-            .iter()
-            .map(|node| node.to_string())
-            .collect();
+        let str_body: Vec<String> = self.body.iter().map(|node| node.to_string()).collect();
         format!(
             "NodeWhile:\n{}\n  <==>\n{}",
             data_format(self.condition.to_string()),
@@ -637,33 +640,25 @@ pub struct NodeIf {
 }
 impl DataNode for NodeIf {
     fn to_string(&self) -> String {
-        let str_body: Vec<String> = self
-            .body
-            .iter()
-            .map(|node| node.to_string())
-            .collect();
+        let str_body: Vec<String> = self.body.iter().map(|node| node.to_string()).collect();
         match &self.else_body {
             Some(else_body) => {
-                let str_else_body: Vec<String> = else_body
-                    .iter()
-                    .map(|node| node.to_string())
-                    .collect();
+                let str_else_body: Vec<String> =
+                    else_body.iter().map(|node| node.to_string()).collect();
                 format!(
                     "NodeIf:\n{}\n  <==>\n{}\n  <==>\n{}",
                     data_format(self.condition.to_string()),
                     data_format(str_body.join("\n")),
                     data_format(str_else_body.join("\n"))
                 )
-            
-            },
+            }
             None => {
                 format!(
                     "NodeIf:\n{}\n  <==>\n{}",
                     data_format(self.condition.to_string()),
                     data_format(str_body.join("\n"))
                 )
-            
-            },
+            }
         }
     }
 }
@@ -693,16 +688,8 @@ pub struct NodeFunction {
 }
 impl DataNode for NodeFunction {
     fn to_string(&self) -> String {
-        let str_params: Vec<String> = self
-            .params
-            .iter()
-            .map(|param| param.to_string())
-            .collect();
-        let str_body: Vec<String> = self
-            .body
-            .iter()
-            .map(|node| node.to_string())
-            .collect();
+        let str_params: Vec<String> = self.params.iter().map(|param| param.to_string()).collect();
+        let str_body: Vec<String> = self.body.iter().map(|node| node.to_string()).collect();
         format!(
             "NodeFunction: {} ({})\n{}",
             self.name,
@@ -785,6 +772,46 @@ impl Clone for NodeLoopEdit {
     fn clone(&self) -> Self {
         NodeLoopEdit {
             action: self.action.clone(),
+            column: self.column,
+            line: self.line,
+            file: self.file.clone(),
+        }
+    }
+}
+
+pub struct NodeTry {
+    pub body: Vec<Node>,
+    pub catch: (String, Vec<Node>),
+    pub finally: Option<Vec<Node>>,
+    pub column: usize,
+    pub line: usize,
+    pub file: String,
+}
+impl DataNode for NodeTry {
+    fn to_string(&self) -> String {
+        let str_body: Vec<String> = self.body.iter().map(|node| node.to_string()).collect();
+        let str_catch = format!("NodeTryCatch: {}:\n{}", self.catch.0, data_format(self.catch.1.iter().map(|node| node.to_string()).collect::<Vec<_>>().join("\n")));
+        let str_finally = match &self.finally {
+            Some(finally) => format!("NodeTryFinally:\n{}", data_format(finally.iter().map(|node| node.to_string()).collect::<Vec<_>>().join("\n"))),
+            None => "No Finally".to_string(),
+        };
+        format!(
+            "NodeTry:\n{}\n  <==>\n{}\n  <==>\n{}",
+            data_format(str_body.join("\n")),
+            data_format(str_catch),
+            data_format(str_finally)
+        )
+    }
+}
+impl Clone for NodeTry {
+    fn clone(&self) -> Self {
+        NodeTry {
+            body: self.body.iter().map(|node| node.clone()).collect(),
+            catch: (self.catch.0.clone(), self.catch.1.iter().map(|node| node.clone()).collect()),
+            finally: match &self.finally {
+                Some(finally) => Some(finally.iter().map(|node| node.clone()).collect()),
+                None => None,
+            },
             column: self.column,
             line: self.line,
             file: self.file.clone(),
