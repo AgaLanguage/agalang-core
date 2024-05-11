@@ -1,5 +1,5 @@
 mod token_type;
-pub use token_type::{KeywordsType, TokenType};
+pub use token_type::*;
 mod token_number;
 use token_number::token_number;
 mod token_string;
@@ -11,7 +11,6 @@ use crate::{
 };
 use token_identifier::token_identifier;
 
-const LETTERS: &str = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 const NUMBERS: &str = "0123456789";
 const OPERATORS: &str = "+-*/%=&|<>!^~?";
 
@@ -52,51 +51,42 @@ pub fn tokenizer(input: String, file_name: String) -> Vec<util::Token<TokenType>
     let tokens = util::tokenize::<TokenType>(
         input,
         vec![
-            (" \t", |c, p, _, m| {
-                (
-                    util::Token {
-                        token_type: TokenType::None,
-                        position: p,
-                        value: c.to_string(),
-                        meta: m,
-                    },
-                    0,
-                )
-            }),
-            ((format!("{}_$", LETTERS)).as_str(), token_identifier),
-            (NUMBERS, token_number),
-            (OPERATORS, |c, pos, _, meta| {
-                (
-                    util::Token {
-                        token_type: TokenType::Operator,
-                        position: pos,
-                        value: c.to_string(),
-                        meta,
-                    },
-                    0,
-                )
-            }),
-            ("'\"", token_string),
-            ("(){}[],.;:", |c, pos, _, meta| {
-                (
-                    util::Token {
-                        token_type: TokenType::Punctuation,
-                        position: pos,
-                        value: c.to_string(),
-                        meta,
-                    },
-                    0,
-                )
-            }),
+            (
+                util::TokenOptionCondition::Chars("\t\r "),
+                util::TokenOptionResult::Min(|| TokenType::None),
+            ),
+            (
+                util::TokenOptionCondition::Chars(NUMBERS),
+                util::TokenOptionResult::Full(token_number),
+            ),
+            (
+                util::TokenOptionCondition::Fn(|c| c.is_alphabetic() || "_$".contains(c)),
+                util::TokenOptionResult::Full(token_identifier),
+            ),
+            (
+                util::TokenOptionCondition::Chars(OPERATORS),
+                util::TokenOptionResult::Min(|| TokenType::Operator),
+            ),
+            (
+                util::TokenOptionCondition::Chars("'\""),
+                util::TokenOptionResult::Full(token_string),
+            ),
+            (
+                util::TokenOptionCondition::Chars("(){}[],.;:"),
+                util::TokenOptionResult::Min(|| TokenType::Punctuation),
+            ),
         ],
         file_name,
     );
     let tokens = match tokens {
         Ok(mut t) => {
-            let end_token = t.get(t.len() -1).unwrap();
+            let end_token = t.get(t.len() - 1).unwrap();
             t.push(util::Token {
                 token_type: TokenType::EOF,
-                position: util::Position { line: end_token.position.line, column: end_token.position.column + 1},
+                position: util::Position {
+                    line: end_token.position.line,
+                    column: end_token.position.column + 1,
+                },
                 value: "".to_string(),
                 meta: "".to_string(),
             });

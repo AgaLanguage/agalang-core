@@ -253,7 +253,7 @@ impl Clone for NodeString {
     }
 }
 pub struct NodeNumber {
-    pub base: i8,
+    pub base: u8,
     pub value: String,
     pub column: usize,
     pub line: usize,

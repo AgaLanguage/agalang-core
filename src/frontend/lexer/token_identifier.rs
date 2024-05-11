@@ -10,8 +10,9 @@ fn get_keyword(s: &str) -> KeywordsType {
 }
 
 fn is_alpha(c: char) -> bool {
-  c.is_alphabetic() || c == '_' || c == '$' || c.is_numeric()
+    c.is_alphabetic() || c == '_' || c == '$' || c.is_ascii_digit()
 }
+
 fn get_type_token(s: &str) -> TokenType {
     let keyword = get_keyword(s);
     if keyword == KeywordsType::None {
@@ -21,25 +22,43 @@ fn get_type_token(s: &str) -> TokenType {
 }
 
 pub fn token_identifier(
-    _: char,
-    pos: util::Position,
-    line: String,
+    ch: char,
+    position: util::Position,
+    ref line: String,
     meta: String,
 ) -> (util::Token<TokenType>, usize) {
-    let col = pos.column;
+    let col = position.column;
     let mut i = col;
+    let mut value = String::new();
     while i < line.len() {
-        if !is_alpha(line.chars().nth(i).unwrap()) {
+        let c = line.chars().nth(i);
+        if c.is_none() {
             break;
         }
+        let c = c.unwrap();
+        if !is_alpha(c) {
+            break;
+        }
+        value.push(c);
         i += 1;
     }
-    let s = &line[col..i];
+    if i == col {
+        return (
+            util::Token {
+                token_type: TokenType::None,
+                position,
+                value: ch.to_string(),
+                meta,
+            },
+            0,
+        );
+    }
     let token = util::Token {
-        token_type: get_type_token(s),
-        position: pos,
-        value: s.to_string(),
+        token_type: get_type_token(&value),
+        position,
+        value,
         meta,
     };
-    (token, i - col - 1)
+
+    (token, i - col -1)
 }

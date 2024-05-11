@@ -6,7 +6,7 @@ const FAILURE: std::process::ExitCode = std::process::ExitCode::FAILURE;
 const SUCCESS: std::process::ExitCode = std::process::ExitCode::SUCCESS;
 
 fn main() -> std::process::ExitCode{
-    let mut args = std::env::args().collect::<Vec<String>>();
+    let mut args: Vec<_> = std::env::args().collect();
     args.push("file.agal".to_string());
     let args = args;
     if args.len() < 2 {

@@ -267,8 +267,8 @@ impl Parser {
     fn parse_simple_decl(&mut self, is_function: bool, is_loop: bool) -> ast::Node {
         let token = self.eat(); // TokenType::Keyword
                                 // cont rom ret
-        match token.value.as_str() {
-            "ret" => {
+        match token.token_type {
+            TokenType::Keyword(KeywordsType::Retornar) => {
                 if !is_function {
                     let line = self.source.lines().nth(token.position.line).unwrap();
                     return ast::Node::Error(ast::NodeError {
@@ -286,7 +286,7 @@ impl Parser {
                 if semicolon.token_type == TokenType::Error || semicolon.value != ";" {
                     let line = self.source.lines().nth(semicolon.position.line).unwrap();
                     return ast::Node::Error(ast::NodeError {
-                        message: "Se esperaba un punto y coma".to_string(),
+                        message: format!("Se esperaba un punto y coma ({})", KeywordsType::Retornar.to_string()),
                         column: semicolon.position.column,
                         line: semicolon.position.line,
                         meta: format!("{}\0{}\0{}", semicolon.meta, line, semicolon.value),
@@ -299,7 +299,7 @@ impl Parser {
                     file: token.meta,
                 });
             }
-            "cont" | "rom" => {
+            TokenType::Keyword(KeywordsType::Romper | KeywordsType::Continuar) => {
                 if !is_loop {
                     let line = self.source.lines().nth(token.position.line).unwrap();
                     return ast::Node::Error(ast::NodeError {
@@ -314,7 +314,7 @@ impl Parser {
                 if semicolon.token_type == TokenType::Error || semicolon.value != ";" {
                     let line = self.source.lines().nth(semicolon.position.line).unwrap();
                     return ast::Node::Error(ast::NodeError {
-                        message: "Se esperaba un punto y coma".to_string(),
+                        message: format!("Se esperaba un punto y coma (Modificador de Bucle)"),
                         column: semicolon.position.column,
                         line: semicolon.position.line,
                         meta: format!("{}\0{}\0{}", semicolon.meta, line, semicolon.value),
@@ -518,7 +518,7 @@ impl Parser {
         if semicolon.token_type == TokenType::Error || semicolon.value != ";" {
             let line = self.source.lines().nth(semicolon.position.line).unwrap();
             return ast::Node::Error(ast::NodeError {
-                message: "Se esperaba un punto y coma".to_string(),
+                message: format!("Se esperaba un punto y coma ({})", KeywordsType::Hacer.to_string()),
                 column: semicolon.position.column,
                 line: semicolon.position.line,
                 meta: format!("{}\0{}\0{}", semicolon.meta, line, semicolon.value),
@@ -665,7 +665,7 @@ impl Parser {
             let line = self.source.lines().nth(semi_token.line).unwrap();
             let meta = format!("{}\0{}\0{}", self.file_name, line, semi_token.value);
             return ast::Node::Error(ast::NodeError {
-                message: "Se esperaba un punto y coma".to_string(),
+                message: format!("Se esperaba un punto y coma (variable)"),
                 column: semi_token.column,
                 line: semi_token.line,
                 meta,
@@ -696,7 +696,7 @@ impl Parser {
             let line = self.source.lines().nth(semi_token.line).unwrap();
             let meta = format!("{}\0{}\0{}", self.file_name, line, semi_token.value);
             return ast::Node::Error(ast::NodeError {
-                message: "Se esperaba un punto y coma".to_string(),
+                message: format!("Se esperaba un punto y coma (variable)"),
                 column: semi_token.column,
                 line: semi_token.line,
                 meta,
@@ -1208,9 +1208,9 @@ impl Parser {
                 }));
             }
             TokenType::Number => {
-                let data = token.value.split("$").collect::<Vec<&str>>()[1];
-                let base_value = data.split("~").collect::<Vec<&str>>();
-                let base = base_value[0].parse::<i8>().unwrap();
+                let data = token.value.split("$").collect::<Vec<_>>()[1];
+                let base_value = data.split("~").collect::<Vec<_>>();
+                let base = base_value[0].parse::<u8>().unwrap();
                 let value = base_value[1].to_string();
                 return Ok(ast::Node::Number(ast::NodeNumber {
                     base,
