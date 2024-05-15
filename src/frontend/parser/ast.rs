@@ -12,13 +12,14 @@ pub enum Node {
 
     // Statements //
     VarDecl(NodeVarDecl),
+    Name(NodeIdentifier),
     Assignment(NodeAssignment),
     Class(NodeClass),
     Function(NodeFunction),
     If(NodeIf),
     Import(NodeImport),
     Export(NodeValue),
-    // For(NodeFor),
+    For(NodeFor),
     While(NodeWhile),
     DoWhile(NodeWhile),
     Try(NodeTry),
@@ -32,7 +33,6 @@ pub enum Node {
     Call(NodeCall),
     Return(NodeReturn),
     LoopEdit(NodeLoopEdit),
-    Arrow(NodeArrow),
     Error(NodeError),
     PartialError(NodePartialError),
 }
@@ -68,6 +68,7 @@ impl Node {
             Node::Array(node) => node.column,
             Node::Identifier(node) => node.column,
             Node::VarDecl(node) => node.column,
+            Node::Name(node) => node.column,
             Node::Assignment(node) => node.column,
             Node::Class(node) => node.column,
             Node::While(node) | Node::DoWhile(node) => node.column,
@@ -82,7 +83,7 @@ impl Node {
             Node::Call(node) => node.column,
             Node::Return(node) => node.column,
             Node::LoopEdit(node) => node.column,
-            Node::Arrow(node) => node.column,
+            Node::For(node) => node.column,
             Node::Error(node) => node.column,
             Node::PartialError(node) => node.value.get_column(),
         }
@@ -95,6 +96,7 @@ impl Node {
             Node::Object(node) => node.line,
             Node::Array(node) => node.line,
             Node::Identifier(node) => node.line,
+            Node::Name(node) => node.line,
             Node::VarDecl(node) => node.line,
             Node::Assignment(node) => node.line,
             Node::Class(node) => node.line,
@@ -110,7 +112,7 @@ impl Node {
             Node::Call(node) => node.line,
             Node::Return(node) => node.line,
             Node::LoopEdit(node) => node.line,
-            Node::Arrow(node) => node.line,
+            Node::For(node) => node.line,
             Node::Error(node) => node.line,
             Node::PartialError(node) => node.value.get_line(),
         }
@@ -124,6 +126,7 @@ impl Node {
             Node::Array(node) => &node.file,
             Node::Identifier(node) => &node.file,
             Node::VarDecl(node) => &node.file,
+            Node::Name(node) => &node.file,
             Node::Assignment(node) => &node.file,
             Node::Class(node) => &node.file,
             Node::While(node) | Node::DoWhile(node) => &node.file,
@@ -138,7 +141,7 @@ impl Node {
             Node::Call(node) => &node.file,
             Node::Return(node) => &node.file,
             Node::LoopEdit(node) => &node.file,
-            Node::Arrow(node) => &node.file,
+            Node::For(node) => &node.file,
             Node::Error(node) => &node.meta,
             Node::PartialError(node) => {
                 let value: &str = &node.error.meta;
@@ -159,6 +162,7 @@ impl Clone for Node {
             Node::Array(node) => Node::Array(node.clone()),
             Node::Identifier(node) => Node::Identifier(node.clone()),
             Node::VarDecl(node) => Node::VarDecl(node.clone()),
+            Node::Name(node) => Node::Name(node.clone()),
             Node::Assignment(node) => Node::Assignment(node.clone()),
             Node::Class(node) => Node::Class(node.clone()),
             Node::While(node) => Node::While(node.clone()),
@@ -176,7 +180,7 @@ impl Clone for Node {
             Node::Call(node) => Node::Call(node.clone()),
             Node::Return(node) => Node::Return(node.clone()),
             Node::LoopEdit(node) => Node::LoopEdit(node.clone()),
-            Node::Arrow(node) => Node::Arrow(node.clone()),
+            Node::For(node) => Node::For(node.clone()),
             Node::Error(node) => Node::Error(node.clone()),
             Node::PartialError(node) => Node::PartialError(node.clone()),
         }
@@ -262,6 +266,7 @@ impl std::fmt::Display for Node {
                 node.identifier,
                 data_format(node.value.to_string())
             ),
+            Node::Name(node) => format!("NodeName: {}", node.name),
             Node::Class(node) => {
                 let str_body: Vec<String> = node
                     .body
@@ -368,6 +373,16 @@ impl std::fmt::Display for Node {
             Node::Export(node) | Node::Throw(node) => {
                 format!("NodeValue: \n{}", data_format(node.value.to_string()))
             }
+            Node::For(node) => {
+                let str_body: Vec<String> = node.body.iter().map(|n| n.to_string()).collect();
+                format!(
+                    "NodeFor: \n{}\n{}\n{}\n  <==>\n{}",
+                    data_format(node.init.to_string()),
+                    data_format(node.condition.to_string()),
+                    data_format(node.update.to_string()),
+                    data_format(str_body.join("\n"))
+                )
+            }
             Node::UnaryFront(node) | Node::UnaryBack(node) => format!(
                 "NodeUnary: \"{}\" para {{\n{}\n}}",
                 node.operator,
@@ -407,18 +422,6 @@ impl std::fmt::Display for Node {
                     NodeLoopEditType::Continue => "continue",
                 }
             ),
-            Node::Arrow(node) => {
-                let str_params = node.params.iter()
-                .map(|arg| format!("{}", Node::Identifier(arg.clone())))
-                .collect::<Vec<_>>()
-                .join(", ");
-                let str_body: Vec<_> = node.body.iter().map(|n| n.to_string()).collect();
-                format!(
-                    "NodeArrowFunction: ({})\n{}",
-                    str_params,
-                    data_format(str_body.join("\n"))
-                )
-            },
             Node::Error(node) => format!("NodeError: {}", node.message),
             Node::PartialError(node) => {
                 let type_err = internal::ErrorNames::SyntaxError;
@@ -938,17 +941,21 @@ impl Clone for NodePartialError {
         }
     }
 }
-pub struct NodeArrow {
-    pub params: NodeArguments,
+pub struct NodeFor {
+    pub init: Box<Node>,
+    pub condition: Box<Node>,
+    pub update: Box<Node>,
     pub body: Vec<Node>,
     pub column: usize,
     pub line: usize,
     pub file: String,
 }
-impl Clone for NodeArrow {
+impl Clone for NodeFor {
     fn clone(&self) -> Self {
-        NodeArrow {
-            params: self.params.iter().map(|param| param.clone()).collect(),
+        NodeFor {
+            init: self.init.clone(),
+            condition: self.condition.clone(),
+            update: self.update.clone(),
             body: self.body.iter().map(|node| node.clone()).collect(),
             column: self.column,
             line: self.line,

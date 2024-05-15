@@ -13,3 +13,7 @@ si cierto {
 exportar fn mundo() {
     imprimir("¡Hola, mundo!");
 }
+
+para (def i = 0; i < 10; i += 1) {
+  imprimir(i);
+}
