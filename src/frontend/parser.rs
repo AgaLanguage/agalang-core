@@ -203,7 +203,7 @@ impl Parser {
         //let code: Vec<Box<dyn ast::Node>> = Vec::new();
 
         while self.not_eof() && error.is_none() {
-            let stmt = self.parse_stmt(true, false, false, false);
+            let stmt = self.parse_stmt(true, false, false);
             if let Some(stmt) = stmt {
                 match stmt {
                     ast::Node::Error(node) => {
@@ -224,7 +224,6 @@ impl Parser {
         &mut self,
         is_global_scope: bool,
         is_function: bool,
-        is_class_decl: bool,
         is_loop: bool,
     ) -> Option<ast::Node> {
         let token = self.at();
@@ -253,10 +252,14 @@ impl Parser {
                 | KeywordsType::Hacer
                 | KeywordsType::Si
                 | KeywordsType::Funcion
-                | KeywordsType::Intentar => Some(self.parse_keyword_value(is_function, is_loop)),
+                | KeywordsType::Intentar
+                | KeywordsType::Clase => Some(self.parse_keyword_value(is_function, is_loop)),
                 KeywordsType::Retornar | KeywordsType::Continuar | KeywordsType::Romper => {
                     Some(self.parse_simple_decl(is_function, is_loop))
                 }
+                KeywordsType::Exportar => Some(self.parse_export_decl(is_global_scope)),
+                KeywordsType::Importar => Some(self.parse_import_decl(is_global_scope)),
+                KeywordsType::Lanzar => Some(self.parse_throw_decl()),
                 _ => {
                     self.eat();
                     None
@@ -264,6 +267,344 @@ impl Parser {
             },
             _ => Some(self.parse_stmt_expr()),
         }
+    }
+    fn parse_throw_decl(&mut self) -> ast::Node {
+        let token = self.eat(); // lanzar
+        let expr = self.parse_expr();
+        if expr.is_error() {
+            return ast::Node::Error(expr.get_error().unwrap());
+        }
+        let semicolon = self.expect(TokenType::Punctuation, "");
+        if semicolon.token_type == TokenType::Error || semicolon.value != ";" {
+            let line = self.source.lines().nth(semicolon.position.line).unwrap();
+            return ast::Node::Error(ast::NodeError {
+                message: format!(
+                    "Se esperaba un punto y coma ({})",
+                    KeywordsType::Lanzar.to_string()
+                ),
+                column: semicolon.position.column,
+                line: semicolon.position.line,
+                meta: format!("{}\0{}\0{}", semicolon.meta, line, semicolon.value),
+            });
+        }
+        ast::Node::Throw(ast::NodeValue {
+            value: Box::new(expr),
+            column: token.position.column,
+            line: token.position.line,
+            file: token.meta,
+        })
+    }
+    fn parse_import_decl(&mut self, is_global_scope: bool) -> ast::Node {
+        let token = self.eat(); // importar
+        let path = self.expect(TokenType::StringLiteral, "Se esperaba una ruta de archivo");
+        if path.token_type == TokenType::Error {
+            let line = self.source.lines().nth(path.position.line).unwrap();
+            return ast::Node::Error(ast::NodeError {
+                message: path.value.clone(),
+                column: path.position.column,
+                line: path.position.line,
+                meta: format!("{}\0{}\0{}", path.meta, line, path.value),
+            });
+        }
+        let mut name = None;
+        if self.at().token_type == TokenType::Keyword(KeywordsType::Como) {
+            self.eat();
+            let alias = self.expect(TokenType::Identifier, "Se esperaba un identificador");
+            if alias.token_type == TokenType::Error {
+                let line = self.source.lines().nth(alias.position.line).unwrap();
+                return ast::Node::Error(ast::NodeError {
+                    message: alias.value.clone(),
+                    column: alias.position.column,
+                    line: alias.position.line,
+                    meta: format!("{}\0{}\0{}", alias.meta, line, alias.value),
+                });
+            }
+            name = Some(alias.value.clone());
+        }
+        let semicolon = self.expect(TokenType::Punctuation, "");
+        if semicolon.token_type == TokenType::Error || semicolon.value != ";" {
+            let line = self.source.lines().nth(semicolon.position.line).unwrap();
+            return ast::Node::Error(ast::NodeError {
+                message: format!("Se esperaba un punto y coma ({})", path.value),
+                column: semicolon.position.column,
+                line: semicolon.position.line,
+                meta: format!("{}\0{}\0{}", semicolon.meta, line, semicolon.value),
+            });
+        }
+        let value = ast::Node::Import(ast::NodeImport {
+            path: token.value.clone(),
+            name,
+            column: token.position.column,
+            line: token.position.line,
+            file: token.meta.clone(),
+        });
+        if !is_global_scope {
+            let line = self.source.lines().nth(token.position.line).unwrap();
+            let error = ast::NodeError {
+                message: "No se puede importar fuera del ámbito global".to_string(),
+                column: token.position.column,
+                line: token.position.line,
+                meta: format!("{}\0{}\0{}", token.meta, line, token.value),
+            };
+            let value = value.to_box();
+            return ast::Node::PartialError(ast::NodePartialError { value, error });
+        }
+        value
+    }
+    fn parse_export_decl(&mut self, is_global_scope: bool) -> ast::Node {
+        let token = self.eat(); // exportar
+        let value = self.parse_export_value();
+        if value.is_error() {
+            return value;
+        }
+        let value = ast::Node::Export(ast::NodeValue {
+            value: Box::new(value),
+            column: token.position.column,
+            line: token.position.line,
+            file: token.meta.clone(),
+        });
+        if !is_global_scope {
+            let line = self.source.lines().nth(token.position.line).unwrap();
+            let error = ast::NodeError {
+                message: "No se puede exportar fuera del ámbito global".to_string(),
+                column: token.position.column,
+                line: token.position.line,
+                meta: format!("{}\0{}\0{}", token.meta, line, token.value),
+            };
+            let value = value.to_box();
+            return ast::Node::PartialError(ast::NodePartialError { value, error });
+        }
+        value
+    }
+    fn parse_export_value(&mut self) -> ast::Node {
+        let token = self.at();
+        match token.token_type {
+            TokenType::Keyword(KeywordsType::Definir | KeywordsType::Constante) => {
+                self.parse_var_decl()
+            }
+            TokenType::Keyword(KeywordsType::Funcion | KeywordsType::Clase) => {
+                self.parse_keyword_value(false, false)
+            }
+            _ => {
+                self.eat();
+                let line = self.source.lines().nth(token.position.line).unwrap();
+                let message = if token.token_type == TokenType::Error {
+                    token.value
+                } else {
+                    "Se esperaba un valor exportable".to_string()
+                };
+                ast::Node::Error(ast::NodeError {
+                    message,
+                    column: token.position.column,
+                    line: token.position.line,
+                    meta: format!(
+                        "{}\0{}\0{}",
+                        token.meta,
+                        line,
+                        " ".repeat(token.position.column)
+                    ),
+                })
+            }
+        }
+    }
+    fn parse_class_prop(
+        &mut self,
+        is_static: bool,
+        is_const: bool,
+        is_public: bool,
+    ) -> Result<ast::NodeClassProperty, ast::NodeError> {
+        let name = self.expect(TokenType::Identifier, "Se esperaba un identificador");
+        if name.token_type == TokenType::Error {
+            let line = self.source.lines().nth(name.position.line).unwrap();
+            return Err(ast::NodeError {
+                message: name.value.clone(),
+                column: name.position.column,
+                line: name.position.line,
+                meta: format!("{}\0{}\0{}", name.meta, line, name.value),
+            });
+        }
+        let token = self.at();
+        if token.token_type == TokenType::Error {
+            self.eat();
+            let line = self.source.lines().nth(token.position.line).unwrap();
+            return Err(ast::NodeError {
+                message: token.value.clone(),
+                column: token.position.column,
+                line: token.position.line,
+                meta: format!("{}\0{}\0{}", token.meta, line, token.value),
+            });
+        }
+        let is_static_bit: u8 = if is_static { 1 } else { 0 };
+        let is_const: u8 = if is_const { 1 << 1 } else { 0 };
+        let is_public_bit: u8 = if is_public { 1 << 2 } else { 0 };
+        let meta: u8 = is_static_bit | is_public_bit | is_const;
+        if token.token_type == TokenType::Punctuation && token.value == ";" {
+            return Ok(ast::NodeClassProperty {
+                name: name.value.clone(),
+                value: None,
+                meta,
+            });
+        }
+        let value: ast::Node = if token.token_type == TokenType::Punctuation || token.value == "(" {
+            let params = self.parse_arguments_expr();
+            if params.is_err() {
+                return Err(params.err().unwrap());
+            }
+            let params = params.ok().unwrap();
+            let block = self.parse_block_expr(false, false);
+            if block.is_err() {
+                return Err(block.err().unwrap());
+            }
+            let body = block.ok().unwrap();
+            ast::Node::Function(ast::NodeFunction {
+                name: name.value.clone(),
+                params,
+                body,
+                column: token.position.column,
+                line: token.position.line,
+                file: token.meta.clone(),
+            })
+        } else if token.token_type == TokenType::Punctuation || token.value == "=" {
+            self.eat();
+            self.parse_expr()
+        } else {
+            let line = self.source.lines().nth(token.position.line).unwrap();
+            return Err(ast::NodeError {
+                message: "Se esperaba un valor".to_string(),
+                column: token.position.column,
+                line: token.position.line,
+                meta: format!("{}\0{}\0{}", token.meta, line, token.value),
+            });
+        };
+        if value.is_error() {
+            return Err(value.get_error().unwrap());
+        }
+        let semicolon = self.expect(TokenType::Punctuation, "");
+        if semicolon.token_type == TokenType::Error || semicolon.value != ";" {
+            let line = self.source.lines().nth(semicolon.position.line).unwrap();
+            return Err(ast::NodeError {
+                message: format!("Se esperaba un punto y coma ({})", name.value),
+                column: semicolon.position.column,
+                line: semicolon.position.line,
+                meta: format!("{}\0{}\0{}", semicolon.meta, line, semicolon.value),
+            });
+        }
+        Ok(ast::NodeClassProperty {
+            name: name.value.clone(),
+            value: Some(value.to_box()),
+            meta,
+        })
+    }
+    fn parse_class_decl(&mut self) -> ast::Node {
+        let token = self.eat(); // clase
+        let name = self.expect(TokenType::Identifier, "Se esperaba un identificador");
+        if name.token_type == TokenType::Error {
+            let line = self.source.lines().nth(name.position.line).unwrap();
+            return ast::Node::Error(ast::NodeError {
+                message: name.value.clone(),
+                column: name.position.column,
+                line: name.position.line,
+                meta: format!("{}\0{}\0{}", name.meta, line, name.value),
+            });
+        }
+        let open_brace = self.expect(TokenType::Punctuation, "");
+        if open_brace.token_type == TokenType::Error || open_brace.value != "{" {
+            let line = self.source.lines().nth(open_brace.position.line).unwrap();
+            return ast::Node::Error(ast::NodeError {
+                message: "Se esperaba un corchete de apertura".to_string(),
+                column: open_brace.position.column,
+                line: open_brace.position.line,
+                meta: format!("{}\0{}\0{}", open_brace.meta, line, open_brace.value),
+            });
+        }
+        let mut body: Vec<ast::NodeClassProperty> = Vec::new();
+        while self.not_eof()
+            && !(self.at().token_type == TokenType::Punctuation && self.at().value == "}")
+        {
+            let modifier = self.get_modifier();
+
+            if modifier.is_err() {
+                return ast::Node::Error(modifier.err().unwrap());
+            }
+
+            let (is_static, is_const, is_public) = modifier.ok().unwrap();
+
+            let prop = self.parse_class_prop(is_static, is_const, is_public);
+            if prop.is_err() {
+                return ast::Node::Error(prop.err().unwrap());
+            }
+            let prop = prop.ok().unwrap();
+            body.push(prop);
+        }
+        let close_brace = self.expect(TokenType::Punctuation, "");
+        if close_brace.token_type == TokenType::Error || close_brace.value != "}" {
+            let line = self.source.lines().nth(close_brace.position.line).unwrap();
+            return ast::Node::Error(ast::NodeError {
+                message: "Se esperaba un corchete de cierre".to_string(),
+                column: close_brace.position.column,
+                line: close_brace.position.line,
+                meta: format!("{}\0{}\0{}", close_brace.meta, line, close_brace.value),
+            });
+        }
+        ast::Node::Class(ast::NodeClass {
+            name: name.value.clone(),
+            body,
+            column: token.position.column,
+            line: token.position.line,
+            file: token.meta,
+        })
+    }
+    fn get_modifier(&mut self) -> Result<(bool, bool, bool), ast::NodeError> {
+        let mut is_static = false;
+        let mut is_const = false;
+        let mut is_public = false;
+        while self.not_eof() {
+            let token = self.at();
+            if token.token_type == TokenType::Keyword(KeywordsType::Estatico) {
+                if is_static {
+                    let line = self.source.lines().nth(token.position.line).unwrap();
+                    return Err(ast::NodeError {
+                        message: "Modificador duplicado".to_string(),
+                        column: token.position.column,
+                        line: token.position.line,
+                        meta: format!("{}\0{}\0{}", token.meta, line, token.value),
+                    });
+                }
+                is_static = true;
+                self.eat();
+                continue;
+            }
+            if token.token_type == TokenType::Keyword(KeywordsType::Publico) {
+                if is_public {
+                    let line = self.source.lines().nth(token.position.line).unwrap();
+                    return Err(ast::NodeError {
+                        message: "Modificador duplicado".to_string(),
+                        column: token.position.column,
+                        line: token.position.line,
+                        meta: format!("{}\0{}\0{}", token.meta, line, token.value),
+                    });
+                }
+                is_public = true;
+                self.eat();
+                continue;
+            }
+            if token.token_type == TokenType::Keyword(KeywordsType::Constante) {
+                if is_const {
+                    let line = self.source.lines().nth(token.position.line).unwrap();
+                    return Err(ast::NodeError {
+                        message: "Modificador duplicado".to_string(),
+                        column: token.position.column,
+                        line: token.position.line,
+                        meta: format!("{}\0{}\0{}", token.meta, line, token.value),
+                    });
+                }
+                is_const = true;
+                self.eat();
+                continue;
+            }
+            break;
+        }
+        Ok((is_static, is_const, is_public))
     }
     fn parse_simple_decl(&mut self, is_function: bool, is_loop: bool) -> ast::Node {
         let token = self.eat(); // TokenType::Keyword
@@ -355,6 +696,7 @@ impl Parser {
             TokenType::Keyword(KeywordsType::Si) => self.parse_if_decl(is_function, is_loop),
             TokenType::Keyword(KeywordsType::Funcion) => self.parse_function_decl(is_loop),
             TokenType::Keyword(KeywordsType::Intentar) => self.parse_try_decl(is_function, is_loop),
+            TokenType::Keyword(KeywordsType::Clase) => self.parse_class_decl(),
             _ => ast::Node::Error(ast::NodeError {
                 message: "Token inesperado".to_string(),
                 column: token.position.column,
@@ -367,10 +709,13 @@ impl Parser {
         let token = self.eat(); // intentar
         let block = self.parse_block_expr(is_function, is_loop);
         if block.is_err() {
-            return block.err().unwrap();
+            return ast::Node::Error(block.err().unwrap());
         }
         let body = block.ok().unwrap();
-        let catch_token = self.expect(TokenType::Keyword(KeywordsType::Capturar), "Se esperaba 'capturar'");
+        let catch_token = self.expect(
+            TokenType::Keyword(KeywordsType::Capturar),
+            "Se esperaba 'capturar'",
+        );
         if catch_token.token_type == TokenType::Error {
             let line = self.source.lines().nth(catch_token.position.line).unwrap();
             return ast::Node::Error(ast::NodeError {
@@ -412,14 +757,14 @@ impl Parser {
         }
         let block = self.parse_block_expr(is_function, is_loop);
         if block.is_err() {
-            return block.err().unwrap();
+            return ast::Node::Error(block.err().unwrap());
         }
         let body_catch = block.ok().unwrap();
         let finally = if self.at().token_type == TokenType::Keyword(KeywordsType::Finalmente) {
             self.eat();
             let block = self.parse_block_expr(is_function, is_loop);
             if block.is_err() {
-                return block.err().unwrap();
+                return ast::Node::Error(block.err().unwrap());
             }
             Some(block.ok().unwrap())
         } else {
@@ -447,39 +792,56 @@ impl Parser {
                 meta: format!("{}\0{}\0{}", name.meta, line, name.value),
             });
         }
-        let open_paren = self.expect(
-            TokenType::Punctuation,
-            "Se esperaba un paréntesis de apertura",
-        );
+        let params = self.parse_arguments_expr();
+        if params.is_err() {
+            return ast::Node::Error(params.err().unwrap());
+        }
+        let params = params.ok().unwrap();
+        let block = self.parse_block_expr(true, is_loop);
+        if block.is_err() {
+            return ast::Node::Error(block.err().unwrap());
+        }
+        let body = block.ok().unwrap();
+        ast::Node::Function(ast::NodeFunction {
+            name: name.value.clone(),
+            params,
+            body,
+            column: token.position.column,
+            line: token.position.line,
+            file: token.meta,
+        })
+    }
+    fn parse_arguments_expr(&mut self) -> Result<ast::NodeArguments, ast::NodeError> {
+        let open_paren = self.expect(TokenType::Punctuation, "");
         if open_paren.token_type == TokenType::Error || open_paren.value != "(" {
             let line = self.source.lines().nth(open_paren.position.line).unwrap();
-            return ast::Node::Error(ast::NodeError {
+            return Err(ast::NodeError {
                 message: "Se esperaba un paréntesis de apertura".to_string(),
                 column: open_paren.position.column,
                 line: open_paren.position.line,
                 meta: format!("{}\0{}\0{}", open_paren.meta, line, open_paren.value),
             });
         }
-        let mut params: Vec<ast::Node> = Vec::new();
+        let mut params = Vec::new();
         while self.not_eof()
             && !(self.at().token_type == TokenType::Punctuation && self.at().value == ")")
         {
             let param = self.expect(TokenType::Identifier, "Se esperaba un identificador");
             if param.token_type == TokenType::Error {
                 let line = self.source.lines().nth(param.position.line).unwrap();
-                return ast::Node::Error(ast::NodeError {
+                return Err(ast::NodeError {
                     message: param.value.clone(),
                     column: param.position.column,
                     line: param.position.line,
                     meta: format!("{}\0{}\0{}", param.meta, line, param.value),
                 });
             }
-            params.push(ast::Node::Identifier(ast::NodeIdentifier {
+            params.push(ast::NodeIdentifier {
                 name: param.value.clone(),
                 column: param.position.column,
                 line: param.position.line,
                 file: param.meta,
-            }));
+            });
             let comma = self.at();
             if comma.token_type == TokenType::Punctuation {
                 if comma.value == "," {
@@ -491,7 +853,7 @@ impl Parser {
                 }
             }
             let line = self.source.lines().nth(comma.position.line).unwrap();
-            return ast::Node::Error(ast::NodeError {
+            return Err(ast::NodeError {
                 message: "Se esperaba una coma".to_string(),
                 column: comma.position.column,
                 line: comma.position.line,
@@ -504,26 +866,14 @@ impl Parser {
         );
         if close_paren.token_type == TokenType::Error || close_paren.value != ")" {
             let line = self.source.lines().nth(close_paren.position.line).unwrap();
-            return ast::Node::Error(ast::NodeError {
+            return Err(ast::NodeError {
                 message: "Se esperaba un paréntesis de cierre".to_string(),
                 column: close_paren.position.column,
                 line: close_paren.position.line,
                 meta: format!("{}\0{}\0{}", close_paren.meta, line, close_paren.value),
             });
         }
-        let block = self.parse_block_expr(true, is_loop);
-        if block.is_err() {
-            return block.err().unwrap();
-        }
-        let body = block.ok().unwrap();
-        ast::Node::Function(ast::NodeFunction {
-            name: name.value.clone(),
-            params,
-            body,
-            column: token.position.column,
-            line: token.position.line,
-            file: token.meta,
-        })
+        Ok(params)
     }
     fn parse_if_decl(&mut self, is_function: bool, is_loop: bool) -> ast::Node {
         let token = self.eat(); // si
@@ -533,7 +883,7 @@ impl Parser {
         }
         let block = self.parse_block_expr(is_function, is_loop);
         if block.is_err() {
-            return block.err().unwrap();
+            return ast::Node::Error(block.err().unwrap());
         }
         let body = block.ok().unwrap();
         let else_token = self.at(); // ent
@@ -541,7 +891,7 @@ impl Parser {
             self.eat();
             let else_block = self.parse_block_expr(is_function, is_loop);
             if else_block.is_err() {
-                return else_block.err().unwrap();
+                return ast::Node::Error(else_block.err().unwrap());
             }
             let else_body = else_block.ok().unwrap();
             let else_body = if else_body.len() == 0 {
@@ -571,7 +921,7 @@ impl Parser {
         let token = self.eat(); // hacer
         let block = self.parse_block_expr(is_function, true);
         if block.is_err() {
-            return block.err().unwrap();
+            return ast::Node::Error(block.err().unwrap());
         }
         let body = block.ok().unwrap();
         let while_token = self.expect(
@@ -620,7 +970,7 @@ impl Parser {
         }
         let block = self.parse_block_expr(is_function, true);
         if block.is_err() {
-            return block.err().unwrap();
+            return ast::Node::Error(block.err().unwrap());
         }
         let body = block.ok().unwrap();
         return ast::Node::While(ast::NodeWhile {
@@ -635,31 +985,31 @@ impl Parser {
         &mut self,
         is_function: bool,
         is_loop: bool,
-    ) -> Result<Vec<ast::Node>, ast::Node> {
+    ) -> Result<Vec<ast::Node>, ast::NodeError> {
         let open_brace = self.at();
         if open_brace.token_type == TokenType::Error {
             let line = self.source.lines().nth(open_brace.position.line).unwrap();
-            return Err(ast::Node::Error(ast::NodeError {
+            return Err(ast::NodeError {
                 message: "Se esperaba un bloque".to_string(),
                 column: open_brace.position.column,
                 line: open_brace.position.line,
                 meta: format!("{}\0{}\0{}", open_brace.meta, line, open_brace.value),
-            }));
+            });
         }
         if self.at().token_type != TokenType::Punctuation || self.at().value != "{" {
-            let expr = self.parse_stmt(false, is_function, false, is_loop);
+            let expr = self.parse_stmt(false, is_function, is_loop);
             if expr.is_none() {
                 let line = self.source.lines().nth(open_brace.position.line).unwrap();
-                return Err(ast::Node::Error(ast::NodeError {
+                return Err(ast::NodeError {
                     message: "Se esperaba un bloque".to_string(),
                     column: open_brace.position.column,
                     line: open_brace.position.line,
                     meta: format!("{}\0{}\0{}", open_brace.meta, line, open_brace.value),
-                }));
+                });
             }
             let expr = expr.unwrap();
             if expr.is_error() {
-                return Err(expr);
+                return Err(expr.get_error().unwrap());
             }
             return Ok(vec![expr]);
         }
@@ -668,25 +1018,25 @@ impl Parser {
         while self.not_eof()
             && !(self.at().token_type == TokenType::Punctuation && self.at().value == "}")
         {
-            let stmt = self.parse_stmt(false, false, false, false);
+            let stmt = self.parse_stmt(false, false, false);
             if stmt.is_none() {
                 break;
             }
             let stmt = stmt.unwrap();
             if stmt.is_error() {
-                return Err(stmt);
+                return Err(stmt.get_error().unwrap());
             }
             body.push(stmt);
         }
         let close_brace = self.expect(TokenType::Punctuation, "");
         if close_brace.token_type == TokenType::Error || close_brace.value != "}" {
             let line = self.source.lines().nth(close_brace.position.line).unwrap();
-            return Err(ast::Node::Error(ast::NodeError {
+            return Err(ast::NodeError {
                 message: "Se esperaba un corchete de cierre".to_string(),
                 column: close_brace.position.column,
                 line: close_brace.position.line,
                 meta: format!("{}\0{}\0{}", close_brace.meta, line, close_brace.value),
-            }));
+            });
         }
         Ok(body)
     }

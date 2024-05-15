@@ -12,7 +12,11 @@ pub fn complex_string(token_string: Token<TokenType>, line: &str) -> Result<Node
     let mut is_id = false;
     let mut i = 0;
     while i < string.len() {
-        let c = string.chars().nth(i).unwrap();
+        let c = string.chars().nth(i);
+        if c.is_none() {
+            break;
+        }
+        let c = c.unwrap();
         i += 1;
         if c == '}' && is_id == false {
             let nc = string.chars().nth(i);

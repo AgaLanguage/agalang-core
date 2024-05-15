@@ -31,6 +31,6 @@ fn main() -> std::process::ExitCode{
         internal::errors::show_error(&type_err, err);
         return FAILURE;
     }
-    println!("{}", program.to_string());
+    println!("{}", program);
     return SUCCESS;
 }

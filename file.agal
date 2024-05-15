@@ -3,3 +3,13 @@ mien 0 京;
 intentar mundo();
 capturar (e) mundo();
 finalmente mundo();
+si cierto {
+  exportar clase HolaMundo {
+    pub mundo() {
+        imprimir("¡Hola, mundo!");
+    };
+  }
+}
+exportar fn mundo() {
+    imprimir("¡Hola, mundo!");
+}

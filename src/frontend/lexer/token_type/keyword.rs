@@ -6,36 +6,41 @@ pub enum KeywordsType {
     Si, Entonces, // done
     Hacer, Mientras, // done
     Romper, Retornar, Continuar, // done
-    Clase, Estatico, Extender, Implementar, // todo
-    Intentar, Capturar, Finalmente, // todo
-    Exportar, Importar, Como, Con // todo
+    Clase, Estatico, Publico // done
+    , Extender, Implementar, // todo
+    Intentar, Capturar, Finalmente, // done
+    Exportar, Importar, Como, // done
+    Lanzar // todo
 }
+const KEYWORDS: [KeywordsType; 23] = 
+[
+    KeywordsType::None,
+    KeywordsType::Definir,
+    KeywordsType::Constante,
+    KeywordsType::Funcion,
+    KeywordsType::Si,
+    KeywordsType::Entonces,
+    KeywordsType::Hacer,
+    KeywordsType::Mientras,
+    KeywordsType::Romper,
+    KeywordsType::Retornar,
+    KeywordsType::Continuar,
+    KeywordsType::Clase,
+    KeywordsType::Estatico,
+    KeywordsType::Publico,
+    KeywordsType::Extender,
+    KeywordsType::Implementar,
+    KeywordsType::Intentar,
+    KeywordsType::Capturar,
+    KeywordsType::Finalmente,
+    KeywordsType::Exportar,
+    KeywordsType::Importar,
+    KeywordsType::Como,
+    KeywordsType::Lanzar
+];
 impl KeywordsType {
-    pub fn iter() -> [KeywordsType; 22] {
-        [
-            KeywordsType::None,
-            KeywordsType::Definir,
-            KeywordsType::Constante,
-            KeywordsType::Funcion,
-            KeywordsType::Si,
-            KeywordsType::Entonces,
-            KeywordsType::Hacer,
-            KeywordsType::Mientras,
-            KeywordsType::Romper,
-            KeywordsType::Retornar,
-            KeywordsType::Continuar,
-            KeywordsType::Clase,
-            KeywordsType::Estatico,
-            KeywordsType::Extender,
-            KeywordsType::Implementar,
-            KeywordsType::Intentar,
-            KeywordsType::Capturar,
-            KeywordsType::Finalmente,
-            KeywordsType::Exportar,
-            KeywordsType::Importar,
-            KeywordsType::Como,
-            KeywordsType::Con,
-        ]
+    pub fn iter() -> [KeywordsType; 23] {
+        KEYWORDS
     }
     pub fn as_str(&self) -> &str {
         match self {
@@ -52,6 +57,7 @@ impl KeywordsType {
             KeywordsType::Continuar => "cont",
             KeywordsType::Clase => "clase",
             KeywordsType::Estatico => "est",
+            KeywordsType::Publico => "pub",
             KeywordsType::Extender => "extiende",
             KeywordsType::Implementar => "impl",
             KeywordsType::Intentar => "intentar",
@@ -60,7 +66,7 @@ impl KeywordsType {
             KeywordsType::Exportar => "exportar",
             KeywordsType::Importar => "importar",
             KeywordsType::Como => "como",
-            KeywordsType::Con => "con",
+            KeywordsType::Lanzar => "lanzar"
         }
     }
     pub fn to_string(&self) -> String {
@@ -83,6 +89,7 @@ impl Clone for KeywordsType {
             KeywordsType::Continuar => KeywordsType::Continuar,
             KeywordsType::Clase => KeywordsType::Clase,
             KeywordsType::Estatico => KeywordsType::Estatico,
+            KeywordsType::Publico => KeywordsType::Publico,
             KeywordsType::Extender => KeywordsType::Extender,
             KeywordsType::Implementar => KeywordsType::Implementar,
             KeywordsType::Intentar => KeywordsType::Intentar,
@@ -91,7 +98,7 @@ impl Clone for KeywordsType {
             KeywordsType::Exportar => KeywordsType::Exportar,
             KeywordsType::Importar => KeywordsType::Importar,
             KeywordsType::Como => KeywordsType::Como,
-            KeywordsType::Con => KeywordsType::Con,
+            KeywordsType::Lanzar => KeywordsType::Lanzar
         }
     }
 }
