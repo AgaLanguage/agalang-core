@@ -17,3 +17,10 @@ exportar fn mundo() {
 para (def i = 0; i < 10; i += 1) {
   imprimir(i);
 }
+
+fn mc ()
+{
+  imprimir("¡Hola, mundo!");
+}
+fn valo()
+  imprimir("¡Hola, mundo!");

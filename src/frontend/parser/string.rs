@@ -1,13 +1,13 @@
 use super::{ast::{NodeError, NodeString, StringData}, Parser};
 use crate::frontend::lexer::TokenType;
-use util::Token;
+use util::{List, Token};
 
 fn is_alpha(c: char) -> bool {
     c.is_alphabetic() || c == '_' || c == '$' || c.is_numeric()
 }
 pub fn complex_string(token_string: Token<TokenType>, line: &str) -> Result<NodeString, NodeError> {
     let string = token_string.value;
-    let mut result = Vec::new();
+    let mut result = List::new();
     let mut current = String::new();
     let mut is_id = false;
     let mut i = 0;

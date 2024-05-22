@@ -6,13 +6,14 @@ mod token_string;
 use token_string::token_string;
 mod token_identifier;
 use crate::{
-    internal::errors::{show_error, show_multiple_errors, ErrorNames, ErrorTypes},
+    internal::errors::{ErrorNames, ErrorTypes, show_error, show_multiple_errors},
     util::{split_meta, to_cyan},
 };
 use token_identifier::token_identifier;
 
 const NUMBERS: &str = "0123456789";
 const OPERATORS: &str = "+-*/%=&|<>!^~?";
+const PUNCTUATION: &str = "(){}[],.;:";
 
 fn token_error(token: &util::Token<TokenType>) -> ErrorTypes {
     let (file_name, data_line, token_value) = split_meta(&token.meta);
@@ -72,8 +73,8 @@ pub fn tokenizer(input: String, file_name: String) -> Vec<util::Token<TokenType>
                 util::TokenOptionResult::Full(token_string),
             ),
             (
-                util::TokenOptionCondition::Chars("(){}[],.;:"),
-                util::TokenOptionResult::Min(|| TokenType::Punctuation),
+                util::TokenOptionCondition::Chars(PUNCTUATION),
+                util::TokenOptionResult::Char(|c| TokenType::Punctuation(c))
             ),
         ],
         file_name,
@@ -104,7 +105,7 @@ pub fn tokenizer(input: String, file_name: String) -> Vec<util::Token<TokenType>
         .map(|x| token_error(x))
         .collect::<Vec<ErrorTypes>>();
     if errors.len() > 0 {
-        show_multiple_errors(ErrorNames::LexerError, errors);
+        show_multiple_errors(&ErrorNames::LexerError, errors);
         return Vec::new();
     }
     tokens

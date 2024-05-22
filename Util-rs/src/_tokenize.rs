@@ -21,7 +21,8 @@ pub struct Token<TokenKind> {
 
 pub type TokenOptionsCallbackFull<TK> =
     fn(ch: char, pos: Position, line: String, meta: String) -> (Token<TK>, usize);
-pub type TokenOptionsCallbackSimple<TK> = fn(meta: String) -> (TK, String);
+pub type TokenOptionsCallbackMeta<TK> = fn(meta: String) -> (TK, String);
+pub type TokenOptionsCallbackChar<TK> = fn(char: char) -> TK;
 pub type TokenOptionsCallbackMin<TK> = fn() -> TK;
 
 pub enum TokenOptionCondition {
@@ -31,7 +32,8 @@ pub enum TokenOptionCondition {
 
 pub enum TokenOptionResult<TK> {
     Full(TokenOptionsCallbackFull<TK>),
-    Simple(TokenOptionsCallbackSimple<TK>),
+    Meta(TokenOptionsCallbackMeta<TK>),
+    Char(TokenOptionsCallbackChar<TK>),
     Min(TokenOptionsCallbackMin<TK>),
 }
 
@@ -67,7 +69,7 @@ pub fn tokenize<TK>(
                 };
                 let (t, consumed) = match result {
                     TokenOptionResult::Full(f) => f(c, position, line.to_string(), meta.clone()),
-                    TokenOptionResult::Simple(f) => {
+                    TokenOptionResult::Meta(f) => {
                         let (token_type, meta) = f(meta.clone());
                         (
                             Token {
@@ -75,6 +77,18 @@ pub fn tokenize<TK>(
                                 value: c.to_string(),
                                 position,
                                 meta,
+                            },
+                            0,
+                        )
+                    }
+                    TokenOptionResult::Char(f) => {
+                        let token_type = f(c);
+                        (
+                            Token {
+                                token_type,
+                                value: c.to_string(),
+                                position,
+                                meta: meta.clone(),
                             },
                             0,
                         )

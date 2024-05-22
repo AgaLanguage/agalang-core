@@ -1,16 +1,16 @@
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone, Copy)]
 pub enum KeywordsType {
     None, // invalid keyword
-    Definir, Constante, Nombre, // done
-    Funcion, // done
-    Si, Entonces, // done
-    Hacer, Mientras, Para, // done
-    Romper, Retornar, Continuar, // done
-    Clase, Estatico, Publico // done
-    , Extender, Implementar, // todo
-    Intentar, Capturar, Finalmente, // done
-    Exportar, Importar, Como, // done
-    Lanzar // todo
+    Definir, Constante, Nombre, // DONE
+    Lanzar, // TODO
+    Funcion, // DONE
+    Si, Entonces, // DONE
+    Hacer, Mientras, Para, // DONE
+    Romper, Retornar, Continuar, // DONE
+    Clase, Estatico, Publico // DONE
+    , Extender, Implementar, // TODO
+    Intentar, Capturar, Finalmente, // DONE
+    Exportar, Importar, Como, // DONE
 }
 const KEYWORDS: [KeywordsType; 25] = 
 [
@@ -46,7 +46,7 @@ impl KeywordsType {
     }
     pub fn as_str(&self) -> &str {
         match self {
-            KeywordsType::None => "NONE",
+            KeywordsType::None => "none",
             KeywordsType::Definir => "def",
             KeywordsType::Constante => "const",
             KeywordsType::Nombre => "nombre",
@@ -77,35 +77,3 @@ impl KeywordsType {
         self.as_str().to_string()
     }
 }
-impl Clone for KeywordsType {
-    fn clone(&self) -> KeywordsType {
-        match self {
-            KeywordsType::None => KeywordsType::None,
-            KeywordsType::Definir => KeywordsType::Definir,
-            KeywordsType::Constante => KeywordsType::Constante,
-            KeywordsType::Nombre => KeywordsType::Nombre,
-            KeywordsType::Funcion => KeywordsType::Funcion,
-            KeywordsType::Si => KeywordsType::Si,
-            KeywordsType::Entonces => KeywordsType::Entonces,
-            KeywordsType::Hacer => KeywordsType::Hacer,
-            KeywordsType::Mientras => KeywordsType::Mientras,
-            KeywordsType::Para => KeywordsType::Para,
-            KeywordsType::Romper => KeywordsType::Romper,
-            KeywordsType::Retornar => KeywordsType::Retornar,
-            KeywordsType::Continuar => KeywordsType::Continuar,
-            KeywordsType::Clase => KeywordsType::Clase,
-            KeywordsType::Estatico => KeywordsType::Estatico,
-            KeywordsType::Publico => KeywordsType::Publico,
-            KeywordsType::Extender => KeywordsType::Extender,
-            KeywordsType::Implementar => KeywordsType::Implementar,
-            KeywordsType::Intentar => KeywordsType::Intentar,
-            KeywordsType::Capturar => KeywordsType::Capturar,
-            KeywordsType::Finalmente => KeywordsType::Finalmente,
-            KeywordsType::Exportar => KeywordsType::Exportar,
-            KeywordsType::Importar => KeywordsType::Importar,
-            KeywordsType::Como => KeywordsType::Como,
-            KeywordsType::Lanzar => KeywordsType::Lanzar
-        }
-    }
-}
-impl Copy for KeywordsType {}

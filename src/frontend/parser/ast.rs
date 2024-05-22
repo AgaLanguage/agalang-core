@@ -1,5 +1,11 @@
-use crate::{frontend::lexer::KeywordsType, internal};
+use util::List;
 
+use crate::frontend::lexer::KeywordsType;
+
+pub type BNode = Box<Node>;
+pub type LNode = List<Node>;
+
+#[derive(Clone)]
 pub enum Node {
     Program(NodeProgram),
 
@@ -34,7 +40,6 @@ pub enum Node {
     Return(NodeReturn),
     LoopEdit(NodeLoopEdit),
     Error(NodeError),
-    PartialError(NodePartialError),
 }
 impl Node {
     pub fn is_error(&self) -> bool {
@@ -43,20 +48,13 @@ impl Node {
             _ => false,
         }
     }
-    pub fn is_partial_error(&self) -> bool {
-        match self {
-            Node::PartialError(_) => true,
-            _ => false,
-        }
-    }
     pub fn get_error(&self) -> Option<NodeError> {
         match self {
             Node::Error(node) => Some(node.clone()),
-            Node::PartialError(node) => Some(node.error.clone()),
             _ => None,
         }
     }
-    pub fn to_box(self) -> Box<Node> {
+    pub fn to_box(self) -> BNode {
         Box::new(self)
     }
     pub fn get_column(&self) -> usize {
@@ -85,7 +83,6 @@ impl Node {
             Node::LoopEdit(node) => node.column,
             Node::For(node) => node.column,
             Node::Error(node) => node.column,
-            Node::PartialError(node) => node.value.get_column(),
         }
     }
     pub fn get_line(&self) -> usize {
@@ -114,7 +111,6 @@ impl Node {
             Node::LoopEdit(node) => node.line,
             Node::For(node) => node.line,
             Node::Error(node) => node.line,
-            Node::PartialError(node) => node.value.get_line(),
         }
     }
     pub fn get_file(&self) -> String {
@@ -143,105 +139,46 @@ impl Node {
             Node::LoopEdit(node) => &node.file,
             Node::For(node) => &node.file,
             Node::Error(node) => &node.meta,
-            Node::PartialError(node) => {
-                let value: &str = &node.error.meta;
-                let vec: Vec<_> = value.split("\0").collect();
-                vec[0]
-            }
         };
         return file.to_string();
-    }
-}
-impl Clone for Node {
-    fn clone(&self) -> Self {
-        match self {
-            Node::Program(node) => Node::Program(node.clone()),
-            Node::String(node) => Node::String(node.clone()),
-            Node::Number(node) => Node::Number(node.clone()),
-            Node::Object(node) => Node::Object(node.clone()),
-            Node::Array(node) => Node::Array(node.clone()),
-            Node::Identifier(node) => Node::Identifier(node.clone()),
-            Node::VarDecl(node) => Node::VarDecl(node.clone()),
-            Node::Name(node) => Node::Name(node.clone()),
-            Node::Assignment(node) => Node::Assignment(node.clone()),
-            Node::Class(node) => Node::Class(node.clone()),
-            Node::While(node) => Node::While(node.clone()),
-            Node::DoWhile(node) => Node::DoWhile(node.clone()),
-            Node::Try(node) => Node::Try(node.clone()),
-            Node::Function(node) => Node::Function(node.clone()),
-            Node::If(node) => Node::If(node.clone()),
-            Node::Import(node) => Node::Import(node.clone()),
-            Node::Export(node) => Node::Export(node.clone()),
-            Node::Throw(node) => Node::Throw(node.clone()),
-            Node::UnaryFront(node) => Node::UnaryFront(node.clone()),
-            Node::UnaryBack(node) => Node::UnaryBack(node.clone()),
-            Node::Binary(node) => Node::Binary(node.clone()),
-            Node::Member(node) => Node::Member(node.clone()),
-            Node::Call(node) => Node::Call(node.clone()),
-            Node::Return(node) => Node::Return(node.clone()),
-            Node::LoopEdit(node) => Node::LoopEdit(node.clone()),
-            Node::For(node) => Node::For(node.clone()),
-            Node::Error(node) => Node::Error(node.clone()),
-            Node::PartialError(node) => Node::PartialError(node.clone()),
-        }
     }
 }
 
 impl std::fmt::Display for Node {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let str = match self {
-            Node::Program(node) => {
-                let data = node
-                    .body
-                    .iter()
-                    .map(|n| format!("{n}"))
-                    .collect::<Vec<String>>()
-                    .join("\n");
-                format!("NodeProgram:\n{}", data_format(data))
-            }
+            Node::Program(node) => format!("NodeProgram:\n  {}", node.body),
             Node::String(node) => {
-                let str_value: Vec<String> = node
-                    .value
-                    .iter()
-                    .map(|data| match data {
-                        StringData::Str(str) => format!("\"{}\"", str).replace("\n", "\\n"),
-                        StringData::Id(id) => id.to_string(),
-                    })
-                    .collect();
-                format!("NodeString: {}", str_value.join(" + "))
+                let str_value = node.value.map(|data| match data {
+                    StringData::Str(str) => format!("\"{}\"", str).replace("\n", "\\n"),
+                    StringData::Id(id) => id.to_string(),
+                });
+                format!("NodeString: {}", str_value)
             }
             Node::Number(node) => format!("NodeNumber: {} en base {}", node.value, node.base),
             Node::Object(node) => {
-                let str_properties: Vec<String> = node
-                    .properties
-                    .iter()
-                    .map(|property| match property {
-                        NodeProperty::Property(name, value) => format!("  {}:\n  {}", name, value),
-                        NodeProperty::Iterable(object) => {
-                            format!("  ...({})", Node::Identifier(object.clone()))
-                        }
-                        NodeProperty::Dynamic(name, value) => format!("  [{}]:\n  {}", name, value),
-                        NodeProperty::Indexable(value) => format!("  [{}]", value.to_string()),
-                    })
-                    .collect();
+                let str_properties = node.properties.map(|property| match property {
+                    NodeProperty::Property(name, value) => format!("  {}:\n  {}", name, value),
+                    NodeProperty::Iterable(object) => {
+                        format!("  ...({})", Node::Identifier(object.clone()))
+                    }
+                    NodeProperty::Dynamic(name, value) => format!("  [{}]:\n  {}", name, value),
+                    NodeProperty::Indexable(value) => format!("  [{}]", value.to_string()),
+                });
                 format!(
                     "NodeObject: {{\n{}\n}}",
                     data_format(str_properties.join(",\n"))
                 )
             }
             Node::Array(node) => {
-                let str_elements: Vec<String> = node
-                    .elements
-                    .iter()
-                    .map(|element| match element {
-                        NodeProperty::Property(name, value) => format!("  {}:\n  {}", name, value),
-                        NodeProperty::Iterable(object) => {
-                            format!("  ...({})", Node::Identifier(object.clone()))
-                        }
-                        NodeProperty::Dynamic(name, value) => format!("  [{}]:\n  {}", name, value),
-                        NodeProperty::Indexable(value) => format!("  {}", value.to_string()),
-                    })
-                    .collect();
+                let str_elements = node.elements.map(|element| match element {
+                    NodeProperty::Property(name, value) => format!("  {}:\n  {}", name, value),
+                    NodeProperty::Iterable(object) => {
+                        format!("  ...({})", Node::Identifier(object.clone()))
+                    }
+                    NodeProperty::Dynamic(name, value) => format!("  [{}]:\n  {}", name, value),
+                    NodeProperty::Indexable(value) => format!("  {}", value.to_string()),
+                });
                 format!("NodeArray: [\n{}\n]", data_format(str_elements.join(",\n")))
             }
             Node::Identifier(node) => format!("NodeIdentifier: {}", node.name),
@@ -268,101 +205,67 @@ impl std::fmt::Display for Node {
             ),
             Node::Name(node) => format!("NodeName: {}", node.name),
             Node::Class(node) => {
-                let str_body: Vec<String> = node
-                    .body
-                    .iter()
-                    .map(|p| {
-                        let is_static = p.meta & 1 << 0 != 0;
-                        let str_static = format!("static: {is_static}");
-                        let is_const = p.meta & 1 << 1 != 0;
-                        let str_const = format!("const: {is_const}");
-                        let is_public = p.meta & 1 << 2 != 0;
-                        let str_public = format!("public: {is_public}");
-                        let str_info = format!("{str_static}\n{str_const}\n{str_public}");
-                        let str_info = format!("{}:\n{}", p.name, data_format(str_info));
-                        match &p.value {
-                            Some(value) => {
-                                format!("{str_info}\n{}", data_format(value.to_string()))
-                            }
-                            None => str_info,
+                let str_body = node.body.map(|p| {
+                    let is_static = p.meta & 1 << 0 != 0;
+                    let str_static = format!("static: {is_static}");
+                    let is_const = p.meta & 1 << 1 != 0;
+                    let str_const = format!("const: {is_const}");
+                    let is_public = p.meta & 1 << 2 != 0;
+                    let str_public = format!("public: {is_public}");
+                    let str_info = format!("{str_static}\n{str_const}\n{str_public}");
+                    let str_info = format!("{}:\n{}", p.name, data_format(str_info));
+                    match &p.value {
+                        Some(value) => {
+                            format!("{str_info}\n{}", data_format(value.to_string()))
                         }
-                    })
-                    .collect();
+                        None => str_info,
+                    }
+                });
                 format!(
                     "NodeClass: {}\n{}",
                     node.name,
                     data_format(str_body.join("\n"))
                 )
             }
-            Node::While(node) | Node::DoWhile(node) => {
-                let str_body: Vec<String> = node.body.iter().map(|n| n.to_string()).collect();
-                format!(
-                    "NodeWhile:\n{}\n  <==>\n{}",
-                    data_format(node.condition.to_string()),
-                    data_format(str_body.join("\n"))
-                )
-            }
+            Node::While(node) | Node::DoWhile(node) => format!(
+                "NodeWhile:\n{}\n  <==>\n{}",
+                data_format(node.condition.to_string()),
+                data_format(node.body.join("\n"))
+            ),
             Node::Try(node) => {
-                let str_body: Vec<String> = node.body.iter().map(|n| n.to_string()).collect();
-                let str_catch = format!(
-                    "NodeTryCatch: {}:\n{}",
-                    node.catch.0,
-                    data_format(
-                        node.catch
-                            .1
-                            .iter()
-                            .map(|n| n.to_string())
-                            .collect::<Vec<_>>()
-                            .join("\n")
-                    )
-                );
+                let str_catch = format!("NodeTryCatch: {}:\n{}", node.catch.0, node.catch.1);
                 let str_finally = match &node.finally {
-                    Some(finally) => format!(
-                        "NodeTryFinally:\n{}",
-                        data_format(
-                            finally
-                                .iter()
-                                .map(|n| n.to_string())
-                                .collect::<Vec<_>>()
-                                .join("\n")
-                        )
-                    ),
+                    Some(finally) => format!("NodeTryFinally:\n{}", finally),
                     None => "No Finally".to_string(),
                 };
                 format!(
-                    "NodeTry:\n{}\n  <==>\n{}\n  <==>\n{}",
-                    data_format(str_body.join("\n")),
+                    "NodeTry:\n  {}\n  <==>\n{}\n  <==>\n{}",
+                    node.body,
                     data_format(str_catch),
                     data_format(str_finally)
                 )
             }
             Node::Function(node) => {
-                let str_params = node.params.iter()
-                .map(|arg| format!("{}", Node::Identifier(arg.clone())))
-                .collect::<Vec<_>>()
-                .join(", ");
-                let str_body: Vec<_> = node.body.iter().map(|n| n.to_string()).collect();
+                let str_params = node
+                    .params
+                    .map(|arg| format!("{}", Node::Identifier(arg.clone())))
+                    .join(", ");
                 format!(
                     "NodeFunction: {} ({})\n{}",
                     node.name,
                     str_params,
-                    data_format(str_body.join("\n"))
+                    data_format(node.body.join("\n"))
                 )
             }
             Node::If(node) => {
-                let str_body: Vec<String> = node.body.iter().map(|node| node.to_string()).collect();
                 let str_else_body = match &node.else_body {
-                    Some(else_body) => {
-                        let str_else_body: Vec<String> =
-                            else_body.iter().map(|node| node.to_string()).collect();
-                        format!("\n  <==>\n{}", data_format(str_else_body.join("\n")))
-                    }
+                    Some(else_body) => format!("\n  <==>\n{}", data_format(else_body.join("\n"))),
                     None => "".to_string(),
                 };
                 format!(
                     "NodeIf:\n{}\n  <==>\n{}{}",
                     data_format(node.condition.to_string()),
-                    data_format(str_body.join("\n")),
+                    data_format(node.body.join("\n")),
                     str_else_body
                 )
             }
@@ -373,16 +276,13 @@ impl std::fmt::Display for Node {
             Node::Export(node) | Node::Throw(node) => {
                 format!("NodeValue: \n{}", data_format(node.value.to_string()))
             }
-            Node::For(node) => {
-                let str_body: Vec<String> = node.body.iter().map(|n| n.to_string()).collect();
-                format!(
-                    "NodeFor: \n{}\n{}\n{}\n  <==>\n{}",
-                    data_format(node.init.to_string()),
-                    data_format(node.condition.to_string()),
-                    data_format(node.update.to_string()),
-                    data_format(str_body.join("\n"))
-                )
-            }
+            Node::For(node) => format!(
+                "NodeFor: \n{}\n{}\n{}\n  <==>\n{}",
+                data_format(node.init.to_string()),
+                data_format(node.condition.to_string()),
+                data_format(node.update.to_string()),
+                data_format(node.body.join("\n"))
+            ),
             Node::UnaryFront(node) | Node::UnaryBack(node) => format!(
                 "NodeUnary: \"{}\" para {{\n{}\n}}",
                 node.operator,
@@ -400,15 +300,14 @@ impl std::fmt::Display for Node {
                 data_format(node.member.to_string())
             ),
             Node::Call(node) => {
-                let str_arguments: Vec<String> = node
+                let str_arguments = node
                     .arguments
-                    .iter()
                     .map(|argument| format!("  {}", argument))
-                    .collect();
+                    .join("\n");
                 format!(
                     "NodeCall:\n{}\n  ({})",
                     data_format(node.callee.to_string()),
-                    data_format(str_arguments.join("\n"))
+                    data_format(str_arguments)
                 )
             }
             Node::Return(node) => match &node.value {
@@ -423,70 +322,37 @@ impl std::fmt::Display for Node {
                 }
             ),
             Node::Error(node) => format!("NodeError: {}", node.message),
-            Node::PartialError(node) => {
-                let type_err = internal::ErrorNames::SyntaxError;
-                let node_err = node.error.clone();
-                let err = crate::frontend::node_error(&node_err);
-                internal::show_warn(&type_err, err);
-                format!(
-                    "NodePartialError: \n  {}\n{}",
-                    Node::Error(node.error.clone()),
-                    data_format(node.value.to_string())
-                )
-            }
         };
         write!(f, "{}", str)
     }
 }
+
 fn data_format(data: String) -> String {
     data.split("\n")
         .map(|line| format!("  {}", line))
         .collect::<Vec<String>>()
         .join("\n")
 }
+#[derive(Clone)]
 pub struct NodeProgram {
-    pub body: Vec<Node>,
+    pub body: LNode,
     pub column: usize,
     pub line: usize,
     pub file: String,
 }
-impl Clone for NodeProgram {
-    fn clone(&self) -> Self {
-        NodeProgram {
-            body: self.body.iter().map(|node| node.clone()).collect(),
-            column: self.column,
-            line: self.line,
-            file: self.file.clone(),
-        }
-    }
-}
+#[derive(Clone)]
 pub enum StringData {
     Str(String),
-    Id(Box<Node>),
+    Id(BNode),
 }
+#[derive(Clone)]
 pub struct NodeString {
-    pub value: Vec<StringData>,
+    pub value: List<StringData>,
     pub column: usize,
     pub line: usize,
     pub file: String,
 }
-impl Clone for NodeString {
-    fn clone(&self) -> Self {
-        NodeString {
-            value: self
-                .value
-                .iter()
-                .map(|data| match data {
-                    StringData::Str(str) => StringData::Str(str.clone()),
-                    StringData::Id(id) => StringData::Id(id.clone()),
-                })
-                .collect(),
-            column: self.column,
-            line: self.line,
-            file: self.file.clone(),
-        }
-    }
-}
+#[derive(Clone)]
 pub struct NodeNumber {
     pub base: u8,
     pub value: String,
@@ -494,368 +360,151 @@ pub struct NodeNumber {
     pub line: usize,
     pub file: String,
 }
-impl Clone for NodeNumber {
-    fn clone(&self) -> Self {
-        NodeNumber {
-            base: self.base,
-            value: self.value.clone(),
-            column: self.column,
-            line: self.line,
-            file: self.file.clone(),
-        }
-    }
-}
+#[derive(Clone)]
 pub enum NodeProperty {
     Property(String, Node),
     Dynamic(Node, Node),
     Iterable(NodeIdentifier),
     Indexable(Node),
 }
+#[derive(Clone)]
 pub struct NodeObject {
-    pub properties: Vec<NodeProperty>,
+    pub properties: List<NodeProperty>,
     pub column: usize,
     pub line: usize,
     pub file: String,
 }
-impl Clone for NodeObject {
-    fn clone(&self) -> Self {
-        NodeObject {
-            properties: self
-                .properties
-                .iter()
-                .map(|property| match property {
-                    NodeProperty::Property(name, value) => {
-                        NodeProperty::Property(name.clone(), value.clone())
-                    }
-                    NodeProperty::Dynamic(name, value) => {
-                        NodeProperty::Dynamic(name.clone(), value.clone())
-                    }
-                    NodeProperty::Iterable(object) => NodeProperty::Iterable(object.clone()),
-                    NodeProperty::Indexable(value) => NodeProperty::Indexable(value.clone()),
-                })
-                .collect(),
-            column: self.column,
-            line: self.line,
-            file: self.file.clone(),
-        }
-    }
-}
+#[derive(Clone)]
 pub struct NodeArray {
-    pub elements: Vec<NodeProperty>,
+    pub elements: List<NodeProperty>,
     pub column: usize,
     pub line: usize,
     pub file: String,
 }
-impl Clone for NodeArray {
-    fn clone(&self) -> Self {
-        NodeArray {
-            elements: self
-                .elements
-                .iter()
-                .map(|element| match element {
-                    NodeProperty::Property(name, value) => {
-                        NodeProperty::Property(name.clone(), value.clone())
-                    }
-                    NodeProperty::Dynamic(name, value) => {
-                        NodeProperty::Dynamic(name.clone(), value.clone())
-                    }
-                    NodeProperty::Iterable(object) => NodeProperty::Iterable(object.clone()),
-                    NodeProperty::Indexable(value) => NodeProperty::Indexable(value.clone()),
-                })
-                .collect(),
-            column: self.column,
-            line: self.line,
-            file: self.file.clone(),
-        }
-    }
-}
+#[derive(Clone)]
 pub struct NodeVarDecl {
     pub name: String,
-    pub value: Option<Box<Node>>,
+    pub value: Option<BNode>,
     pub is_const: bool,
     pub column: usize,
     pub line: usize,
     pub file: String,
 }
-impl Clone for NodeVarDecl {
-    fn clone(&self) -> Self {
-        NodeVarDecl {
-            name: self.name.clone(),
-            value: match &self.value {
-                Some(value) => Some(value.clone()),
-                None => None,
-            },
-            is_const: self.is_const,
-            column: self.column,
-            line: self.line,
-            file: self.file.clone(),
-        }
-    }
-}
+#[derive(Clone)]
 pub struct NodeIdentifier {
     pub name: String,
     pub column: usize,
     pub line: usize,
     pub file: String,
 }
-impl Clone for NodeIdentifier {
-    fn clone(&self) -> Self {
-        NodeIdentifier {
-            name: self.name.clone(),
-            column: self.column,
-            line: self.line,
-            file: self.file.clone(),
-        }
-    }
-}
+#[derive(Clone)]
 pub struct NodeError {
     pub message: String,
     pub column: usize,
     pub line: usize,
     pub meta: String,
 }
-impl Clone for NodeError {
-    fn clone(&self) -> Self {
-        NodeError {
-            message: self.message.clone(),
-            column: self.column,
-            line: self.line,
-            meta: self.meta.clone(),
-        }
-    }
-}
+#[derive(Clone)]
 pub struct NodeUnary {
     pub operator: String,
-    pub operand: Box<Node>,
+    pub operand: BNode,
     pub column: usize,
     pub line: usize,
     pub file: String,
 }
-impl Clone for NodeUnary {
-    fn clone(&self) -> Self {
-        NodeUnary {
-            operator: self.operator.clone(),
-            operand: self.operand.clone(),
-            column: self.column,
-            line: self.line,
-            file: self.file.clone(),
-        }
-    }
-}
+#[derive(Clone)]
 pub struct NodeBinary {
     pub operator: String,
-    pub left: Box<Node>,
-    pub right: Box<Node>,
+    pub left: BNode,
+    pub right: BNode,
     pub column: usize,
     pub line: usize,
     pub file: String,
 }
-impl Clone for NodeBinary {
-    fn clone(&self) -> Self {
-        NodeBinary {
-            operator: self.operator.clone(),
-            left: self.left.clone(),
-            right: self.right.clone(),
-            column: self.column,
-            line: self.line,
-            file: self.file.clone(),
-        }
-    }
-}
+#[derive(Clone)]
 pub struct NodeAssignment {
-    pub identifier: Box<Node>,
-    pub value: Box<Node>,
+    pub identifier: BNode,
+    pub value: BNode,
     pub column: usize,
     pub line: usize,
     pub file: String,
 }
-impl Clone for NodeAssignment {
-    fn clone(&self) -> Self {
-        NodeAssignment {
-            identifier: self.identifier.clone(),
-            value: self.value.clone(),
-            column: self.column,
-            line: self.line,
-            file: self.file.clone(),
-        }
-    }
-}
+#[derive(Clone)]
 pub struct NodeMember {
-    pub object: Box<Node>,
-    pub member: Box<Node>,
+    pub object: BNode,
+    pub member: BNode,
     pub computed: bool,
     pub column: usize,
     pub line: usize,
     pub file: String,
 }
-impl Clone for NodeMember {
-    fn clone(&self) -> Self {
-        NodeMember {
-            object: self.object.clone(),
-            member: self.member.clone(),
-            computed: self.computed,
-            column: self.column,
-            line: self.line,
-            file: self.file.clone(),
-        }
-    }
-}
+#[derive(Clone)]
 pub struct NodeCall {
-    pub callee: Box<Node>,
-    pub arguments: Vec<Node>,
+    pub callee: BNode,
+    pub arguments: LNode,
     pub column: usize,
     pub line: usize,
     pub file: String,
 }
-impl Clone for NodeCall {
-    fn clone(&self) -> Self {
-        NodeCall {
-            callee: self.callee.clone(),
-            arguments: self.arguments.iter().map(|arg| arg.clone()).collect(),
-            column: self.column,
-            line: self.line,
-            file: self.file.clone(),
-        }
-    }
-}
+#[derive(Clone)]
 pub struct NodeWhile {
-    pub condition: Box<Node>,
-    pub body: Vec<Node>,
+    pub condition: BNode,
+    pub body: LNode,
     pub column: usize,
     pub line: usize,
     pub file: String,
 }
-impl Clone for NodeWhile {
-    fn clone(&self) -> Self {
-        NodeWhile {
-            condition: self.condition.clone(),
-            body: self.body.iter().map(|node| node.clone()).collect(),
-            column: self.column,
-            line: self.line,
-            file: self.file.clone(),
-        }
-    }
-}
+#[derive(Clone)]
 pub struct NodeIf {
-    pub condition: Box<Node>,
-    pub body: Vec<Node>,
-    pub else_body: Option<Vec<Node>>,
+    pub condition: BNode,
+    pub body: LNode,
+    pub else_body: Option<LNode>,
     pub column: usize,
     pub line: usize,
     pub file: String,
 }
-impl Clone for NodeIf {
-    fn clone(&self) -> Self {
-        NodeIf {
-            condition: self.condition.clone(),
-            body: self.body.iter().map(|node| node.clone()).collect(),
-            else_body: match &self.else_body {
-                Some(else_body) => Some(else_body.iter().map(|node| node.clone()).collect()),
-                None => None,
-            },
-            column: self.column,
-            line: self.line,
-            file: self.file.clone(),
-        }
-    }
-}
-pub type NodeArguments = Vec<NodeIdentifier>;
+
+#[derive(Clone)]
 pub struct NodeFunction {
     pub name: String,
-    pub params: NodeArguments,
-    pub body: Vec<Node>,
+    pub params: List<NodeIdentifier>,
+    pub body: LNode,
     pub column: usize,
     pub line: usize,
     pub file: String,
 }
-impl Clone for NodeFunction {
-    fn clone(&self) -> Self {
-        NodeFunction {
-            name: self.name.clone(),
-            params: self.params.iter().map(|param| param.clone()).collect(),
-            body: self.body.iter().map(|node| node.clone()).collect(),
-            column: self.column,
-            line: self.line,
-            file: self.file.clone(),
-        }
-    }
-}
+#[derive(Clone)]
 pub struct NodeReturn {
-    pub value: Option<Box<Node>>,
+    pub value: Option<BNode>,
     pub column: usize,
     pub line: usize,
     pub file: String,
 }
-impl Clone for NodeReturn {
-    fn clone(&self) -> Self {
-        NodeReturn {
-            value: match &self.value {
-                Some(value) => Some(value.clone()),
-                None => None,
-            },
-            column: self.column,
-            line: self.line,
-            file: self.file.clone(),
-        }
-    }
-}
+#[derive(Clone)]
 pub enum NodeLoopEditType {
     Break,
     Continue,
 }
-impl Clone for NodeLoopEditType {
-    fn clone(&self) -> Self {
-        match self {
-            NodeLoopEditType::Break => NodeLoopEditType::Break,
-            NodeLoopEditType::Continue => NodeLoopEditType::Continue,
-        }
-    }
-}
+#[derive(Clone)]
 pub struct NodeLoopEdit {
     pub action: NodeLoopEditType,
     pub column: usize,
     pub line: usize,
     pub file: String,
 }
-impl Clone for NodeLoopEdit {
-    fn clone(&self) -> Self {
-        NodeLoopEdit {
-            action: self.action.clone(),
-            column: self.column,
-            line: self.line,
-            file: self.file.clone(),
-        }
-    }
-}
+#[derive(Clone)]
 pub struct NodeTry {
-    pub body: Vec<Node>,
-    pub catch: (String, Vec<Node>),
-    pub finally: Option<Vec<Node>>,
+    pub body: LNode,
+    pub catch: (String, LNode),
+    pub finally: Option<LNode>,
     pub column: usize,
     pub line: usize,
     pub file: String,
 }
-impl Clone for NodeTry {
-    fn clone(&self) -> Self {
-        NodeTry {
-            body: self.body.iter().map(|node| node.clone()).collect(),
-            catch: (
-                self.catch.0.clone(),
-                self.catch.1.iter().map(|node| node.clone()).collect(),
-            ),
-            finally: match &self.finally {
-                Some(finally) => Some(finally.iter().map(|node| node.clone()).collect()),
-                None => None,
-            },
-            column: self.column,
-            line: self.line,
-            file: self.file.clone(),
-        }
-    }
-}
+#[derive(Clone)]
 pub struct NodeClassProperty {
     pub name: String,
-    pub value: Option<Box<Node>>,
+    pub value: Option<BNode>,
     /** bits
 
     0: is_static
@@ -863,35 +512,15 @@ pub struct NodeClassProperty {
     2: is_public */
     pub meta: u8,
 }
+#[derive(Clone)]
 pub struct NodeClass {
     pub name: String,
-    pub body: Vec<NodeClassProperty>,
+    pub body: List<NodeClassProperty>,
     pub column: usize,
     pub line: usize,
     pub file: String,
 }
-impl Clone for NodeClass {
-    fn clone(&self) -> Self {
-        NodeClass {
-            name: self.name.clone(),
-            body: self
-                .body
-                .iter()
-                .map(|property| NodeClassProperty {
-                    name: property.name.clone(),
-                    value: match &property.value {
-                        Some(value) => Some(value.clone()),
-                        None => None,
-                    },
-                    meta: property.meta,
-                })
-                .collect(),
-            column: self.column,
-            line: self.line,
-            file: self.file.clone(),
-        }
-    }
-}
+#[derive(Clone)]
 pub struct NodeImport {
     pub path: String,
     pub name: Option<String>,
@@ -899,67 +528,20 @@ pub struct NodeImport {
     pub line: usize,
     pub file: String,
 }
-impl Clone for NodeImport {
-    fn clone(&self) -> Self {
-        NodeImport {
-            path: self.path.clone(),
-            name: match &self.name {
-                Some(name) => Some(name.clone()),
-                None => None,
-            },
-            column: self.column,
-            line: self.line,
-            file: self.file.clone(),
-        }
-    }
-}
+#[derive(Clone)]
 pub struct NodeValue {
-    pub value: Box<Node>,
+    pub value: BNode,
     pub column: usize,
     pub line: usize,
     pub file: String,
 }
-impl Clone for NodeValue {
-    fn clone(&self) -> Self {
-        NodeValue {
-            value: self.value.clone(),
-            column: self.column,
-            line: self.line,
-            file: self.file.clone(),
-        }
-    }
-}
-pub struct NodePartialError {
-    pub error: NodeError,
-    pub value: Box<Node>,
-}
-impl Clone for NodePartialError {
-    fn clone(&self) -> Self {
-        NodePartialError {
-            error: self.error.clone(),
-            value: self.value.clone(),
-        }
-    }
-}
+#[derive(Clone)]
 pub struct NodeFor {
-    pub init: Box<Node>,
-    pub condition: Box<Node>,
-    pub update: Box<Node>,
-    pub body: Vec<Node>,
+    pub init: BNode,
+    pub condition: BNode,
+    pub update: BNode,
+    pub body: LNode,
     pub column: usize,
     pub line: usize,
     pub file: String,
-}
-impl Clone for NodeFor {
-    fn clone(&self) -> Self {
-        NodeFor {
-            init: self.init.clone(),
-            condition: self.condition.clone(),
-            update: self.update.clone(),
-            body: self.body.iter().map(|node| node.clone()).collect(),
-            column: self.column,
-            line: self.line,
-            file: self.file.clone(),
-        }
-    }
 }
