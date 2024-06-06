@@ -1,13 +1,12 @@
 pub mod ast;
 pub mod string;
+use ast::NodeBlock;
 use util::{List, Token};
 
 use crate::{
     internal,
     util::{split_meta, to_cyan},
 };
-
-use self::ast::LNode;
 
 use super::lexer::{KeywordsType, TokenType};
 
@@ -1067,9 +1066,9 @@ impl Parser {
     }
     fn parse_block_expr(
         &mut self,
-        is_function: bool,
-        is_loop: bool,
-    ) -> Result<LNode, ast::NodeError> {
+        in_function: bool,
+        in_loop: bool,
+    ) -> Result<NodeBlock, ast::NodeError> {
         let open_brace = self.at();
         if open_brace.token_type == TokenType::Error {
             return Err(ast::NodeError {
@@ -1080,7 +1079,7 @@ impl Parser {
             });
         }
         if self.at().token_type != TokenType::Punctuation('{') {
-            let expr = self.parse_stmt(false, is_function, is_loop);
+            let expr = self.parse_stmt(false, in_function, in_loop);
             if expr.is_none() {
                 let line = self.source.lines().nth(open_brace.position.line).unwrap();
                 return Err(ast::NodeError {
@@ -1094,9 +1093,13 @@ impl Parser {
             if expr.is_error() {
                 return Err(expr.get_error().unwrap());
             }
-            let mut data = List::new();
-            data.push(expr);
-            return Ok(data);
+            let mut body = List::new();
+            body.push(expr);
+            return Ok(ast::NodeBlock {
+                body,
+                in_function,
+                in_loop
+            });
         }
         self.eat();
         let body = self.parse_block(TokenType::Punctuation('}'));
@@ -1115,7 +1118,7 @@ impl Parser {
         }
         Ok(body)
     }
-    fn parse_block(&mut self, stop_with: TokenType) -> Result<LNode, ast::NodeError> {
+    fn parse_block(&mut self, stop_with: TokenType) -> Result<NodeBlock, ast::NodeError> {
         let mut body = List::new();
         let mut error = None;
         let mut functions = Vec::new();
@@ -1139,7 +1142,11 @@ impl Parser {
         }
         body.append_vec(&mut functions);
         body.append_vec(&mut code);
-        Ok(body)
+        Ok(ast::NodeBlock {
+            body,
+            in_function: false,
+            in_loop: false,
+        })
     }
     fn parse_var_decl(&mut self) -> ast::Node {
         let token = self.eat();
@@ -1245,10 +1252,10 @@ impl Parser {
         if node.is_error() {
             return node;
         }
-        let semicolon = self.expect(TokenType::Punctuation(';'), "");
+        let semicolon = self.expect(TokenType::Punctuation(';'), "Se esperaba un punto y coma");
         if semicolon.token_type == TokenType::Error {
             return ast::Node::Error(ast::NodeError {
-                message: "Se esperaba un punto y coma".to_string(),
+                message: semicolon.value,
                 column: semicolon.position.column,
                 line: semicolon.position.line,
                 meta: semicolon.meta,

@@ -11,25 +11,17 @@ fn main() -> ExitCode {
     if filename.is_none() {
         return ExitCode::FAILURE;
     }
-    let ref filename = filename.unwrap();
-    let contents = code(filename);
-    if contents.is_none() {
+    let filename = filename.unwrap();
+    let ref stack = runtime::Stack::get_default();
+    let global_env = runtime::env::get_default();
+
+    let program = runtime::full_eval(filename, stack, global_env);
+    if program.is_err() {
         return ExitCode::FAILURE;
     }
-    let contents = contents.unwrap();
-    let program: frontend::ast::Node = {
-        let mut parser = frontend::Parser::new(contents, filename);
-        parser.produce_ast()
-    };
-    if program.is_error() {
-        let type_err = internal::errors::ErrorNames::SyntaxError;
-        let node_err = program.get_error().unwrap();
-        let err = frontend::node_error(&node_err);
-        let data = internal::errors::error_to_string(&type_err, err);
-        internal::print_error(data);
-        return ExitCode::FAILURE;
-    }
-    println!("{}", program);
+    let env = program.ok().unwrap();
+    let env = env.borrow_mut();
+    println!("{}", env);
     return ExitCode::SUCCESS;
 }
 fn file() -> Option<String> {
@@ -42,16 +34,4 @@ fn file() -> Option<String> {
         return None;
     }
     Some(args[1].to_string())
-}
-fn code(filename: &str) -> Option<String> {
-    let contents = std::fs::read_to_string(filename);
-    match contents {
-        Ok(contents) => Some(contents),
-        Err(err) => {
-            let ref type_err = internal::ErrorNames::PathError;
-            let err = internal::ErrorTypes::IoError(err);
-            internal::show_error(type_err, err);
-            None
-        }
-    }
 }

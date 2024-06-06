@@ -1,26 +1,2 @@
-mien 0 京;
-
-intentar mundo();
-capturar (e) mundo();
-finalmente mundo();
-si cierto {
-  exportar clase HolaMundo {
-    pub mundo() {
-        imprimir("¡Hola, mundo!");
-    };
-  }
-}
-exportar fn mundo() {
-    imprimir("¡Hola, mundo!");
-}
-
-para (def i = 0; i < 10; i += 1) {
-  imprimir(i);
-}
-
-fn mc ()
-{
-  imprimir("¡Hola, mundo!");
-}
-fn valo()
-  imprimir("¡Hola, mundo!");
+def mundo = 'Gente de GitHub';
+def saludo = "Hola {mundo}";

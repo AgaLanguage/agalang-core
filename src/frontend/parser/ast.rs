@@ -1,12 +1,12 @@
-use util::List;
+use util::List; // is a Vec clonable
 
-use crate::frontend::lexer::KeywordsType;
+use crate::frontend::lexer::KeywordsType; // is a enum with keywords
 
 pub type BNode = Box<Node>;
-pub type LNode = List<Node>;
 
 #[derive(Clone)]
 pub enum Node {
+    None,
     Program(NodeProgram),
 
     // Literals //
@@ -83,6 +83,7 @@ impl Node {
             Node::LoopEdit(node) => node.column,
             Node::For(node) => node.column,
             Node::Error(node) => node.column,
+            Node::None => 0,
         }
     }
     pub fn get_line(&self) -> usize {
@@ -111,6 +112,7 @@ impl Node {
             Node::LoopEdit(node) => node.line,
             Node::For(node) => node.line,
             Node::Error(node) => node.line,
+            Node::None => 0,
         }
     }
     pub fn get_file(&self) -> String {
@@ -139,15 +141,28 @@ impl Node {
             Node::LoopEdit(node) => &node.file,
             Node::For(node) => &node.file,
             Node::Error(node) => &node.meta,
+            Node::None => "none"
         };
         return file.to_string();
     }
 }
 
+
+impl NodeBlock {
+    pub fn join(&self, separator: &str) -> String {
+        self.body.map(|node| format!("{}", node)).join(separator)
+    }
+}
+impl std::fmt::Display for NodeBlock {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let str_body = self.body.map(|node| format!("{}", node)).join("\n");
+        write!(f, "{}", data_format(str_body))
+    }
+}
 impl std::fmt::Display for Node {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let str = match self {
-            Node::Program(node) => format!("NodeProgram:\n  {}", node.body),
+            Node::Program(node) => format!("NodeProgram:\n{}", data_format(node.body.to_string())),
             Node::String(node) => {
                 let str_value = node.value.map(|data| match data {
                     StringData::Str(str) => format!("\"{}\"", str).replace("\n", "\\n"),
@@ -322,10 +337,12 @@ impl std::fmt::Display for Node {
                 }
             ),
             Node::Error(node) => format!("NodeError: {}", node.message),
+            Node::None => "NodeNone".to_string(),
         };
         write!(f, "{}", str)
     }
 }
+
 
 fn data_format(data: String) -> String {
     data.split("\n")
@@ -334,8 +351,23 @@ fn data_format(data: String) -> String {
         .join("\n")
 }
 #[derive(Clone)]
+pub struct NodeBlock {
+    pub body: List<Node>,
+    pub in_function: bool,
+    pub in_loop: bool,
+}
+impl NodeBlock {
+    pub fn len(&self) -> usize {
+        self.body.len()
+    }
+    pub fn iter(&self) -> std::slice::Iter<Node> {
+        self.body.iter()
+    }
+}
+
+#[derive(Clone)]
 pub struct NodeProgram {
-    pub body: LNode,
+    pub body: NodeBlock,
     pub column: usize,
     pub line: usize,
     pub file: String,
@@ -343,7 +375,7 @@ pub struct NodeProgram {
 #[derive(Clone)]
 pub enum StringData {
     Str(String),
-    Id(BNode),
+    Id(String),
 }
 #[derive(Clone)]
 pub struct NodeString {
@@ -441,7 +473,7 @@ pub struct NodeMember {
 #[derive(Clone)]
 pub struct NodeCall {
     pub callee: BNode,
-    pub arguments: LNode,
+    pub arguments: List<Node>,
     pub column: usize,
     pub line: usize,
     pub file: String,
@@ -449,7 +481,7 @@ pub struct NodeCall {
 #[derive(Clone)]
 pub struct NodeWhile {
     pub condition: BNode,
-    pub body: LNode,
+    pub body: NodeBlock,
     pub column: usize,
     pub line: usize,
     pub file: String,
@@ -457,8 +489,8 @@ pub struct NodeWhile {
 #[derive(Clone)]
 pub struct NodeIf {
     pub condition: BNode,
-    pub body: LNode,
-    pub else_body: Option<LNode>,
+    pub body: NodeBlock,
+    pub else_body: Option<NodeBlock>,
     pub column: usize,
     pub line: usize,
     pub file: String,
@@ -468,7 +500,7 @@ pub struct NodeIf {
 pub struct NodeFunction {
     pub name: String,
     pub params: List<NodeIdentifier>,
-    pub body: LNode,
+    pub body: NodeBlock,
     pub column: usize,
     pub line: usize,
     pub file: String,
@@ -494,9 +526,9 @@ pub struct NodeLoopEdit {
 }
 #[derive(Clone)]
 pub struct NodeTry {
-    pub body: LNode,
-    pub catch: (String, LNode),
-    pub finally: Option<LNode>,
+    pub body: NodeBlock,
+    pub catch: (String, NodeBlock),
+    pub finally: Option<NodeBlock>,
     pub column: usize,
     pub line: usize,
     pub file: String,
@@ -540,7 +572,7 @@ pub struct NodeFor {
     pub init: BNode,
     pub condition: BNode,
     pub update: BNode,
-    pub body: LNode,
+    pub body: NodeBlock,
     pub column: usize,
     pub line: usize,
     pub file: String,

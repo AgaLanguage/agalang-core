@@ -4,19 +4,22 @@ pub enum ErrorTypes {
     ErrorError(Box<dyn std::error::Error>),
     StringError(String),
 }
+#[derive(Clone)]
 pub enum ErrorNames {
+    None,
     PathError,
     LexerError,
     SyntaxError,
-    //CustomError(String)
+    CustomError(String)
 }
 impl std::fmt::Display for ErrorNames {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
+            ErrorNames::None => write!(f, ""),
             ErrorNames::PathError => write!(f, "Error ruta"),
             ErrorNames::LexerError => write!(f, "Error léxico"),
             ErrorNames::SyntaxError => write!(f, "Error sintáctico"),
-            //ErrorNames::CustomError(s) => write!(f, "{s}"),
+            ErrorNames::CustomError(s) => write!(f, "{s}"),
         }
     }
 }
