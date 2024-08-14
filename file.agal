@@ -1,2 +1,3 @@
 def mundo = 'Gente de GitHub';
-def saludo = "Hola {mundo}";
+def data = (si cierto mundo; ent 'Mundo';);
+def saludo = [..mundo]::aCadena() == mundo::caracteres()::aCadena();

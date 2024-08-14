@@ -1,6 +1,6 @@
 use crate::frontend::ast::Node;
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct Stack {
   value: Box<Node>,
   previous: Option<Box<Stack>>,
@@ -23,6 +23,9 @@ impl Stack {
     let mut stack = vec![self.get_value()];
     let mut current = self;
     while let Some(previous) = &current.previous {
+      if previous.get_value().get_type() == "Nada" {
+        break;
+      }
       stack.push(previous.get_value());
       current = previous.as_ref();
     }
@@ -35,7 +38,7 @@ impl Stack {
 
 impl<'a> std::fmt::Display for Stack {
   fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-    write!(f, "{} -> {}", self.value, match &self.previous {
+    write!(f, "{} -> {}", self.value.get_type(), match &self.previous {
       Some(previous) => previous.to_string(),
       None => "None".to_string(),
     })

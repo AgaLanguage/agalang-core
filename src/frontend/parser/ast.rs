@@ -4,7 +4,7 @@ use crate::frontend::lexer::KeywordsType; // is a enum with keywords
 
 pub type BNode = Box<Node>;
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum Node {
     None,
     Program(NodeProgram),
@@ -30,6 +30,7 @@ pub enum Node {
     DoWhile(NodeWhile),
     Try(NodeTry),
     Throw(NodeValue),
+    Block(NodeBlock),
 
     // Expressions //
     UnaryFront(NodeUnary),
@@ -42,15 +43,27 @@ pub enum Node {
     Error(NodeError),
 }
 impl Node {
+    pub fn is_identifier(&self) -> bool {
+        match self {
+            Node::Identifier(_) => true,
+            _ => false,
+        }
+    }
+    pub fn get_identifier(&self) -> Option<&NodeIdentifier> {
+        match self {
+            Node::Identifier(node) => Some(node),
+            _ => None,
+        }
+    }
     pub fn is_error(&self) -> bool {
         match self {
             Node::Error(_) => true,
             _ => false,
         }
     }
-    pub fn get_error(&self) -> Option<NodeError> {
+    pub fn get_error(&self) -> Option<&NodeError> {
         match self {
-            Node::Error(node) => Some(node.clone()),
+            Node::Error(node) => Some(node),
             _ => None,
         }
     }
@@ -83,7 +96,7 @@ impl Node {
             Node::LoopEdit(node) => node.column,
             Node::For(node) => node.column,
             Node::Error(node) => node.column,
-            Node::None => 0,
+            Node::Block(_) | Node::None => 0,
         }
     }
     pub fn get_line(&self) -> usize {
@@ -112,7 +125,7 @@ impl Node {
             Node::LoopEdit(node) => node.line,
             Node::For(node) => node.line,
             Node::Error(node) => node.line,
-            Node::None => 0,
+            Node::Block(_) | Node::None => 0,
         }
     }
     pub fn get_file(&self) -> String {
@@ -141,11 +154,47 @@ impl Node {
             Node::LoopEdit(node) => &node.file,
             Node::For(node) => &node.file,
             Node::Error(node) => &node.meta,
-            Node::None => "none"
+            Node::Block(_) | Node::None => "none",
         };
         return file.to_string();
     }
+    pub fn get_type(&self) -> &str {
+        match self {
+            Node::Program(_) => "Programa",
+            Node::String(_) => "Cadena",
+            Node::Number(_) => "Numero",
+            Node::Object(_) => "Objeto",
+            Node::Array(_) => "Lista",
+            Node::Identifier(_) => "Identificador",
+            Node::VarDecl(_) => "Variable",
+            Node::Name(_) => "Nombre",
+            Node::Assignment(_) => "Asignacion",
+            Node::Class(_) => "Clase",
+            Node::While(_) => "Mientras",
+            Node::DoWhile(_) => "Hacer",
+            Node::Try(_) => "Intentar",
+            Node::Function(_) => "Funcion",
+            Node::If(_) => "Si",
+            Node::Import(_) => "Importar",
+            Node::Export(_) => "Exportar",
+            Node::UnaryFront(_) => "Operador Unario",
+            Node::UnaryBack(_) => "Operador Unario",
+            Node::Binary(_) => "Operador Binario",
+            Node::Member(_) => "Miembro",
+            Node::Call(_) => "Llamada",
+            Node::Return(_) => "Retorno",
+            Node::LoopEdit(_) => "Editor de bucle",
+            Node::For(_) => "Para",
+            Node::Error(_) => "Error",
+            Node::Block(_) => "Bloque",
+            Node::None => "Nada",
+            Node::Throw(_) => "Lanzar",
+        }
+    }
 }
+
+
+// TODO: delete this code
 
 
 impl NodeBlock {
@@ -162,6 +211,7 @@ impl std::fmt::Display for NodeBlock {
 impl std::fmt::Display for Node {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let str = match self {
+            Node::Block(node) => node.body.to_string(),
             Node::Program(node) => format!("NodeProgram:\n{}", data_format(node.body.to_string())),
             Node::String(node) => {
                 let str_value = node.value.map(|data| match data {
@@ -350,7 +400,7 @@ fn data_format(data: String) -> String {
         .collect::<Vec<String>>()
         .join("\n")
 }
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct NodeBlock {
     pub body: List<Node>,
     pub in_function: bool,
@@ -363,28 +413,31 @@ impl NodeBlock {
     pub fn iter(&self) -> std::slice::Iter<Node> {
         self.body.iter()
     }
+    pub fn to_node(self) -> Node {
+        Node::Block(self)
+    }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct NodeProgram {
     pub body: NodeBlock,
     pub column: usize,
     pub line: usize,
     pub file: String,
 }
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum StringData {
     Str(String),
     Id(String),
 }
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct NodeString {
     pub value: List<StringData>,
     pub column: usize,
     pub line: usize,
     pub file: String,
 }
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct NodeNumber {
     pub base: u8,
     pub value: String,
@@ -392,28 +445,28 @@ pub struct NodeNumber {
     pub line: usize,
     pub file: String,
 }
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum NodeProperty {
     Property(String, Node),
     Dynamic(Node, Node),
     Iterable(NodeIdentifier),
     Indexable(Node),
 }
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct NodeObject {
     pub properties: List<NodeProperty>,
     pub column: usize,
     pub line: usize,
     pub file: String,
 }
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct NodeArray {
     pub elements: List<NodeProperty>,
     pub column: usize,
     pub line: usize,
     pub file: String,
 }
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct NodeVarDecl {
     pub name: String,
     pub value: Option<BNode>,
@@ -422,21 +475,21 @@ pub struct NodeVarDecl {
     pub line: usize,
     pub file: String,
 }
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct NodeIdentifier {
     pub name: String,
     pub column: usize,
     pub line: usize,
     pub file: String,
 }
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct NodeError {
     pub message: String,
     pub column: usize,
     pub line: usize,
     pub meta: String,
 }
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct NodeUnary {
     pub operator: String,
     pub operand: BNode,
@@ -444,7 +497,7 @@ pub struct NodeUnary {
     pub line: usize,
     pub file: String,
 }
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct NodeBinary {
     pub operator: String,
     pub left: BNode,
@@ -453,7 +506,7 @@ pub struct NodeBinary {
     pub line: usize,
     pub file: String,
 }
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct NodeAssignment {
     pub identifier: BNode,
     pub value: BNode,
@@ -461,16 +514,17 @@ pub struct NodeAssignment {
     pub line: usize,
     pub file: String,
 }
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct NodeMember {
     pub object: BNode,
     pub member: BNode,
+    pub instance: bool,
     pub computed: bool,
     pub column: usize,
     pub line: usize,
     pub file: String,
 }
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct NodeCall {
     pub callee: BNode,
     pub arguments: List<Node>,
@@ -478,7 +532,7 @@ pub struct NodeCall {
     pub line: usize,
     pub file: String,
 }
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct NodeWhile {
     pub condition: BNode,
     pub body: NodeBlock,
@@ -486,7 +540,7 @@ pub struct NodeWhile {
     pub line: usize,
     pub file: String,
 }
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct NodeIf {
     pub condition: BNode,
     pub body: NodeBlock,
@@ -496,7 +550,7 @@ pub struct NodeIf {
     pub file: String,
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct NodeFunction {
     pub name: String,
     pub params: List<NodeIdentifier>,
@@ -505,26 +559,26 @@ pub struct NodeFunction {
     pub line: usize,
     pub file: String,
 }
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct NodeReturn {
     pub value: Option<BNode>,
     pub column: usize,
     pub line: usize,
     pub file: String,
 }
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum NodeLoopEditType {
     Break,
     Continue,
 }
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct NodeLoopEdit {
     pub action: NodeLoopEditType,
     pub column: usize,
     pub line: usize,
     pub file: String,
 }
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct NodeTry {
     pub body: NodeBlock,
     pub catch: (String, NodeBlock),
@@ -533,7 +587,7 @@ pub struct NodeTry {
     pub line: usize,
     pub file: String,
 }
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct NodeClassProperty {
     pub name: String,
     pub value: Option<BNode>,
@@ -544,7 +598,7 @@ pub struct NodeClassProperty {
     2: is_public */
     pub meta: u8,
 }
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct NodeClass {
     pub name: String,
     pub body: List<NodeClassProperty>,
@@ -552,7 +606,7 @@ pub struct NodeClass {
     pub line: usize,
     pub file: String,
 }
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct NodeImport {
     pub path: String,
     pub name: Option<String>,
@@ -560,14 +614,14 @@ pub struct NodeImport {
     pub line: usize,
     pub file: String,
 }
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct NodeValue {
     pub value: BNode,
     pub column: usize,
     pub line: usize,
     pub file: String,
 }
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct NodeFor {
     pub init: BNode,
     pub condition: BNode,

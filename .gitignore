@@ -1,3 +1,4 @@
 # Rust
 target/
+base/
 Cargo.lock

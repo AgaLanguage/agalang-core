@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use super::{AgalBoolean, AgalValue};
 use crate::frontend::ast::Node;
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct Enviroment {
     parent: Option<Box<Enviroment>>,
     variables: HashMap<String, AgalValue>,
@@ -59,9 +59,6 @@ impl Enviroment {
         value
     }
     pub fn get(&self, name: &str, node: &Node) -> AgalValue {
-        if self.is_keyword(name) {
-            panic!("No se puede declarar una variable con el nombre de una palabra clave");
-        }
         let env = self.resolve(name, node);
         if !env.has(name, node) {
             panic!("La variable {} no ha sido declarada", name);
@@ -79,9 +76,6 @@ impl Enviroment {
             return self.parent.as_ref().unwrap().resolve(name, node);
         }
         return self;
-    }
-    pub fn inmut(&mut self) -> &Enviroment{
-      self
     }
     pub fn as_ref(&self) -> &Enviroment {
         self

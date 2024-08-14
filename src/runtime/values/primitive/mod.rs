@@ -1,16 +1,12 @@
-use crate::runtime::{env::{FALSE_KEYWORD, TRUE_KEYWORD}, AgalArray, Enviroment, Stack};
+use crate::runtime::{env::{FALSE_KEYWORD, TRUE_KEYWORD}, Enviroment, Stack};
 
-use super::{AgalThrow, AgalValuable};
+use super::{super::{AgalThrow, AgalValuable, AgalValue}, get_instance_property_error};
 
-pub type AgalString = AgalArray<AgalChar>;
-impl AgalString {
-    pub fn from_string(value: String) -> AgalString {
-        AgalArray::from_vec(value.chars().map(AgalChar).collect())
-    }
-    pub fn get_string(&self) -> String {
-        self.get_vec().iter().map(|c| c.to_char()).collect()
-    }
-}
+mod string;
+pub use string::{AgalString, AgalChar};
+mod byte;
+pub use byte::AgalByte;
+
 
 #[derive(Clone, Copy, PartialEq, PartialOrd)]
 pub struct AgalNumber(f64);
@@ -21,49 +17,61 @@ impl AgalNumber {
     pub fn to_f64(&self) -> f64 {
         self.0
     }
+    pub fn multiply(&self, other: AgalNumber) -> AgalNumber {
+        AgalNumber::new(self.0 * other.0)
+    }
 }
 impl AgalValuable for AgalNumber {
+    fn to_value(self) -> AgalValue {
+        AgalValue::Number(self)
+    }
     fn to_agal_number(
         self,
-        _: Box<Stack>,
+        _: &Stack,
         _: &Enviroment
     ) -> Result<AgalNumber, AgalThrow> {
         Ok(self)
     }
     fn to_agal_boolean(
         self,
-        _: Box<Stack>,
+        _: &Stack,
         _: &Enviroment
     ) -> Result<AgalBoolean, AgalThrow> {
         Ok(AgalBoolean(self.0 != 0f64))
     }
     fn to_agal_string(
         self,
-        _: Box<Stack>,
+        _: &Stack,
         _: &Enviroment
     ) -> Result<AgalString, AgalThrow> {
         Ok(AgalString::from_string(self.0.to_string()))
     }
     fn to_agal_console(
         self,
-        _: Box<Stack>,
+        _: &Stack,
         _: &Enviroment
     ) -> Result<AgalString, AgalThrow> {
         Ok(AgalString::from_string(format!("\x1b[33{}\x1b[39", self.0)))
     }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct AgalChar(char);
-impl AgalChar {
-    pub fn new(value: char) -> AgalChar {
-        AgalChar(value)
+    fn get_instance_property(self, stack: &Stack, env: &Enviroment, key: String) -> AgalValue {
+        let value = AgalValue::Number(self);
+        get_instance_property_error(stack, env, key, value)
     }
-    pub fn to_char(&self) -> char {
-        self.0
+    fn call(self, stack: &Stack, env: &Enviroment, _: AgalValue, list: Vec<AgalValue>) -> AgalValue {
+        let value = list.get(0);
+        if value.is_none() {
+            return AgalValue::Number(self);
+        }
+        let value = value.unwrap();
+        let other = value.clone().to_agal_number(stack, env);
+        if other.is_err() {
+            return other.err().unwrap().to_value();
+        }
+        let other = other.ok().unwrap();
+        let number = self.multiply(other);
+        AgalValue::Number(number)
     }
 }
-impl AgalValuable for AgalChar {}
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct AgalBoolean(bool);
@@ -84,25 +92,32 @@ fn bool_to_str(value: bool) -> String {
     data.to_string()
 }
 impl AgalValuable for AgalBoolean {
+    fn to_value(self) -> AgalValue {
+        AgalValue::Boolean(self)
+    }
     fn to_agal_boolean(
         self,
-        _: Box<Stack>,
+        _: &Stack,
         _: &Enviroment
     ) -> Result<AgalBoolean, AgalThrow> {
         Ok(self)
     }
     fn to_agal_string(
         self,
-        _: Box<Stack>,
+        _: &Stack,
         _: &Enviroment
     ) -> Result<AgalString, AgalThrow> {
         Ok(AgalString::from_string(bool_to_str(self.0)))
     }
     fn to_agal_console(
         self,
-        _: Box<Stack>,
+        _: &Stack,
         _: &Enviroment
     ) -> Result<AgalString, AgalThrow> {
         Ok(AgalString::from_string(format!("\x1b[33{}\x1b[39", bool_to_str(self.0))))
+    }
+    fn get_instance_property(self, stack: &Stack, env: &Enviroment, key: String) -> AgalValue {
+        let value = AgalValue::Boolean(self);
+        get_instance_property_error(stack, env, key, value)
     }
 }

@@ -4,7 +4,7 @@ pub enum ErrorTypes {
     ErrorError(Box<dyn std::error::Error>),
     StringError(String),
 }
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub enum ErrorNames {
     None,
     PathError,

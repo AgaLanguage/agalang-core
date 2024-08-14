@@ -1,6 +1,6 @@
 use std::{cell::RefCell, rc::Rc};
 
-use super::{Enviroment, Stack};
+use super::{AgalValue, Enviroment, Stack};
 use crate::{frontend, internal, runtime};
 
 type EvalResult = Result<Rc<RefCell<Enviroment>>, ()>;
@@ -21,6 +21,7 @@ fn code(filename: &str) -> Option<String> {
 pub fn full_eval(path: String, stack: &Stack, env: Enviroment) -> EvalResult {
     let contents = code(&path);
     if contents.is_none() {
+        println!("Error al leer el archivo");
         return Err(());
     }
 
@@ -41,8 +42,15 @@ pub fn eval(code: String, path: String, stack: &Stack, env: Enviroment) -> EvalR
         internal::print_error(data);
         return Err(());
     }
-    println!("{}", program);
     let env = Rc::new(RefCell::new(env.crate_child()));
-    runtime::interpreter(&program, stack, Rc::clone(&env));
+    let value = runtime::interpreter(&program, stack, Rc::clone(&env));
+    if let AgalValue::Throw(err) = value {
+        let error = err.get_error();
+        let type_err = error.get_type_error();
+        let err = error.to_error();
+        let data = internal::errors::error_to_string(&type_err, err);
+        internal::print_error(data);
+        return Err(());
+    }
     Ok(env)
 }
