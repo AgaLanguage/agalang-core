@@ -218,7 +218,7 @@ impl Parser {
         }
     }
     pub fn produce_ast(&mut self) -> ast::Node {
-        let body = self.parse_block(TokenType::EOF);
+        let body = self.parse_block(false,false,TokenType::EOF);
         if body.is_err() {
             return ast::Node::Error(body.err().unwrap());
         }
@@ -726,7 +726,7 @@ impl Parser {
             TokenType::Keyword(KeywordsType::Mientras) => self.parse_while_decl(is_function),
             TokenType::Keyword(KeywordsType::Hacer) => self.parse_do_while_decl(is_function),
             TokenType::Keyword(KeywordsType::Si) => self.parse_if_decl(is_function, is_loop),
-            TokenType::Keyword(KeywordsType::Funcion) => self.parse_function_decl(is_loop),
+            TokenType::Keyword(KeywordsType::Funcion) => self.parse_function_decl(),
             TokenType::Keyword(KeywordsType::Intentar) => self.parse_try_decl(is_function, is_loop),
             TokenType::Keyword(KeywordsType::Clase) => self.parse_class_decl(),
             TokenType::Error => {
@@ -873,7 +873,7 @@ impl Parser {
             file: token.meta,
         })
     }
-    fn parse_function_decl(&mut self, is_loop: bool) -> ast::Node {
+    fn parse_function_decl(&mut self) -> ast::Node {
         let token = self.eat(); // fn
         let name = self.expect(TokenType::Identifier, "Se esperaba un identificador");
         if name.token_type == TokenType::Error {
@@ -889,7 +889,7 @@ impl Parser {
             return ast::Node::Error(params.err().unwrap());
         }
         let params = params.ok().unwrap();
-        let block = self.parse_block_expr(true, is_loop);
+        let block = self.parse_block_expr(true, false);
         if block.is_err() {
             return ast::Node::Error(block.err().unwrap());
         }
@@ -1102,7 +1102,7 @@ impl Parser {
             });
         }
         self.eat();
-        let body = self.parse_block(TokenType::Punctuation('}'));
+        let body = self.parse_block(in_function, in_loop, TokenType::Punctuation('}'));
         if body.is_err() {
             return Err(body.err().unwrap());
         }
@@ -1118,13 +1118,13 @@ impl Parser {
         }
         Ok(body)
     }
-    fn parse_block(&mut self, stop_with: TokenType) -> Result<NodeBlock, ast::NodeError> {
+    fn parse_block(&mut self, is_function: bool, is_loop: bool, stop_with: TokenType) -> Result<NodeBlock, ast::NodeError> {
         let mut body = List::new();
         let mut error = None;
         let mut functions = Vec::new();
         let mut code = Vec::new();
         while self.not_eof() && !(self.at().token_type == stop_with) && error.is_none() {
-            let stmt = self.parse_stmt(false, false, false);
+            let stmt = self.parse_stmt(false, is_function, is_loop);
             if let Some(stmt) = stmt {
                 match stmt {
                     ast::Node::Error(node) => error = Some(node),
@@ -1385,9 +1385,10 @@ impl Parser {
     }
     fn parse_assignment_expr(&mut self, left: ast::Node, operator_st: SemiToken) -> ast::Node {
         let token = self.prev();
-        let operator: &str = &operator_st.value;
+        let operator: &str = &operator_st.value; 
+
         if operator_st.line != token.position.line
-            || operator_st.column != (token.position.column - 1)
+            || operator_st.column == (token.position.column - 1)
         {
             let line = self.source.lines().nth(token.position.line).unwrap();
             return ast::Node::Error(ast::NodeError {
@@ -1965,22 +1966,11 @@ impl Parser {
                             meta: dot.meta,
                         });
                     }
-                    let iterable =
-                        self.expect(TokenType::Identifier, "Se esperaba un identificador");
-                    if iterable.token_type == TokenType::Error {
-                        return Err(ast::NodeError {
-                            message: iterable.value,
-                            column: iterable.position.column,
-                            line: iterable.position.line,
-                            meta: iterable.meta,
-                        });
+                    let data = self.parse_expr();
+                    if data.is_error() {
+                        return Err(data.get_error().unwrap().clone());
                     }
-                    return Ok(ast::NodeProperty::Iterable(ast::NodeIdentifier {
-                        name: iterable.value,
-                        column: iterable.position.column,
-                        line: iterable.position.line,
-                        file: iterable.meta,
-                    }));
+                    return Ok(ast::NodeProperty::Iterable(data));
                 }
                 let line = self.source.lines().nth(token.position.line).unwrap();
                 return Err(ast::NodeError {
@@ -2062,22 +2052,11 @@ impl Parser {
                             meta: dot.meta,
                         });
                     }
-                    let iterable =
-                        self.expect(TokenType::Identifier, "Se esperaba un identificador");
-                    if iterable.token_type == TokenType::Error {
-                        return Err(ast::NodeError {
-                            message: iterable.value,
-                            column: iterable.position.column,
-                            line: iterable.position.line,
-                            meta: iterable.meta,
-                        });
+                    let data = self.parse_expr();
+                    if data.is_error() {
+                        return Err(data.get_error().unwrap().clone());
                     }
-                    return Ok(ast::NodeProperty::Iterable(ast::NodeIdentifier {
-                        name: iterable.value,
-                        column: iterable.position.column,
-                        line: iterable.position.line,
-                        file: iterable.meta,
-                    }));
+                    return Ok(ast::NodeProperty::Iterable(data));
                 }
                 let line = self.source.lines().nth(token.position.line).unwrap();
                 return Err(ast::NodeError {

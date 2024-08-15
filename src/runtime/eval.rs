@@ -34,6 +34,7 @@ pub fn eval(code: String, path: String, stack: &Stack, env: Enviroment) -> EvalR
         let mut parser = frontend::Parser::new(code, &path);
         parser.produce_ast()
     };
+    println!("{}", program);
     if program.is_error() {
         let type_err = internal::errors::ErrorNames::SyntaxError;
         let node_err = program.get_error().unwrap();
@@ -44,6 +45,7 @@ pub fn eval(code: String, path: String, stack: &Stack, env: Enviroment) -> EvalR
     }
     let env = Rc::new(RefCell::new(env.crate_child()));
     let value = runtime::interpreter(&program, stack, Rc::clone(&env));
+    let value: &AgalValue = &value.borrow();
     if let AgalValue::Throw(err) = value {
         let error = err.get_error();
         let type_err = error.get_type_error();

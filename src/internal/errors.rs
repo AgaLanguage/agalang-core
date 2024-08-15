@@ -10,7 +10,8 @@ pub enum ErrorNames {
     PathError,
     LexerError,
     SyntaxError,
-    CustomError(String)
+    CustomError(String),
+    EnviromentError,
 }
 impl std::fmt::Display for ErrorNames {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -19,6 +20,7 @@ impl std::fmt::Display for ErrorNames {
             ErrorNames::PathError => write!(f, "Error ruta"),
             ErrorNames::LexerError => write!(f, "Error léxico"),
             ErrorNames::SyntaxError => write!(f, "Error sintáctico"),
+            ErrorNames::EnviromentError => write!(f, "Error de entorno"),
             ErrorNames::CustomError(s) => write!(f, "{s}"),
         }
     }

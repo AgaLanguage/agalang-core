@@ -1,12 +1,14 @@
-use std::collections::{HashMap, HashSet};
+use std::{cell::RefCell, collections::{HashMap, HashSet}, rc::Rc};
 
-use super::{AgalBoolean, AgalValue};
-use crate::frontend::ast::Node;
+use super::{AgalBoolean, AgalThrow::Params, AgalValue, Stack};
+use crate::{frontend::ast::Node, internal::ErrorNames};
+
+type RefAgalValue = Rc<RefCell<AgalValue>>;
 
 #[derive(Clone, PartialEq)]
 pub struct Enviroment {
     parent: Option<Box<Enviroment>>,
-    variables: HashMap<String, AgalValue>,
+    variables: HashMap<String, RefAgalValue>,
     constants: HashSet<String>,
 }
 pub const TRUE_KEYWORD: &str = "cierto";
@@ -28,16 +30,28 @@ impl Enviroment {
     }
     pub fn define(
         &mut self,
+        stack: &Stack,
         name: &String,
-        value: AgalValue,
+        value: RefAgalValue,
         is_constant: bool,
         node: &Node,
-    ) -> AgalValue {
+    ) -> RefAgalValue {
         if self.is_keyword(name) {
-            panic!("No se puede declarar una variable con el nombre de una palabra clave");
+            let value = AgalValue::Throw(Params {
+                type_error: ErrorNames::EnviromentError,
+                message: "No se puede declarar una variable con el nombre de una palabra clave"
+                    .to_string(),
+                stack: Box::new(stack.clone()),
+            });
+            return Rc::new(RefCell::new(value));
         }
         if self.has(name, node) {
-            panic!("La variable {} ya ha sido declarada", name);
+            let value = AgalValue::Throw(Params {
+                type_error: ErrorNames::EnviromentError,
+                message: format!("La variable {} ya ha sido declarada", name),
+                stack: Box::new(stack.clone()),
+            });
+            return Rc::new(RefCell::new(value));
         }
         if is_constant {
             self.constants.insert(name.to_string());
@@ -45,23 +59,43 @@ impl Enviroment {
         self.variables.insert(name.to_string(), value.clone());
         value
     }
-    pub fn assign(&mut self, name: &str, value: AgalValue, node: &Node) -> AgalValue {
+    pub fn assign(&mut self, name: &str, value: RefAgalValue, node: &Node) -> RefAgalValue {
         if self.is_keyword(name) {
-            panic!("No se puede reasignar una palabra clave");
+            let value = AgalValue::Throw(Params {
+                type_error: ErrorNames::EnviromentError,
+                message: "No se puede reasignar una palabra clave".to_string(),
+                stack: Box::new(Stack::get_default()),
+            });
+            return Rc::new(RefCell::new(value));
         }
         if !self.has(name, node) {
-            panic!("La variable {} no ha sido declarada", name);
+            let value = AgalValue::Throw(Params {
+                type_error: ErrorNames::EnviromentError,
+                message: format!("La variable {} no ha sido declarada", name),
+                stack: Box::new(Stack::get_default()),
+            });
+            return Rc::new(RefCell::new(value));
         }
         if self.constants.contains(name) {
-            panic!("No se puede reasignar una constante");
+            let value = AgalValue::Throw(Params {
+                type_error: ErrorNames::EnviromentError,
+                message: "No se puede reasignar una constante".to_string(),
+                stack: Box::new(Stack::get_default()),
+            });
+            return Rc::new(RefCell::new(value));
         }
         self.variables.insert(name.to_string(), value.clone());
         value
     }
-    pub fn get(&self, name: &str, node: &Node) -> AgalValue {
+    pub fn get(&self, name: &str, node: &Node) -> RefAgalValue {
         let env = self.resolve(name, node);
         if !env.has(name, node) {
-            panic!("La variable {} no ha sido declarada", name);
+            let value = AgalValue::Throw(Params {
+                type_error: ErrorNames::EnviromentError,
+                message: format!("La variable {} no ha sido declarada", name),
+                stack: Box::new(Stack::get_default()),
+            });
+            return Rc::new(RefCell::new(value));
         }
         env.variables.get(name).unwrap().clone()
     }
@@ -85,7 +119,7 @@ impl std::fmt::Display for Enviroment {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let mut output = String::new();
         for (name, value) in &self.variables {
-            output.push_str(&format!("{}: {};\n", name, value));
+            output.push_str(&format!("{}: {};\n", name, value.borrow()));
         }
         if self.parent.is_some() {
             output.push_str(&format!("{}", self.parent.as_ref().unwrap()));
@@ -101,15 +135,16 @@ pub fn get_default() -> Enviroment {
     };
     env.variables.insert(
         TRUE_KEYWORD.to_string(),
-        AgalValue::Boolean(AgalBoolean::new(true)),
+        Rc::new(RefCell::new(AgalValue::Boolean(AgalBoolean::new(true)))),
     );
     env.variables.insert(
         FALSE_KEYWORD.to_string(),
-        AgalValue::Boolean(AgalBoolean::new(false)),
+        Rc::new(RefCell::new(AgalValue::Boolean(AgalBoolean::new(false)))),
     );
     env.variables
-        .insert(NULL_KEYWORD.to_string(), AgalValue::Null);
+        .insert(NULL_KEYWORD.to_string(), 
+        Rc::new(RefCell::new(AgalValue::Null)));
     env.variables
-        .insert(NOTHING_KEYWORD.to_string(), AgalValue::Never);
+        .insert(NOTHING_KEYWORD.to_string(), Rc::new(RefCell::new(AgalValue::Never)));
     env
 }

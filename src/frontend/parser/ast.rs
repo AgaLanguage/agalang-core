@@ -225,7 +225,7 @@ impl std::fmt::Display for Node {
                 let str_properties = node.properties.map(|property| match property {
                     NodeProperty::Property(name, value) => format!("  {}:\n  {}", name, value),
                     NodeProperty::Iterable(object) => {
-                        format!("  ...({})", Node::Identifier(object.clone()))
+                        format!("  ...({})", object)
                     }
                     NodeProperty::Dynamic(name, value) => format!("  [{}]:\n  {}", name, value),
                     NodeProperty::Indexable(value) => format!("  [{}]", value.to_string()),
@@ -239,7 +239,7 @@ impl std::fmt::Display for Node {
                 let str_elements = node.elements.map(|element| match element {
                     NodeProperty::Property(name, value) => format!("  {}:\n  {}", name, value),
                     NodeProperty::Iterable(object) => {
-                        format!("  ...({})", Node::Identifier(object.clone()))
+                        format!("  ...({})", object)
                     }
                     NodeProperty::Dynamic(name, value) => format!("  [{}]:\n  {}", name, value),
                     NodeProperty::Indexable(value) => format!("  {}", value.to_string()),
@@ -449,7 +449,7 @@ pub struct NodeNumber {
 pub enum NodeProperty {
     Property(String, Node),
     Dynamic(Node, Node),
-    Iterable(NodeIdentifier),
+    Iterable(Node),
     Indexable(Node),
 }
 #[derive(Clone, PartialEq, Debug)]

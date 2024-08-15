@@ -1,4 +1,4 @@
-#[derive(PartialEq, Clone, Copy)]
+#[derive(PartialEq, Clone, Copy, Debug)]
 pub enum KeywordsType {
     None, // invalid keyword
     Definir, Constante, Nombre, // DONE

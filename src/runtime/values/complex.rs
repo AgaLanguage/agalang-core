@@ -1,16 +1,19 @@
+use std::{cell::RefCell, rc::Rc};
+
 use crate::{
-    frontend::{node_error, ast::NodeError}, internal::{ErrorTypes, ErrorNames}, runtime::{AgalString, Enviroment, Stack}
+    frontend::node_error, internal::{ErrorTypes, ErrorNames}, runtime::{AgalString, Enviroment, Stack}
 };
 
-use super::{get_instance_property_error, AgalThrow, AgalValuable, AgalValue};
+use super::{get_instance_property_error, AgalThrow, AgalValuable, AgalValue, RefAgalValue};
 
+pub type AgalVec = Vec<Rc<RefCell<AgalValue>>>;
 #[derive(Clone, PartialEq)]
-pub struct AgalArray(Vec<AgalValue>);
+pub struct AgalArray(AgalVec);
 impl AgalArray {
-    pub fn from_vec(vec: Vec<AgalValue>) -> AgalArray {
+    pub fn from_vec(vec: AgalVec) -> AgalArray {
         AgalArray(vec)
     }
-    pub fn get_vec(&self) -> &Vec<AgalValue> {
+    pub fn get_vec(&self) -> &AgalVec {
         &self.0
     }
 }
@@ -19,7 +22,7 @@ impl AgalValuable for AgalArray {
     fn to_agal_console(self, stack: &Stack, env: &Enviroment) -> Result<AgalString, AgalThrow> {
         let mut result = String::new();
         for value in self.0.iter() {
-            let str = value.clone().to_agal_value(stack, env);
+            let str = value.borrow().clone().to_agal_value(stack, env);
             if str.is_err() {
                 return str;
             }
@@ -39,7 +42,7 @@ impl AgalValuable for AgalArray {
     fn to_agal_string(self, stack: &Stack, env: &Enviroment) -> Result<AgalString, AgalThrow> {
         let mut result = String::new();
         for value in self.0.iter() {
-            let str = value.clone().to_agal_string(stack, &env.clone().crate_child());
+            let str = value.borrow().clone().to_agal_string(stack, &env.clone().crate_child());
             if str.is_err() {
                 return str;
             }
@@ -49,14 +52,27 @@ impl AgalValuable for AgalArray {
         }
         Ok(AgalString::from_string(result))
     }
-    fn get_instance_property(self, stack: &Stack, env: &Enviroment, key: String) -> AgalValue {
+    fn get_instance_property(self, stack: &Stack, env: &Enviroment, key: String) -> RefAgalValue {
         let value = AgalValue::Array(self);
         get_instance_property_error(stack, env, key, value)
     }
 }
 
+pub type AgalHashMap = std::collections::HashMap<String, Rc<RefCell<AgalValue>>>;
+
 #[derive(Clone, PartialEq)]
-pub struct AgalObject(std::collections::HashMap<String, AgalValue>);
+pub struct AgalObject(AgalHashMap);
+impl AgalObject {
+    pub fn new() -> AgalObject {
+        AgalObject(std::collections::HashMap::new())
+    }
+    pub fn from_hashmap(hashmap: AgalHashMap) -> AgalObject {
+        AgalObject(hashmap)
+    }
+    pub fn get_hashmap(&self) -> &AgalHashMap {
+        &self.0
+    }
+}
 impl AgalValuable for AgalObject {
     fn to_agal_console(self, _: &Stack, _: &Enviroment) -> Result<AgalString, AgalThrow> {
         let string = "\x1b[36m[Objeto]\x1b[39m".to_string();
@@ -65,7 +81,14 @@ impl AgalValuable for AgalObject {
     fn to_value(self) -> AgalValue {
         AgalValue::Object(self)
     }
-    fn get_instance_property(self, stack: &Stack, env: &Enviroment, key: String) -> AgalValue {
+    fn get_object_property(self, _: &Stack, _: &Enviroment, key: String) -> RefAgalValue {
+        let value = self.0.get(&key);
+        if value.is_none() {
+            return AgalValue::Never.to_ref();
+        }
+        value.unwrap().clone()
+    }
+    fn get_instance_property(self, stack: &Stack, env: &Enviroment, key: String) -> RefAgalValue {
         let value = AgalValue::Object(self);
         get_instance_property_error(stack, env, key, value)
     }
@@ -129,7 +152,7 @@ impl AgalValuable for AgalError {
     fn to_value(self) -> AgalValue {
         AgalValue::Error(self)
     }
-    fn get_instance_property(self, stack: &Stack, env: &Enviroment, key: String) -> AgalValue {
+    fn get_instance_property(self, stack: &Stack, env: &Enviroment, key: String) -> RefAgalValue {
         let value = AgalValue::Error(self);
         get_instance_property_error(stack, env, key, value)
     }

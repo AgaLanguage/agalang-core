@@ -1,6 +1,6 @@
 use crate::runtime::{env::{FALSE_KEYWORD, TRUE_KEYWORD}, Enviroment, Stack};
 
-use super::{super::{AgalThrow, AgalValuable, AgalValue}, get_instance_property_error};
+use super::{super::{AgalThrow, AgalValuable, AgalValue}, get_instance_property_error, RefAgalValue};
 
 mod string;
 pub use string::{AgalString, AgalChar};
@@ -53,23 +53,23 @@ impl AgalValuable for AgalNumber {
     ) -> Result<AgalString, AgalThrow> {
         Ok(AgalString::from_string(format!("\x1b[33{}\x1b[39", self.0)))
     }
-    fn get_instance_property(self, stack: &Stack, env: &Enviroment, key: String) -> AgalValue {
+    fn get_instance_property(self, stack: &Stack, env: &Enviroment, key: String) -> RefAgalValue {
         let value = AgalValue::Number(self);
         get_instance_property_error(stack, env, key, value)
     }
-    fn call(self, stack: &Stack, env: &Enviroment, _: AgalValue, list: Vec<AgalValue>) -> AgalValue {
+    fn call(self, stack: &Stack, env: &Enviroment, _: RefAgalValue, list: Vec<RefAgalValue>) -> RefAgalValue {
         let value = list.get(0);
         if value.is_none() {
-            return AgalValue::Number(self);
+            return AgalValue::Number(self).to_ref();
         }
         let value = value.unwrap();
-        let other = value.clone().to_agal_number(stack, env);
+        let other = value.borrow().clone().to_agal_number(stack, env);
         if other.is_err() {
-            return other.err().unwrap().to_value();
+            return other.err().unwrap().to_value().to_ref();
         }
         let other = other.ok().unwrap();
         let number = self.multiply(other);
-        AgalValue::Number(number)
+        AgalValue::Number(number).to_ref()
     }
 }
 
@@ -116,7 +116,7 @@ impl AgalValuable for AgalBoolean {
     ) -> Result<AgalString, AgalThrow> {
         Ok(AgalString::from_string(format!("\x1b[33{}\x1b[39", bool_to_str(self.0))))
     }
-    fn get_instance_property(self, stack: &Stack, env: &Enviroment, key: String) -> AgalValue {
+    fn get_instance_property(self, stack: &Stack, env: &Enviroment, key: String) -> RefAgalValue {
         let value = AgalValue::Boolean(self);
         get_instance_property_error(stack, env, key, value)
     }

@@ -1,7 +1,7 @@
 mod keyword;
 pub use keyword::KeywordsType;
 
-#[derive(PartialEq, Clone, Copy)]
+#[derive(PartialEq, Clone, Copy, Debug)]
 pub enum TokenType {
     Identifier, // variable names, function names, etc
     NumberLiteral, // 123, 123.456, 123i, 123e, 123π, etc
