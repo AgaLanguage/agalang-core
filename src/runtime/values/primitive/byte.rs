@@ -1,4 +1,7 @@
-use crate::runtime::{binary_operation_error, get_instance_property_error, AgalArray, AgalValuable, AgalValue, Enviroment, RefAgalValue, Stack};
+use crate::runtime::{
+    binary_operation_error, env::RefEnviroment, get_instance_property_error, AgalArray,
+    AgalValuable, AgalValue, RefAgalValue, Stack,
+};
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct AgalByte(u8);
@@ -17,7 +20,7 @@ impl AgalValuable for AgalByte {
     fn binary_operation(
         &self,
         stack: &Stack,
-        _: &Enviroment,
+        _: RefEnviroment,
         operator: String,
         _other_: RefAgalValue,
     ) -> RefAgalValue {
@@ -31,9 +34,10 @@ impl AgalValuable for AgalByte {
                     let byte1 = ((c >> 8) & 0xFF) as u8;
                     let byte2 = (c & 0xFF) as u8;
                     AgalValue::Array(AgalArray::from_vec(vec![
-                        AgalValue::Byte(AgalByte::new(byte1)).to_ref(),
-                        AgalValue::Byte(AgalByte::new(byte2)).to_ref(),
-                    ])).to_ref()
+                        AgalValue::Byte(AgalByte::new(byte1)).as_ref(),
+                        AgalValue::Byte(AgalByte::new(byte2)).as_ref(),
+                    ]))
+                    .as_ref()
                 }
                 "-" => {
                     let a = self.0 as i16;
@@ -42,7 +46,7 @@ impl AgalValuable for AgalByte {
                         return binary_operation_error(
                             stack,
                             operator,
-                            AgalValue::Byte(*self).to_ref(),
+                            AgalValue::Byte(*self).as_ref(),
                             Some(_other_.clone()),
                         );
                     }
@@ -50,9 +54,10 @@ impl AgalValuable for AgalByte {
                     let byte1 = ((c >> 8) & 0xFF) as u8;
                     let byte2 = (c & 0xFF) as u8;
                     AgalValue::Array(AgalArray::from_vec(vec![
-                        AgalValue::Byte(AgalByte::new(byte1)).to_ref(),
-                        AgalValue::Byte(AgalByte::new(byte2)).to_ref(),
-                    ])).to_ref()
+                        AgalValue::Byte(AgalByte::new(byte1)).as_ref(),
+                        AgalValue::Byte(AgalByte::new(byte2)).as_ref(),
+                    ]))
+                    .as_ref()
                 }
                 "*" => {
                     let a = self.0 as u16;
@@ -61,9 +66,10 @@ impl AgalValuable for AgalByte {
                     let byte1 = ((c >> 8) & 0xFF) as u8;
                     let byte2 = (c & 0xFF) as u8;
                     AgalValue::Array(AgalArray::from_vec(vec![
-                        AgalValue::Byte(AgalByte::new(byte1)).to_ref(),
-                        AgalValue::Byte(AgalByte::new(byte2)).to_ref(),
-                    ])).to_ref()
+                        AgalValue::Byte(AgalByte::new(byte1)).as_ref(),
+                        AgalValue::Byte(AgalByte::new(byte2)).as_ref(),
+                    ]))
+                    .as_ref()
                 }
                 "/" => {
                     let a = self.0;
@@ -72,11 +78,11 @@ impl AgalValuable for AgalByte {
                         return binary_operation_error(
                             stack,
                             operator,
-                            AgalValue::Byte(*self).to_ref(),
+                            AgalValue::Byte(*self).as_ref(),
                             Some(_other_.clone()),
                         );
                     }
-                    AgalValue::Byte(AgalByte::new(a / b)).to_ref()
+                    AgalValue::Byte(AgalByte::new(a / b)).as_ref()
                 }
                 "%" => {
                     let a = self.0;
@@ -85,25 +91,43 @@ impl AgalValuable for AgalByte {
                         return binary_operation_error(
                             stack,
                             operator,
-                            AgalValue::Byte(*self).to_ref(),
+                            AgalValue::Byte(*self).as_ref(),
                             Some(_other_.clone()),
                         );
                     }
-                    AgalValue::Byte(AgalByte::new(a % b)).to_ref()
+                    AgalValue::Byte(AgalByte::new(a % b)).as_ref()
                 }
-                _ => binary_operation_error(stack, operator, AgalValue::Byte(*self).to_ref(), Some(_other_.clone())),
+                _ => binary_operation_error(
+                    stack,
+                    operator,
+                    AgalValue::Byte(*self).as_ref(),
+                    Some(_other_.clone()),
+                ),
             },
-            _ => binary_operation_error(stack, operator, AgalValue::Byte(*self).to_ref(), Some(_other_.clone())),
+            _ => binary_operation_error(
+                stack,
+                operator,
+                AgalValue::Byte(*self).as_ref(),
+                Some(_other_.clone()),
+            ),
         }
     }
-    fn get_instance_property(self, stack: &Stack, env: &Enviroment, key: String) -> RefAgalValue {
+    fn get_instance_property(self, stack: &Stack, env: RefEnviroment, key: String) -> RefAgalValue {
         let value = AgalValue::Byte(self);
         get_instance_property_error(stack, env, key, value)
     }
-    fn to_agal_string(self, _: &Stack, _: &Enviroment) -> Result<super::AgalString, crate::runtime::AgalThrow> {
+    fn to_agal_string(
+        self,
+        _: &Stack,
+        _: RefEnviroment,
+    ) -> Result<super::AgalString, crate::runtime::AgalThrow> {
         Ok(super::AgalString::from_string(format!("{:08b}", self.0)))
     }
-    fn to_agal_number(self, _: &Stack, _: &Enviroment) -> Result<super::AgalNumber, crate::runtime::AgalThrow> {
+    fn to_agal_number(
+        self,
+        _: &Stack,
+        _: RefEnviroment,
+    ) -> Result<super::AgalNumber, crate::runtime::AgalThrow> {
         Ok(super::AgalNumber::new(self.0 as f64))
     }
 }

@@ -13,15 +13,15 @@ fn main() -> ExitCode {
     }
     let filename = filename.unwrap();
     let ref stack = runtime::Stack::get_default();
-    let global_env = runtime::env::get_default();
+    let global_env = runtime::env::get_default().as_ref();
 
     let program = runtime::full_eval(filename, stack, global_env);
     if program.is_err() {
         return ExitCode::FAILURE;
     }
-    let env = program.ok().unwrap();
-    let env = env.borrow_mut();
-    println!("{}", env);
+    let value = program.ok().unwrap();
+    let value = value.borrow_mut();
+    println!("{}", value);
     return ExitCode::SUCCESS;
 }
 fn file() -> Option<String> {

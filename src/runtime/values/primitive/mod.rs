@@ -1,4 +1,4 @@
-use crate::runtime::{env::{FALSE_KEYWORD, TRUE_KEYWORD}, Enviroment, Stack};
+use crate::runtime::{env::{RefEnviroment, FALSE_KEYWORD, TRUE_KEYWORD}, Stack};
 
 use super::{super::{AgalThrow, AgalValuable, AgalValue}, get_instance_property_error, RefAgalValue};
 
@@ -28,48 +28,48 @@ impl AgalValuable for AgalNumber {
     fn to_agal_number(
         self,
         _: &Stack,
-        _: &Enviroment
+        _: RefEnviroment
     ) -> Result<AgalNumber, AgalThrow> {
         Ok(self)
     }
     fn to_agal_boolean(
         self,
         _: &Stack,
-        _: &Enviroment
+        _: RefEnviroment
     ) -> Result<AgalBoolean, AgalThrow> {
         Ok(AgalBoolean(self.0 != 0f64))
     }
     fn to_agal_string(
         self,
         _: &Stack,
-        _: &Enviroment
+        _: RefEnviroment
     ) -> Result<AgalString, AgalThrow> {
         Ok(AgalString::from_string(self.0.to_string()))
     }
     fn to_agal_console(
         self,
         _: &Stack,
-        _: &Enviroment
+        _: RefEnviroment
     ) -> Result<AgalString, AgalThrow> {
         Ok(AgalString::from_string(format!("\x1b[33{}\x1b[39", self.0)))
     }
-    fn get_instance_property(self, stack: &Stack, env: &Enviroment, key: String) -> RefAgalValue {
+    fn get_instance_property(self, stack: &Stack, env: RefEnviroment, key: String) -> RefAgalValue {
         let value = AgalValue::Number(self);
         get_instance_property_error(stack, env, key, value)
     }
-    fn call(self, stack: &Stack, env: &Enviroment, _: RefAgalValue, list: Vec<RefAgalValue>) -> RefAgalValue {
+    fn call(self, stack: &Stack, env: RefEnviroment, _: RefAgalValue, list: Vec<RefAgalValue>) -> RefAgalValue {
         let value = list.get(0);
         if value.is_none() {
-            return AgalValue::Number(self).to_ref();
+            return AgalValue::Number(self).as_ref();
         }
         let value = value.unwrap();
         let other = value.borrow().clone().to_agal_number(stack, env);
         if other.is_err() {
-            return other.err().unwrap().to_value().to_ref();
+            return other.err().unwrap().to_value().as_ref();
         }
         let other = other.ok().unwrap();
         let number = self.multiply(other);
-        AgalValue::Number(number).to_ref()
+        AgalValue::Number(number).as_ref()
     }
 }
 
@@ -98,25 +98,25 @@ impl AgalValuable for AgalBoolean {
     fn to_agal_boolean(
         self,
         _: &Stack,
-        _: &Enviroment
+        _: RefEnviroment
     ) -> Result<AgalBoolean, AgalThrow> {
         Ok(self)
     }
     fn to_agal_string(
         self,
         _: &Stack,
-        _: &Enviroment
+        _: RefEnviroment
     ) -> Result<AgalString, AgalThrow> {
         Ok(AgalString::from_string(bool_to_str(self.0)))
     }
     fn to_agal_console(
         self,
         _: &Stack,
-        _: &Enviroment
+        _: RefEnviroment
     ) -> Result<AgalString, AgalThrow> {
         Ok(AgalString::from_string(format!("\x1b[33{}\x1b[39", bool_to_str(self.0))))
     }
-    fn get_instance_property(self, stack: &Stack, env: &Enviroment, key: String) -> RefAgalValue {
+    fn get_instance_property(self, stack: &Stack, env: RefEnviroment, key: String) -> RefAgalValue {
         let value = AgalValue::Boolean(self);
         get_instance_property_error(stack, env, key, value)
     }

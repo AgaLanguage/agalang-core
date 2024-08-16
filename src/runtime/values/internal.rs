@@ -1,7 +1,7 @@
 use std::{cell::RefCell, rc::Rc};
 
 use super::{get_instance_property_error, AgalString, AgalValuable};
-use crate::{internal::ErrorNames, runtime::{AgalError, Stack, AgalValue, Enviroment, RefAgalValue}};
+use crate::{internal::ErrorNames, runtime::{env::RefEnviroment, AgalError, AgalValue, RefAgalValue, Stack}};
 
 #[derive(Clone, PartialEq)]
 pub enum AgalThrow {
@@ -13,14 +13,8 @@ pub enum AgalThrow {
     Error(AgalError),
 }
 impl AgalThrow {
-    pub fn new(type_error: ErrorNames, message: String, stack: Box<Stack>) -> AgalThrow {
-        AgalThrow::Params {
-            type_error,
-            message,
-            stack,
-        }
-    }
-    pub fn from_value<T: AgalValuable>(v: T, stack: Box<Stack>, env: &mut Enviroment) -> AgalThrow {
+    // [x] pending to delete
+    pub fn from_value<T: AgalValuable>(v: T, stack: Box<Stack>, env: RefEnviroment) -> AgalThrow {
         let str = v.to_agal_console(stack.as_ref(), env);
         if str.is_err() {
             return str.err().unwrap();
@@ -33,8 +27,8 @@ impl AgalThrow {
             stack,
         }
     }
-    pub fn from_ref_value<T: AgalValuable>(v: Rc<RefCell<T>>, stack: Box<Stack>, env: &mut Enviroment) -> AgalThrow {
-        let str = v.as_ref().borrow().clone().to_agal_console(stack.as_ref(), env);
+    pub fn from_ref_value<T: AgalValuable>(v: Rc<RefCell<T>>, stack: Box<Stack>, env: RefEnviroment) -> AgalThrow {
+        let str = v.borrow().clone().to_agal_console(stack.as_ref(), env);
         if str.is_err() {
             return str.err().unwrap();
         }
@@ -61,11 +55,11 @@ impl AgalValuable for AgalThrow {
     fn to_value(self) -> AgalValue {
         AgalValue::Throw(self)
     }
-    fn call(self, _: &Stack, _: &crate::runtime::Enviroment, _: RefAgalValue, _: Vec<RefAgalValue>) -> RefAgalValue {
-        AgalValue::Throw(self).to_ref()
+    fn call(self, _: &Stack, _: RefEnviroment, _: RefAgalValue, _: Vec<RefAgalValue>) -> RefAgalValue {
+        AgalValue::Throw(self).as_ref()
     }
-    fn get_instance_property(self, _: &Stack, _: &Enviroment, _: String) -> RefAgalValue {
-        AgalValue::Throw(self).to_ref()
+    fn get_instance_property(self, _: &Stack, _: RefEnviroment, _: String) -> RefAgalValue {
+        AgalValue::Throw(self).as_ref()
     }
 }
 
@@ -96,10 +90,10 @@ impl AgalValuable for AgalNativeFunction {
     fn to_value(self) -> AgalValue {
         AgalValue::NativeFunction(self)
     }
-    fn to_agal_string(self, _: &Stack, _: &Enviroment) -> Result<AgalString, AgalThrow> {
+    fn to_agal_string(self, _: &Stack, _: RefEnviroment) -> Result<AgalString, AgalThrow> {
         Ok(AgalString::from_string(format!("<Funcion nativa {}>", self.name)))
     }
-    fn get_instance_property(self, stack: &Stack, env: &Enviroment, key: String) -> RefAgalValue {
+    fn get_instance_property(self, stack: &Stack, env: RefEnviroment, key: String) -> RefAgalValue {
         get_instance_property_error(stack, env, key, self.to_value())
     }
 }

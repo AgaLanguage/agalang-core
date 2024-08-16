@@ -1,0 +1,4 @@
+exportar fn hola() {
+  ret "Hola";
+}
+exportar const mundo = "Mundo";

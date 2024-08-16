@@ -1,13 +1,13 @@
 use std::{cell::RefCell, collections::{HashMap, HashSet}, rc::Rc};
 
-use super::{AgalBoolean, AgalThrow::Params, AgalValue, Stack};
+use super::{AgalBoolean, AgalThrow::Params, AgalValue, RefAgalValue, Stack};
 use crate::{frontend::ast::Node, internal::ErrorNames};
 
-type RefAgalValue = Rc<RefCell<AgalValue>>;
+pub type RefEnviroment = Rc<RefCell<Enviroment>>;
 
 #[derive(Clone, PartialEq)]
 pub struct Enviroment {
-    parent: Option<Box<Enviroment>>,
+    parent: Option<RefEnviroment>,
     variables: HashMap<String, RefAgalValue>,
     constants: HashSet<String>,
 }
@@ -18,9 +18,19 @@ pub const NOTHING_KEYWORD: &str = "nada";
 const KEYWORDS: [&str; 4] = [TRUE_KEYWORD, FALSE_KEYWORD, NULL_KEYWORD, NOTHING_KEYWORD];
 
 impl Enviroment {
+    pub fn get_global(&self) -> RefEnviroment {
+        let mut env = self.clone().as_ref();
+        while env.borrow().parent.is_some() {
+            env = env.clone().borrow().parent.clone().unwrap();
+        }
+        env
+    }
+    pub fn as_ref(self) -> RefEnviroment {
+        Rc::new(RefCell::new(self))
+    }
     pub fn crate_child(self) -> Enviroment {
         Enviroment {
-            parent: Some(Box::new(self)),
+            parent: Some(self.as_ref()),
             variables: HashMap::new(),
             constants: HashSet::new(),
         }
@@ -43,7 +53,7 @@ impl Enviroment {
                     .to_string(),
                 stack: Box::new(stack.clone()),
             });
-            return Rc::new(RefCell::new(value));
+            return value.as_ref();
         }
         if self.has(name, node) {
             let value = AgalValue::Throw(Params {
@@ -51,7 +61,7 @@ impl Enviroment {
                 message: format!("La variable {} ya ha sido declarada", name),
                 stack: Box::new(stack.clone()),
             });
-            return Rc::new(RefCell::new(value));
+            return value.as_ref();
         }
         if is_constant {
             self.constants.insert(name.to_string());
@@ -66,7 +76,7 @@ impl Enviroment {
                 message: "No se puede reasignar una palabra clave".to_string(),
                 stack: Box::new(Stack::get_default()),
             });
-            return Rc::new(RefCell::new(value));
+            return value.as_ref();
         }
         if !self.has(name, node) {
             let value = AgalValue::Throw(Params {
@@ -74,7 +84,7 @@ impl Enviroment {
                 message: format!("La variable {} no ha sido declarada", name),
                 stack: Box::new(Stack::get_default()),
             });
-            return Rc::new(RefCell::new(value));
+            return value.as_ref();
         }
         if self.constants.contains(name) {
             let value = AgalValue::Throw(Params {
@@ -82,20 +92,21 @@ impl Enviroment {
                 message: "No se puede reasignar una constante".to_string(),
                 stack: Box::new(Stack::get_default()),
             });
-            return Rc::new(RefCell::new(value));
+            return value.as_ref();
         }
         self.variables.insert(name.to_string(), value.clone());
         value
     }
     pub fn get(&self, name: &str, node: &Node) -> RefAgalValue {
         let env = self.resolve(name, node);
+        let env = env.borrow();
         if !env.has(name, node) {
             let value = AgalValue::Throw(Params {
                 type_error: ErrorNames::EnviromentError,
                 message: format!("La variable {} no ha sido declarada", name),
                 stack: Box::new(Stack::get_default()),
             });
-            return Rc::new(RefCell::new(value));
+            return value.as_ref();
         }
         env.variables.get(name).unwrap().clone()
     }
@@ -103,16 +114,13 @@ impl Enviroment {
         self.variables.contains_key(name)
     }
     pub fn has(&self, name: &str, node: &Node) -> bool {
-        self.resolve(name, node).variables.contains_key(name)
+        self.resolve(name, node).borrow().variables.contains_key(name)
     }
-    pub fn resolve(&self, name: &str, node: &Node) -> &Enviroment {
+    fn resolve(&self, name: &str, node: &Node) -> RefEnviroment {
         if !self._has(name) && self.parent.is_some() {
-            return self.parent.as_ref().unwrap().resolve(name, node);
+            return self.parent.clone().unwrap().borrow().resolve(name, node);
         }
-        return self;
-    }
-    pub fn as_ref(&self) -> &Enviroment {
-        self
+        return self.clone().as_ref();
     }
 }
 impl std::fmt::Display for Enviroment {
@@ -122,7 +130,7 @@ impl std::fmt::Display for Enviroment {
             output.push_str(&format!("{}: {};\n", name, value.borrow()));
         }
         if self.parent.is_some() {
-            output.push_str(&format!("{}", self.parent.as_ref().unwrap()));
+            output.push_str(&format!("{}", self.parent.clone().unwrap().borrow()));
         }
         write!(f, "{}", output)
     }
@@ -135,16 +143,16 @@ pub fn get_default() -> Enviroment {
     };
     env.variables.insert(
         TRUE_KEYWORD.to_string(),
-        Rc::new(RefCell::new(AgalValue::Boolean(AgalBoolean::new(true)))),
+        AgalValue::Boolean(AgalBoolean::new(true)).as_ref(),
     );
     env.variables.insert(
         FALSE_KEYWORD.to_string(),
-        Rc::new(RefCell::new(AgalValue::Boolean(AgalBoolean::new(false)))),
+        AgalValue::Boolean(AgalBoolean::new(false)).as_ref(),
     );
     env.variables
         .insert(NULL_KEYWORD.to_string(), 
-        Rc::new(RefCell::new(AgalValue::Null)));
+        AgalValue::Null.as_ref());
     env.variables
-        .insert(NOTHING_KEYWORD.to_string(), Rc::new(RefCell::new(AgalValue::Never)));
+        .insert(NOTHING_KEYWORD.to_string(), AgalValue::Never.as_ref());
     env
 }

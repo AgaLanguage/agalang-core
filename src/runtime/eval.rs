@@ -1,12 +1,13 @@
-use std::{cell::RefCell, rc::Rc};
+use std::rc::Rc;
 
-use super::{AgalValue, Enviroment, Stack};
-use crate::{frontend, internal, runtime};
+use super::{env::RefEnviroment, AgalValue, RefAgalValue, Stack};
+use crate::{frontend, internal, runtime::{self, AgalValuable}};
 
-type EvalResult = Result<Rc<RefCell<Enviroment>>, ()>;
+type EvalResult = Result<RefAgalValue, ()>;
 
 fn code(filename: &str) -> Option<String> {
-    let contents = std::fs::read_to_string(filename);
+    let path = std::path::Path::new(filename);
+    let contents = std::fs::read_to_string(path);
     match contents {
         Ok(contents) => Some(contents),
         Err(err) => {
@@ -18,7 +19,7 @@ fn code(filename: &str) -> Option<String> {
     }
 }
 
-pub fn full_eval(path: String, stack: &Stack, env: Enviroment) -> EvalResult {
+pub fn full_eval(path: String, stack: &Stack, env: RefEnviroment) -> EvalResult {
     let contents = code(&path);
     if contents.is_none() {
         println!("Error al leer el archivo");
@@ -29,12 +30,11 @@ pub fn full_eval(path: String, stack: &Stack, env: Enviroment) -> EvalResult {
     eval(contents, path, stack, env)
 }
 
-pub fn eval(code: String, path: String, stack: &Stack, env: Enviroment) -> EvalResult {
+pub fn eval(code: String, path: String, stack: &Stack, env: RefEnviroment) -> EvalResult {
     let program: frontend::ast::Node = {
         let mut parser = frontend::Parser::new(code, &path);
         parser.produce_ast()
     };
-    println!("{}", program);
     if program.is_error() {
         let type_err = internal::errors::ErrorNames::SyntaxError;
         let node_err = program.get_error().unwrap();
@@ -43,8 +43,9 @@ pub fn eval(code: String, path: String, stack: &Stack, env: Enviroment) -> EvalR
         internal::print_error(data);
         return Err(());
     }
-    let env = Rc::new(RefCell::new(env.crate_child()));
+    let env = env.borrow().clone().crate_child().as_ref();
     let value = runtime::interpreter(&program, stack, Rc::clone(&env));
+    let result = Ok(value.clone());
     let value: &AgalValue = &value.borrow();
     if let AgalValue::Throw(err) = value {
         let error = err.get_error();
@@ -54,5 +55,5 @@ pub fn eval(code: String, path: String, stack: &Stack, env: Enviroment) -> EvalR
         internal::print_error(data);
         return Err(());
     }
-    Ok(env)
+    result
 }

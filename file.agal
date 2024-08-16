@@ -1,6 +1,8 @@
+importar './mod.agal' como a;
 def o = {};
 fn aCadena() {
     ret "Hola";
 }
-def c = o.aCadena;
-def d = o::aCadena;
+o.aCadena = o::aCadena;
+a.o = o;
+exportar def x = a;

@@ -218,7 +218,7 @@ impl Parser {
         }
     }
     pub fn produce_ast(&mut self) -> ast::Node {
-        let body = self.parse_block(false,false,TokenType::EOF);
+        let body = self.parse_block(true, false,false,TokenType::EOF);
         if body.is_err() {
             return ast::Node::Error(body.err().unwrap());
         }
@@ -300,7 +300,7 @@ impl Parser {
     }
     fn parse_import_decl(&mut self, is_global_scope: bool) -> ast::Node {
         let token = self.eat(); // importar
-        let path = self.expect(TokenType::StringLiteral, "Se esperaba una ruta de archivo");
+        let path = self.expect(TokenType::StringLiteral, "Se esperaba una ruta de archivo, debe usar una cadena literal con '");
         if path.token_type == TokenType::Error {
             return ast::Node::Error(ast::NodeError {
                 message: path.value.clone(),
@@ -342,7 +342,7 @@ impl Parser {
             });
         }
         ast::Node::Import(ast::NodeImport {
-            path: token.value.clone(),
+            path: path.value.clone(),
             name,
             column: token.position.column,
             line: token.position.line,
@@ -1102,7 +1102,7 @@ impl Parser {
             });
         }
         self.eat();
-        let body = self.parse_block(in_function, in_loop, TokenType::Punctuation('}'));
+        let body = self.parse_block(false, in_function, in_loop, TokenType::Punctuation('}'));
         if body.is_err() {
             return Err(body.err().unwrap());
         }
@@ -1118,13 +1118,13 @@ impl Parser {
         }
         Ok(body)
     }
-    fn parse_block(&mut self, is_function: bool, is_loop: bool, stop_with: TokenType) -> Result<NodeBlock, ast::NodeError> {
+    fn parse_block(&mut self, is_global_scope: bool, is_function: bool, is_loop: bool, stop_with: TokenType) -> Result<NodeBlock, ast::NodeError> {
         let mut body = List::new();
         let mut error = None;
         let mut functions = Vec::new();
         let mut code = Vec::new();
         while self.not_eof() && !(self.at().token_type == stop_with) && error.is_none() {
-            let stmt = self.parse_stmt(false, is_function, is_loop);
+            let stmt = self.parse_stmt(is_global_scope, is_function, is_loop);
             if let Some(stmt) = stmt {
                 match stmt {
                     ast::Node::Error(node) => error = Some(node),
