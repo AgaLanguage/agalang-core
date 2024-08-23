@@ -66,7 +66,7 @@ pub fn tokenizer(input: String, file_name: String) -> Vec<util::Token<TokenType>
             ),
             (
                 util::TokenOptionCondition::Chars(OPERATORS),
-                util::TokenOptionResult::Min(|| TokenType::Operator),
+                util::TokenOptionResult::Char(|c| TokenType::Operator(OperatorType::from(c))),
             ),
             (
                 util::TokenOptionCondition::Chars("'\""),
@@ -74,7 +74,7 @@ pub fn tokenizer(input: String, file_name: String) -> Vec<util::Token<TokenType>
             ),
             (
                 util::TokenOptionCondition::Chars(PUNCTUATION),
-                util::TokenOptionResult::Char(|c| TokenType::Punctuation(c))
+                util::TokenOptionResult::Char(|c| TokenType::Punctuation(PunctuationType::from(c)))
             ),
         ],
         file_name,

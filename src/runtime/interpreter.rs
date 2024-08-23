@@ -105,14 +105,16 @@ pub fn interpreter(node: &Node, stack: &Stack, env: Rc<RefCell<Enviroment>>) -> 
         }
         Node::Block(block) => {
             let env = env.borrow().clone().crate_child().as_ref();
-            let mut value = AgalValue::Never.as_ref();
             for n in block.body.iter() {
-                value = interpreter(n, pre_stack, env.clone());
-                if value.borrow().is_stop() {
+                let value = interpreter(n, pre_stack, env.clone());
+                if value.borrow().is_return() || value.borrow().is_throw() {
                     return value;
                 }
+                if value.borrow().is_stop() {
+                    break;
+                }
             }
-            value
+            AgalValue::Never.as_ref()
         }
         Node::Call(call) => {
             let callee = interpreter(&call.callee, &stack, env.clone());

@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use super::{env::RefEnviroment, AgalValue, RefAgalValue, Stack};
-use crate::{frontend, internal, runtime::{self, AgalValuable}};
+use crate::{frontend, internal, runtime};
 
 type EvalResult = Result<RefAgalValue, ()>;
 

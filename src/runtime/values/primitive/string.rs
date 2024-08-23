@@ -80,6 +80,9 @@ impl AgalValuable for AgalString {
                     AgalValue::String(AgalString::from_string(new_string)).as_ref()
                 }
                 "==" => AgalValue::Boolean(AgalBoolean(self.0 == other.0)).as_ref(),
+                "!=" => AgalValue::Boolean(AgalBoolean(self.0 != other.0)).as_ref(),
+                "&&" => return (if self.0 == "" {self} else {other}).clone().to_value().as_ref(),
+                "||" => return (if self.0 != "" {self} else {other}).clone().to_value().as_ref(),
                 _ => {
                     binary_operation_error(stack, operator, cself.to_value().as_ref(), Some(cother))
                 }
