@@ -10,8 +10,8 @@ use crate::{
 
 use super::lexer::{KeywordsType, OperatorType, PunctuationType, TokenType};
 
-const ASSIGNMENT_MODIFICATOR: [&str; 9] = ["+", "-", "*", "/", "%", "~", "&&", "||", "??"];
-const COMPARISON: [&str; 4] = ["=", "!", "<", ">"];
+const ASSIGNMENT_MODIFICATOR: [&str; 8] = ["+", "-", "*", "/", "%", "&&", "||", "??"];
+const COMPARISON: [&str; 5] = ["=", "~", "!", "<", ">"];
 const MISSING_TOKEN: &str = "\x1b[81mToken desaparecido\x1b[0m";
 
 struct SemiToken {
