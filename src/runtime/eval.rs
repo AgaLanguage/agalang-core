@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use super::{env::RefEnviroment, AgalValue, RefAgalValue, Stack};
+use super::{env::RefEnvironment, AgalValue, RefAgalValue, Stack};
 use crate::{frontend, internal, runtime};
 
 type EvalResult = Result<RefAgalValue, ()>;
@@ -19,7 +19,7 @@ fn code(filename: &str) -> Option<String> {
     }
 }
 
-pub fn full_eval(path: String, stack: &Stack, env: RefEnviroment) -> EvalResult {
+pub fn full_eval(path: String, stack: &Stack, env: RefEnvironment) -> EvalResult {
     let contents = code(&path);
     if contents.is_none() {
         println!("Error al leer el archivo");
@@ -30,7 +30,7 @@ pub fn full_eval(path: String, stack: &Stack, env: RefEnviroment) -> EvalResult 
     eval(contents, path, stack, env)
 }
 
-pub fn eval(code: String, path: String, stack: &Stack, env: RefEnviroment) -> EvalResult {
+pub fn eval(code: String, path: String, stack: &Stack, env: RefEnvironment) -> EvalResult {
     let program: frontend::ast::Node = {
         let mut parser = frontend::Parser::new(code, &path);
         parser.produce_ast()
@@ -43,7 +43,7 @@ pub fn eval(code: String, path: String, stack: &Stack, env: RefEnviroment) -> Ev
         internal::print_error(data);
         return Err(());
     }
-    let env = env.borrow().clone().crate_child().as_ref();
+    let env = env.borrow().clone().crate_child(false).as_ref();
     let value = runtime::interpreter(&program, stack, Rc::clone(&env));
     let result = Ok(value.clone());
     let value: &AgalValue = &value.borrow();

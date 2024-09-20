@@ -1,11 +1,7 @@
 use std::rc::Rc;
 
 use crate::runtime::{
-    binary_operation_error,
-    env::RefEnviroment,
-    get_instance_property_error,
-    values::{AgalNumber, AgalThrow, AgalValuable, AgalValue},
-    AgalArray, RefAgalValue, Stack,
+    binary_operation_error, env::RefEnvironment, get_instance_property_error, unary_operation_error, values::{AgalNumber, AgalThrow, AgalValuable, AgalValue}, AgalArray, RefAgalValue, Stack
 };
 
 use super::AgalBoolean;
@@ -31,10 +27,10 @@ impl AgalString {
     }
 }
 impl AgalValuable for AgalString {
-    fn to_agal_string(self, _: &Stack, _: RefEnviroment) -> Result<AgalString, AgalThrow> {
+    fn to_agal_string(self, _: &Stack, _: RefEnvironment) -> Result<AgalString, AgalThrow> {
         Ok(self)
     }
-    fn to_agal_console(self, _: &Stack, _: RefEnviroment) -> Result<AgalString, AgalThrow> {
+    fn to_agal_console(self, _: &Stack, _: RefEnvironment) -> Result<AgalString, AgalThrow> {
         Ok(AgalString::from_string(format!("\x1b[33{}\x1b[39", self.0)))
     }
     fn to_agal_array(self, _: &Stack) -> Result<AgalArray, AgalThrow> {
@@ -43,7 +39,7 @@ impl AgalValuable for AgalString {
     fn to_value(self) -> AgalValue {
         AgalValue::String(self)
     }
-    fn get_instance_property(self, stack: &Stack, env: RefEnviroment, key: String) -> RefAgalValue {
+    fn get_instance_property(self, stack: &Stack, env: RefEnvironment, key: String) -> RefAgalValue {
         match key.as_str() {
             "caracteres" => {
                 let function =
@@ -65,15 +61,15 @@ impl AgalValuable for AgalString {
     fn binary_operation(
         &self,
         stack: &Stack,
-        _: RefEnviroment,
-        operator: String,
+        _: RefEnvironment,
+        operator: &str,
         other: RefAgalValue,
     ) -> RefAgalValue {
         let cself = self.clone();
         let cother = other.clone();
         let other: &AgalValue = &other.borrow();
         match other {
-            AgalValue::String(other) => match operator.as_str() {
+            AgalValue::String(other) => match operator {
                 "+" => {
                     let mut new_string = self.get_string().clone();
                     new_string.push_str(other.get_string());
@@ -84,10 +80,28 @@ impl AgalValuable for AgalString {
                 "&&" => return (if self.0 == "" {self} else {other}).clone().to_value().as_ref(),
                 "||" => return (if self.0 != "" {self} else {other}).clone().to_value().as_ref(),
                 _ => {
-                    binary_operation_error(stack, operator, cself.to_value().as_ref(), Some(cother))
+                    binary_operation_error(stack, operator, cself.to_value().as_ref(), cother)
                 }
             },
-            _ => binary_operation_error(stack, operator, cself.to_value().as_ref(), Some(cother)),
+            _ => binary_operation_error(stack, operator, cself.to_value().as_ref(), cother),
+        }
+    }
+    fn unary_operator(&self, stack: &Stack, env: RefEnvironment, operator: &str) -> RefAgalValue {
+        match operator {
+            "?" => match self.clone().to_agal_boolean(stack, env) {
+                Ok(bool) => bool.to_ref_value(),
+                Err(throw) => throw.to_ref_value(),
+            },
+            "!" => match self.clone().to_agal_boolean(stack, env) {
+                Ok(bool) => AgalBoolean::new(!bool.to_bool()).to_ref_value(),
+                Err(throw) => throw.to_ref_value(),
+            },
+            "+" => match self.clone().to_agal_number(stack, env) {
+                Ok(num) => num.to_ref_value(),
+                Err(throw) => throw.to_ref_value(),
+            },
+            "&" => self.clone().to_ref_value(),
+            _ => unary_operation_error(stack, operator, self.clone().to_ref_value()),
         }
     }
 }
@@ -126,11 +140,11 @@ impl AgalValuable for AgalChar {
     fn to_value(self) -> AgalValue {
         AgalValue::Char(self)
     }
-    fn get_instance_property(self, stack: &Stack, env: RefEnviroment, key: String) -> RefAgalValue {
+    fn get_instance_property(self, stack: &Stack, env: RefEnvironment, key: String) -> RefAgalValue {
         let value = AgalValue::Char(self);
         get_instance_property_error(stack, env, key, value)
     }
-    fn to_agal_string(self, _: &Stack, _: RefEnviroment) -> Result<AgalString, AgalThrow> {
+    fn to_agal_string(self, _: &Stack, _: RefEnvironment) -> Result<AgalString, AgalThrow> {
         Ok(AgalString::from_string(self.0.to_string()))
     }
 }

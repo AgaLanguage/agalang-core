@@ -2,17 +2,17 @@
 pub enum KeywordsType {
     None, // invalid keyword
     Definir, Constante, Nombre, // DONE
-    Lanzar, // TODO
+    Lanzar, // DONE
     Funcion, // DONE
     Si, Entonces, // DONE
     Hacer, Mientras, Para, // DONE
     Romper, Retornar, Continuar, // DONE
     Clase, Estatico, Publico // DONE
-    , Extender, Implementar, // TODO
+    , Extender, // TODO
     Intentar, Capturar, Finalmente, // DONE
     Exportar, Importar, Como, // DONE
 }
-const KEYWORDS: [KeywordsType; 25] = 
+const KEYWORDS: [KeywordsType; 24] = 
 [
     KeywordsType::None,
     KeywordsType::Definir,
@@ -31,7 +31,6 @@ const KEYWORDS: [KeywordsType; 25] =
     KeywordsType::Estatico,
     KeywordsType::Publico,
     KeywordsType::Extender,
-    KeywordsType::Implementar,
     KeywordsType::Intentar,
     KeywordsType::Capturar,
     KeywordsType::Finalmente,
@@ -41,7 +40,7 @@ const KEYWORDS: [KeywordsType; 25] =
     KeywordsType::Lanzar
 ];
 impl KeywordsType {
-    pub fn iter() -> [KeywordsType; 25] {
+    pub fn iter() -> [KeywordsType; 24] {
         KEYWORDS
     }
     pub fn as_str(&self) -> &str {
@@ -63,7 +62,6 @@ impl KeywordsType {
             KeywordsType::Estatico => "est",
             KeywordsType::Publico => "pub",
             KeywordsType::Extender => "extiende",
-            KeywordsType::Implementar => "impl",
             KeywordsType::Intentar => "intentar",
             KeywordsType::Capturar => "capturar",
             KeywordsType::Finalmente => "finalmente",

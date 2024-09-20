@@ -1,7 +1,7 @@
 use std::{cell::RefCell, rc::Rc};
 
 use super::{get_instance_property_error, AgalString, AgalValuable};
-use crate::{internal::ErrorNames, runtime::{env::RefEnviroment, AgalError, AgalValue, RefAgalValue, Stack}};
+use crate::{internal::ErrorNames, runtime::{env::RefEnvironment, AgalError, AgalValue, RefAgalValue, Stack}};
 
 #[derive(Clone, PartialEq)]
 pub enum AgalThrow {
@@ -13,7 +13,7 @@ pub enum AgalThrow {
     Error(AgalError),
 }
 impl AgalThrow {
-    pub fn from_ref_value<T: AgalValuable>(v: Rc<RefCell<T>>, stack: Box<Stack>, env: RefEnviroment) -> AgalThrow {
+    pub fn from_ref_value<T: AgalValuable>(v: Rc<RefCell<T>>, stack: Box<Stack>, env: RefEnvironment) -> AgalThrow {
         let str = v.borrow().clone().to_agal_console(stack.as_ref(), env);
         if str.is_err() {
             return str.err().unwrap();
@@ -38,10 +38,10 @@ impl AgalValuable for AgalThrow {
     fn to_value(self) -> AgalValue {
         AgalValue::Throw(self)
     }
-    fn call(self, _: &Stack, _: RefEnviroment, _: RefAgalValue, _: Vec<RefAgalValue>) -> RefAgalValue {
+    fn call(self, _: &Stack, _: RefEnvironment, _: RefAgalValue, _: Vec<RefAgalValue>) -> RefAgalValue {
         AgalValue::Throw(self).as_ref()
     }
-    fn get_instance_property(self, _: &Stack, _: RefEnviroment, _: String) -> RefAgalValue {
+    fn get_instance_property(self, _: &Stack, _: RefEnvironment, _: String) -> RefAgalValue {
         AgalValue::Throw(self).as_ref()
     }
 }
@@ -73,10 +73,10 @@ impl AgalValuable for AgalNativeFunction {
     fn to_value(self) -> AgalValue {
         AgalValue::NativeFunction(self)
     }
-    fn to_agal_string(self, _: &Stack, _: RefEnviroment) -> Result<AgalString, AgalThrow> {
+    fn to_agal_string(self, _: &Stack, _: RefEnvironment) -> Result<AgalString, AgalThrow> {
         Ok(AgalString::from_string(format!("<Funcion nativa {}>", self.name)))
     }
-    fn get_instance_property(self, stack: &Stack, env: RefEnviroment, key: String) -> RefAgalValue {
+    fn get_instance_property(self, stack: &Stack, env: RefEnvironment, key: String) -> RefAgalValue {
         get_instance_property_error(stack, env, key, self.to_value())
     }
 }

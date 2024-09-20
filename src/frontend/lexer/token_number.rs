@@ -37,7 +37,7 @@ fn number_literal(
         value,
         meta,
     };
-    (token, i - col -1)
+    (token, i - col - 1)
 }
 
 fn number_base(
@@ -66,6 +66,46 @@ fn number_base(
         if c == 'b' {
             base = 2;
             i += 1;
+            if let Some('y') = line.chars().nth(i) {
+                i += 1;
+                let mut value = String::new();
+                let mut x = 1;
+                while x <= 8 {
+                    let bit = line.chars().nth(i);
+                    i += 1;
+                    if bit.is_none() {
+                        break;
+                    }
+                    let bit = bit.unwrap();
+                    if bit == '0' || bit == '1' {
+                        value.push(bit);
+                        x += 1;
+                    } else if bit != '_' {
+                        break;
+                    }
+                }
+                return if x == 1 {
+                    (
+                        util::Token {
+                            token_type: TokenType::Error,
+                            position: pos,
+                            value: format!("No se pudo analizar el byte"),
+                            meta,
+                        },
+                        i - col - 1,
+                    )
+                } else {
+                    (
+                        util::Token {
+                            token_type: TokenType::Byte,
+                            position: pos,
+                            value,
+                            meta,
+                        },
+                        i - col - 1,
+                    )
+                };
+            }
         } else if c == 'o' {
             base = 8;
             i += 1;
@@ -155,6 +195,7 @@ fn number_base(
             }
         }
     }
+
     // save the first index of the value
     let value_index = i;
 

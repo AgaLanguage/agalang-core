@@ -1,9 +1,5 @@
-importar './mod.agal' como a;
-def o = { aCadena };
-fn aCadena() {
-    ret "Hola";
+exportar clase Nombre {
 }
-a.o = o;
-o.texto = o.aCadena();
-o.texto += " Mundo";
-exportar nombre a;
+exportar fn Hola(){
+    ret 3;
+}

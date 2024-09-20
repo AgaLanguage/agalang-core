@@ -1,13 +1,10 @@
-use std::{borrow::Borrow, cell::RefCell, rc::Rc};
+use std::{borrow::Borrow, cell::RefCell, collections::HashMap, rc::Rc};
 
 use super::{
-    env::{RefEnviroment, FALSE_KEYWORD, NOTHING_KEYWORD, NULL_KEYWORD, TRUE_KEYWORD},
-    interpreter, Enviroment, Stack,
+    env::{RefEnvironment, FALSE_KEYWORD, NOTHING_KEYWORD, NULL_KEYWORD, TRUE_KEYWORD},
+    Stack,
 };
-use crate::{
-    frontend::ast::{Node, NodeBlock, NodeIdentifier},
-    internal::ErrorNames,
-};
+use crate::{frontend::ast::Node, internal::ErrorNames};
 
 pub mod primitive;
 pub use primitive::*;
@@ -15,49 +12,48 @@ pub mod complex;
 pub use complex::*;
 pub mod internal;
 pub use internal::*;
-use util::List;
 
 pub type RefAgalValue = Rc<RefCell<AgalValue>>;
 
 pub enum AgalValue {
     NativeFunction(AgalNativeFunction),
+    Export(String, RefAgalValue),
+    Function(AgalFunction),
+    Boolean(AgalBoolean),
+    Return(RefAgalValue),
+    Object(AgalObject),
     Number(AgalNumber),
     String(AgalString),
-    Boolean(AgalBoolean),
-    Char(AgalChar),
-    Byte(AgalByte),
-    Null,
-    Never,
-    Break,
-    Continue,
     Error(AgalError),
     Throw(AgalThrow),
-    Function(List<NodeIdentifier>, NodeBlock, Rc<RefCell<Enviroment>>),
     Array(AgalArray),
-    Object(AgalObject),
-    Return(RefAgalValue),
-    Export(String, RefAgalValue),
+    Class(AgalClass),
+    Char(AgalChar),
+    Byte(AgalByte),
+    Continue,
+    Never,
+    Break,
+    Null,
 }
 impl Clone for AgalValue {
     fn clone(&self) -> Self {
         match self {
-            AgalValue::Byte(b) => AgalValue::Byte(b.clone()),
+            AgalValue::Class(c) => c.clone().to_value(),
+            AgalValue::Byte(b) => b.clone().to_value(),
             AgalValue::NativeFunction(f) => AgalValue::NativeFunction(f.clone()),
-            AgalValue::Number(n) => AgalValue::Number(n.clone()),
-            AgalValue::String(s) => AgalValue::String(s.clone()),
-            AgalValue::Boolean(b) => AgalValue::Boolean(b.clone()),
-            AgalValue::Char(c) => AgalValue::Char(c.clone()),
+            AgalValue::Number(n) => n.clone().to_value(),
+            AgalValue::String(s) => s.clone().to_value(),
+            AgalValue::Boolean(b) => b.clone().to_value(),
+            AgalValue::Char(c) => c.clone().to_value(),
             AgalValue::Null => AgalValue::Null,
             AgalValue::Never => AgalValue::Never,
             AgalValue::Continue => AgalValue::Continue,
             AgalValue::Break => AgalValue::Break,
-            AgalValue::Error(e) => AgalValue::Error(e.clone()),
-            AgalValue::Throw(t) => AgalValue::Throw(t.clone()),
-            AgalValue::Function(params, body, env) => {
-                AgalValue::Function(params.clone(), body.clone(), env.clone())
-            }
-            AgalValue::Array(a) => AgalValue::Array(a.clone()),
-            AgalValue::Object(o) => AgalValue::Object(o.clone()),
+            AgalValue::Error(e) => e.clone().to_value(),
+            AgalValue::Throw(t) => t.clone().to_value(),
+            AgalValue::Function(f) => f.clone().to_value(),
+            AgalValue::Array(a) => a.clone().to_value(),
+            AgalValue::Object(o) => o.clone().to_value(),
             AgalValue::Return(r) => AgalValue::Return(r.clone()),
             AgalValue::Export(name, value) => AgalValue::Export(name.clone(), value.clone()),
         }
@@ -65,64 +61,27 @@ impl Clone for AgalValue {
 }
 impl PartialEq for AgalValue {
     fn eq(&self, other: &Self) -> bool {
-        match self {
-            AgalValue::Byte(b) => match other {
-                AgalValue::Byte(o) => b == o,
-                _ => false,
-            },
-            AgalValue::NativeFunction(f) => match other {
-                AgalValue::NativeFunction(o) => f as *const _ == o as *const _,
-                _ => false,
-            },
-            AgalValue::Number(n) => match other {
-                AgalValue::Number(o) => n == o,
-                _ => false,
-            },
-            AgalValue::String(s) => match other {
-                AgalValue::String(o) => s == o,
-                _ => false,
-            },
-            AgalValue::Boolean(b) => match other {
-                AgalValue::Boolean(o) => b == o,
-                _ => false,
-            },
-            AgalValue::Char(c) => match other {
-                AgalValue::Char(o) => c == o,
-                _ => false,
-            },
-            AgalValue::Null => match other {
-                AgalValue::Null => true,
-                _ => false,
-            },
-            AgalValue::Never | AgalValue::Continue | AgalValue::Break => false,
-            AgalValue::Error(e) => match other {
-                AgalValue::Error(o) => e == o,
-                _ => false,
-            },
-            AgalValue::Throw(t) => match other {
-                AgalValue::Throw(o) => t == o,
-                _ => false,
-            },
-            AgalValue::Function(params, body, env) => match other {
-                AgalValue::Function(op, ob, oe) => params == op && body == ob && env == oe,
-                _ => false,
-            },
-            AgalValue::Array(a) => match other {
-                AgalValue::Array(o) => a == o,
-                _ => false,
-            },
-            AgalValue::Object(o) => match other {
-                AgalValue::Object(oo) => o == oo,
-                _ => false,
-            },
-            AgalValue::Return(r) => match other {
-                AgalValue::Return(o) => r == o,
-                _ => false,
-            },
-            AgalValue::Export(name, value) => match other {
-                AgalValue::Export(on, ov) => name == on && value == ov,
-                _ => false,
-            },
+        match (self, other) {
+            (AgalValue::Class(c), AgalValue::Class(o)) => c == o,
+            (AgalValue::Byte(b), AgalValue::Byte(o)) => b == o,
+            (AgalValue::NativeFunction(f), AgalValue::NativeFunction(o)) => {
+                f as *const _ == o as *const _
+            }
+            (AgalValue::Number(n), AgalValue::Number(o)) => n == o,
+            (AgalValue::String(s), AgalValue::String(o)) => s == o,
+            (AgalValue::Boolean(b), AgalValue::Boolean(o)) => b == o,
+            (AgalValue::Char(c), AgalValue::Char(o)) => c == o,
+            (AgalValue::Null, AgalValue::Null) => true,
+            (AgalValue::Error(e), AgalValue::Error(o)) => e == o,
+            (AgalValue::Throw(t), AgalValue::Throw(o)) => t == o,
+            (AgalValue::Function(f), AgalValue::Function(o)) => f == o,
+            (AgalValue::Array(a), AgalValue::Array(o)) => a == o,
+            (AgalValue::Object(o), AgalValue::Object(oo)) => o == oo,
+            (AgalValue::Return(r), AgalValue::Return(o)) => r == o,
+            (AgalValue::Export(name, value), AgalValue::Export(on, ov)) => {
+                name == on && value == ov
+            }
+            (_, _) => false,
         }
     }
 }
@@ -180,9 +139,9 @@ impl AgalValue {
             _ => None,
         }
     }
-    // TODO: Remove this code
     pub fn get_type(&self) -> &str {
         match self {
+            AgalValue::Class(_) => "Clase",
             AgalValue::Error(_) => "Error",
             AgalValue::Number(_) => "Numero",
             AgalValue::String(_) => "Cadena",
@@ -193,7 +152,7 @@ impl AgalValue {
             AgalValue::Break => "Romper",
             AgalValue::Continue => "Continuar",
             AgalValue::Throw(_) => "Error",
-            AgalValue::Function(_, _, _) => "Funcion",
+            AgalValue::Function(_) => "Funcion",
             AgalValue::Array(_) => "Arreglo",
             AgalValue::Object(_) => "Objeto",
             AgalValue::NativeFunction(_) => "Funcion nativa",
@@ -207,26 +166,21 @@ impl AgalValuable for AgalValue {
     fn to_value(self) -> AgalValue {
         self
     }
-    fn to_agal_number(self, stack: &Stack, env: RefEnviroment) -> Result<AgalNumber, AgalThrow> {
+    fn to_agal_number(self, stack: &Stack, env: RefEnvironment) -> Result<AgalNumber, AgalThrow> {
         match self {
             AgalValue::Number(n) => Ok(n),
             AgalValue::String(s) => s.to_agal_number(stack, env),
             AgalValue::Boolean(b) => b.to_agal_number(stack, env),
             AgalValue::Null => Ok(AgalNumber::new(0f64)),
-            AgalValue::Never => Err(AgalThrow::Params {
-                type_error: ErrorNames::CustomError("Error Parseo".to_string()),
-                message: "No se pudo convertir en numero".to_string(),
-                stack: Box::new(stack.clone()),
-            }),
             AgalValue::Throw(t) => Err(t),
             _ => Err(AgalThrow::Params {
-                type_error: ErrorNames::CustomError("Error Parseo".to_string()),
+                type_error: ErrorNames::CustomError("Error Parseo"),
                 message: "No se pudo convertir en numero".to_string(),
                 stack: Box::new(stack.clone()),
             }),
         }
     }
-    fn to_agal_string(self, stack: &Stack, env: RefEnviroment) -> Result<AgalString, AgalThrow> {
+    fn to_agal_string(self, stack: &Stack, env: RefEnvironment) -> Result<AgalString, AgalThrow> {
         match self {
             AgalValue::Number(n) => n.to_agal_string(stack, env),
             AgalValue::String(s) => Ok(s),
@@ -238,13 +192,13 @@ impl AgalValuable for AgalValue {
             AgalValue::Char(c) => c.to_agal_string(stack, env),
             AgalValue::Byte(b) => b.to_agal_string(stack, env),
             _ => Err(AgalThrow::Params {
-                type_error: ErrorNames::CustomError("Error Parseo".to_string()),
+                type_error: ErrorNames::CustomError("Error Parseo"),
                 message: "No se pudo convertir en cadena".to_string(),
                 stack: Box::new(stack.clone()),
             }),
         }
     }
-    fn to_agal_boolean(self, stack: &Stack, env: RefEnviroment) -> Result<AgalBoolean, AgalThrow> {
+    fn to_agal_boolean(self, stack: &Stack, env: RefEnvironment) -> Result<AgalBoolean, AgalThrow> {
         match self {
             AgalValue::Number(n) => n.to_agal_boolean(stack, env),
             AgalValue::String(s) => s.to_agal_boolean(stack, env),
@@ -258,13 +212,13 @@ impl AgalValuable for AgalValue {
                 .clone()
                 .to_agal_boolean(stack, env.clone()),
             AgalValue::Never => Err(AgalThrow::Params {
-                type_error: ErrorNames::CustomError("Error Parseo".to_string()),
+                type_error: ErrorNames::CustomError("Error Parseo"),
                 message: "No se pudo convertir en booleano".to_string(),
                 stack: Box::new(stack.clone()),
             }),
             AgalValue::Throw(t) => Err(t),
             _ => Err(AgalThrow::Params {
-                type_error: ErrorNames::CustomError("Error Parseo".to_string()),
+                type_error: ErrorNames::CustomError("Error Parseo"),
                 message: "No se pudo convertir en booleano".to_string(),
                 stack: Box::new(stack.clone()),
             }),
@@ -276,13 +230,18 @@ impl AgalValuable for AgalValue {
             AgalValue::String(a) => a.to_agal_array(stack),
             AgalValue::Throw(t) => Err(t),
             _ => Err(AgalThrow::Params {
-                type_error: ErrorNames::CustomError("Error Iterable".to_string()),
+                type_error: ErrorNames::CustomError("Error Iterable"),
                 message: "El valor no es iterable".to_string(),
                 stack: Box::new(stack.clone()),
             }),
         }
     }
-    fn get_instance_property(self, stack: &Stack, env: RefEnviroment, key: String) -> RefAgalValue {
+    fn get_instance_property(
+        self,
+        stack: &Stack,
+        env: RefEnvironment,
+        key: String,
+    ) -> RefAgalValue {
         match self {
             AgalValue::Array(a) => a.get_instance_property(stack, env, key),
             AgalValue::Boolean(b) => b.get_instance_property(stack, env, key),
@@ -291,7 +250,7 @@ impl AgalValuable for AgalValue {
             AgalValue::Byte(b) => b.get_instance_property(stack, env, key),
             AgalValue::Number(n) => n.get_instance_property(stack, env, key),
             AgalValue::String(s) => s.get_instance_property(stack, env, key),
-            AgalValue::Function(_, _, _) => AgalValue::Never.as_ref(),
+            AgalValue::Function(f) => f.get_instance_property(stack, env, key),
             AgalValue::NativeFunction(n) => {
                 n.borrow().clone().get_instance_property(stack, env, key)
             }
@@ -302,7 +261,7 @@ impl AgalValuable for AgalValue {
                 .get_instance_property(stack, env, key),
             AgalValue::Object(o) => o.get_instance_property(stack, env, key),
             AgalValue::Never | AgalValue::Null => AgalValue::Error(AgalError::new(
-                ErrorNames::CustomError("Error Propiedad".to_string()),
+                ErrorNames::CustomError("Error Propiedad"),
                 format!("No se puede obtener la propiedad {}", key),
                 Box::new(stack.clone()),
             ))
@@ -310,7 +269,7 @@ impl AgalValuable for AgalValue {
             _ => self.as_ref(),
         }
     }
-    fn get_object_property(self, stack: &Stack, env: RefEnviroment, key: String) -> RefAgalValue {
+    fn get_object_property(self, stack: &Stack, env: RefEnvironment, key: String) -> RefAgalValue {
         match self {
             AgalValue::Object(o) => o.get_object_property(stack, env, key),
             _ => get_property_error(stack, env, key),
@@ -319,7 +278,7 @@ impl AgalValuable for AgalValue {
     fn set_object_property(
         self,
         stack: &Stack,
-        env: RefEnviroment,
+        env: RefEnvironment,
         key: String,
         value: RefAgalValue,
     ) -> RefAgalValue {
@@ -332,8 +291,8 @@ impl AgalValuable for AgalValue {
     fn binary_operation(
         &self,
         stack: &Stack,
-        env: RefEnviroment,
-        operator: String,
+        env: RefEnvironment,
+        operator: &str,
         other: RefAgalValue,
     ) -> RefAgalValue {
         match self {
@@ -348,10 +307,34 @@ impl AgalValuable for AgalValue {
             _ => AgalValue::Never.as_ref(),
         }
     }
+    fn unary_operator(&self, stack: &Stack, env: RefEnvironment, operator: &str) -> RefAgalValue {
+        match self {
+            AgalValue::Number(n) => n.unary_operator(stack, env, operator),
+            AgalValue::String(s) => s.unary_operator(stack, env, operator),
+            AgalValue::Boolean(b) => b.unary_operator(stack, env, operator),
+            AgalValue::Char(c) => c.unary_operator(stack, env, operator),
+            AgalValue::Byte(b) => b.unary_operator(stack, env, operator),
+            AgalValue::Array(a) => a.unary_operator(stack, env, operator),
+            AgalValue::Object(o) => o.unary_operator(stack, env, operator),
+            AgalValue::Throw(t) => AgalValue::Throw(t.clone()).as_ref(),
+            _ => AgalValue::Never.as_ref(),
+        }
+    }
+    fn unary_back_operator(
+        &self,
+        _stack: &Stack,
+        _env: RefEnvironment,
+        operator: &str,
+    ) -> RefAgalValue {
+        match (self, operator) {
+            (AgalValue::Throw(_), "?") => AgalValue::Null.as_ref(),
+            _ => self.clone().as_ref(),
+        }
+    }
     fn call(
         self,
         stack: &Stack,
-        env: RefEnviroment,
+        env: RefEnvironment,
         this: RefAgalValue,
         arguments: Vec<RefAgalValue>,
     ) -> RefAgalValue {
@@ -359,32 +342,7 @@ impl AgalValuable for AgalValue {
             AgalValue::Throw(t) => t.call(stack, env, this, arguments),
             AgalValue::Number(n) => n.call(stack, env, this, arguments),
             AgalValue::Object(o) => o.call(stack, env, this, arguments),
-            AgalValue::Function(args, body, env) => {
-                let mut new_env = env.as_ref().borrow().clone().crate_child();
-                for (i, arg) in args.iter().enumerate() {
-                    let value = if i < arguments.len() {
-                        arguments[i].clone()
-                    } else {
-                        AgalValue::Never.as_ref()
-                    };
-                    new_env.define(
-                        stack,
-                        &arg.name,
-                        value,
-                        true,
-                        &Node::Identifier(arg.clone()),
-                    );
-                }
-                let value = interpreter(&body.to_node(), stack, env);
-                if value.as_ref().borrow().is_throw() {
-                    return value;
-                }
-                let value: &AgalValue = &value.as_ref().borrow();
-                if let AgalValue::Return(returned) = value {
-                    return returned.clone();
-                }
-                AgalValue::Never.as_ref()
-            }
+            AgalValue::Function(f) => f.call(stack, env, this, arguments),
             AgalValue::NativeFunction(f) => {
                 let v = (f.func)(arguments);
                 v
@@ -392,7 +350,7 @@ impl AgalValuable for AgalValue {
             _ => {
                 let message = format!("No se puede llamar a {}", self.get_type());
                 AgalValue::Throw(AgalThrow::Params {
-                    type_error: ErrorNames::CustomError("Error Llamada".to_string()),
+                    type_error: ErrorNames::CustomError("Error Llamada"),
                     message,
                     stack: Box::new(stack.clone()),
                 })
@@ -402,9 +360,11 @@ impl AgalValuable for AgalValue {
     }
 }
 
+// TODO: Delete
 impl std::fmt::Display for AgalValue {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
+            AgalValue::Class(c) => write!(f, "clase <nombrada>"),
             AgalValue::Error(_e) => write!(f, "Error"),
             AgalValue::Char(c) => write!(f, "{}", c.to_char()),
             AgalValue::Number(n) => write!(f, "{}", n.to_f64()),
@@ -427,7 +387,7 @@ impl std::fmt::Display for AgalValue {
             AgalValue::Break => write!(f, "romper"),
             AgalValue::Continue => write!(f, "continuar"),
             AgalValue::Throw(t) => write!(f, "{}", t),
-            AgalValue::Function(_, _, _) => write!(f, "Funcion"),
+            AgalValue::Function(_) => write!(f, "Funcion"),
             AgalValue::Array(_) => write!(f, "[..]"),
             AgalValue::Object(o) => {
                 let mut data = String::new();
@@ -439,15 +399,20 @@ impl std::fmt::Display for AgalValue {
                 }
                 let proto = o.get_prototype();
                 if let Some(proto) = proto {
-                    let proto: &AgalHashMap = &proto;
+                    let proto: &HashMap<String, RefAgalValue> = &proto;
                     for (key, value) in proto {
                         let value: &AgalValue = &value.as_ref().borrow();
                         data.push_str(&format!("{}: {},\n", key, value).replace("\n", "\n  "));
                     }
                 }
                 data.push_str("\0}");
-                write!(f, "{}", data.replace(",\n  \0}", "\n  \0}").replace("\n  \0}", "\n}"))
-            },
+                write!(
+                    f,
+                    "{}",
+                    data.replace(",\n  \0}", "\n  \0}")
+                        .replace("\n  \0}", "\n}")
+                )
+            }
             AgalValue::NativeFunction(_) => write!(f, "Funcion nativa"),
             AgalValue::Return(r) => write!(f, "Retorno: {}", r.as_ref().borrow()),
             AgalValue::Export(name, value) => {
@@ -472,23 +437,23 @@ where
         0
     }
     // types
-    fn to_agal_number(self, stack: &Stack, _: RefEnviroment) -> Result<AgalNumber, AgalThrow> {
+    fn to_agal_number(self, stack: &Stack, _: RefEnvironment) -> Result<AgalNumber, AgalThrow> {
         Err(AgalThrow::Params {
-            type_error: ErrorNames::CustomError("Error Parseo".to_string()),
+            type_error: ErrorNames::CustomError("Error Parseo"),
             message: "No se pudo convertir en numero".to_string(),
             stack: Box::new(stack.clone()),
         })
     }
-    fn to_agal_string(self, _: &Stack, _: RefEnviroment) -> Result<AgalString, AgalThrow> {
+    fn to_agal_string(self, _: &Stack, _: RefEnvironment) -> Result<AgalString, AgalThrow> {
         Ok(AgalString::from_string("<interno>".to_string()))
     }
-    fn to_agal_boolean(self, stack: &Stack, env: RefEnviroment) -> Result<AgalBoolean, AgalThrow> {
+    fn to_agal_boolean(self, stack: &Stack, env: RefEnvironment) -> Result<AgalBoolean, AgalThrow> {
         let value = env.as_ref().borrow().get(TRUE_KEYWORD, stack.get_value());
         let value: &AgalValue = &value.as_ref().borrow();
         match value {
             AgalValue::Boolean(b) => Ok(b.clone()),
             _ => Err(AgalThrow::Params {
-                type_error: ErrorNames::CustomError("Error Parseo".to_string()),
+                type_error: ErrorNames::CustomError("Error Parseo"),
                 message: "No se pudo convertir en booleano".to_string(),
                 stack: Box::new(stack.clone()),
             }),
@@ -496,17 +461,17 @@ where
     }
     fn to_agal_array(self, stack: &Stack) -> Result<AgalArray, AgalThrow> {
         Err(AgalThrow::Params {
-            type_error: ErrorNames::CustomError("Error Iterable".to_string()),
+            type_error: ErrorNames::CustomError("Error Iterable"),
             message: "El valor no es iterable".to_string(),
             stack: Box::new(stack.clone()),
         })
     }
 
     // utils
-    fn to_agal_value(self, stack: &Stack, env: RefEnviroment) -> Result<AgalString, AgalThrow> {
+    fn to_agal_value(self, stack: &Stack, env: RefEnvironment) -> Result<AgalString, AgalThrow> {
         self.to_agal_console(stack, env)
     }
-    fn to_agal_console(self, stack: &Stack, env: RefEnviroment) -> Result<AgalString, AgalThrow> {
+    fn to_agal_console(self, stack: &Stack, env: RefEnvironment) -> Result<AgalString, AgalThrow> {
         let value = self.to_agal_string(stack, env);
         if value.is_err() {
             return value;
@@ -520,71 +485,84 @@ where
     fn binary_operation(
         &self,
         stack: &Stack,
-        _env: RefEnviroment,
-        operator: String,
+        _env: RefEnvironment,
+        operator: &str,
         other: RefAgalValue,
     ) -> RefAgalValue {
-        binary_operation_error(stack, operator, other, None)
+        binary_operation_error(stack, operator, self.clone().to_ref_value(), other)
     }
 
+    fn unary_operator(&self, stack: &Stack, _env: RefEnvironment, operator: &str) -> RefAgalValue {
+        unary_operation_error(stack, operator, self.clone().to_ref_value())
+    }
+
+    fn unary_back_operator(
+        &self,
+        stack: &Stack,
+        _env: RefEnvironment,
+        operator: &str,
+    ) -> RefAgalValue {
+        unary_back_operation_error(stack, operator, self.clone().to_ref_value())
+    }
     // object methods
-    fn get_object_property(self, stack: &Stack, env: RefEnviroment, key: String) -> RefAgalValue {
+    fn get_object_property(self, stack: &Stack, env: RefEnvironment, key: String) -> RefAgalValue {
         get_property_error(stack, env, key)
     }
     fn set_object_property(
         self,
         stack: &Stack,
-        env: RefEnviroment,
+        env: RefEnvironment,
         key: String,
         _value: RefAgalValue,
     ) -> RefAgalValue {
         set_property_error(stack, env, key, "No se puede asignar".to_string())
     }
-    fn delete_object_property(self, stack: &Stack, env: RefEnviroment, key: String) {
+    fn delete_object_property(self, stack: &Stack, env: RefEnvironment, key: String) {
         delete_property_error(stack, env, key);
     }
     // instance methods
-    fn get_instance_property(self, stack: &Stack, env: RefEnviroment, key: String) -> RefAgalValue;
+    fn get_instance_property(self, stack: &Stack, env: RefEnvironment, key: String)
+        -> RefAgalValue;
 
     // values
     fn call(
         self,
         _: &Stack,
-        _: RefEnviroment,
+        _: RefEnvironment,
         _: RefAgalValue,
         _: Vec<RefAgalValue>,
     ) -> RefAgalValue {
         AgalValue::Never.as_ref()
     }
-    fn construct(self, _: &Stack, _: RefEnviroment, _: Vec<RefAgalValue>) -> RefAgalValue {
+    fn construct(self, _: &Stack, _: RefEnvironment, _: Vec<RefAgalValue>) -> RefAgalValue {
         AgalValue::Never.as_ref()
     }
 }
 
 pub fn set_property_error(
     stack: &Stack,
-    _env: RefEnviroment,
+    _env: RefEnvironment,
     key: String,
     message: String,
 ) -> RefAgalValue {
     AgalValue::Throw(AgalThrow::Params {
-        type_error: ErrorNames::CustomError("Error Propiedad".to_string()),
+        type_error: ErrorNames::CustomError("Error Propiedad"),
         message: format!("No se puede obtener la propiedad {}: {}", key, message),
         stack: Box::new(stack.clone()),
     })
     .as_ref()
 }
-pub fn get_property_error(stack: &Stack, _env: RefEnviroment, key: String) -> RefAgalValue {
+pub fn get_property_error(stack: &Stack, _env: RefEnvironment, key: String) -> RefAgalValue {
     AgalValue::Throw(AgalThrow::Params {
-        type_error: ErrorNames::CustomError("Error Propiedad".to_string()),
+        type_error: ErrorNames::CustomError("Error Propiedad"),
         message: format!("No se puede obtener la propiedad {}", key),
         stack: Box::new(stack.clone()),
     })
     .as_ref()
 }
-pub fn delete_property_error(stack: &Stack, _env: RefEnviroment, key: String) -> AgalValue {
+pub fn delete_property_error(stack: &Stack, _env: RefEnvironment, key: String) -> AgalValue {
     AgalValue::Throw(AgalThrow::Params {
-        type_error: ErrorNames::CustomError("Error Propiedad".to_string()),
+        type_error: ErrorNames::CustomError("Error Propiedad"),
         message: format!("No se puede eliminar la propiedad {}", key),
         stack: Box::new(stack.clone()),
     })
@@ -592,7 +570,7 @@ pub fn delete_property_error(stack: &Stack, _env: RefEnviroment, key: String) ->
 
 pub fn get_instance_property_error(
     stack: &Stack,
-    env: RefEnviroment,
+    env: RefEnvironment,
     key: String,
     value: AgalValue,
 ) -> RefAgalValue {
@@ -714,7 +692,7 @@ pub fn get_instance_property_error(
 
 fn get_instance_property_value(
     stack: Rc<RefCell<Stack>>,
-    env: RefEnviroment,
+    env: RefEnvironment,
     key: &str,
     value: &AgalValue,
 ) -> RefAgalValue {
@@ -723,7 +701,7 @@ fn get_instance_property_value(
         "aCadena" => {
             let data = value
                 .clone()
-                .to_agal_string(stack, env.as_ref().borrow().clone().crate_child().as_ref());
+                .to_agal_string(stack, env.as_ref().borrow().clone().crate_child(false).as_ref());
             let data = match data {
                 Ok(s) => AgalValue::String(s),
                 Err(e) => AgalValue::Throw(e),
@@ -733,7 +711,7 @@ fn get_instance_property_value(
         "__aConsola__" => {
             let data = value
                 .clone()
-                .to_agal_console(stack, env.as_ref().borrow().clone().crate_child().as_ref());
+                .to_agal_console(stack, env.as_ref().borrow().clone().crate_child(false).as_ref());
             let data = match data {
                 Ok(s) => AgalValue::String(s),
                 Err(e) => AgalValue::Throw(e),
@@ -743,7 +721,7 @@ fn get_instance_property_value(
         "aNumero" => {
             let data = value
                 .clone()
-                .to_agal_number(stack, env.as_ref().borrow().clone().crate_child().as_ref());
+                .to_agal_number(stack, env.as_ref().borrow().clone().crate_child(false).as_ref());
             let data = match data {
                 Ok(s) => AgalValue::Number(s),
                 Err(e) => AgalValue::Throw(e),
@@ -753,7 +731,7 @@ fn get_instance_property_value(
         "aBuleano" => {
             let data = value
                 .clone()
-                .to_agal_boolean(stack, env.as_ref().borrow().clone().crate_child().as_ref());
+                .to_agal_boolean(stack, env.as_ref().borrow().clone().crate_child(false).as_ref());
             let data = match data {
                 Ok(s) => AgalValue::Boolean(s),
                 Err(e) => AgalValue::Throw(e),
@@ -761,9 +739,7 @@ fn get_instance_property_value(
             data.as_ref()
         }
         "__aIterable__" => {
-            let data = value
-                .clone()
-                .to_agal_array(stack);
+            let data = value.clone().to_agal_array(stack);
             let data = match data {
                 Ok(s) => AgalValue::Array(s),
                 Err(e) => AgalValue::Throw(e),
@@ -775,28 +751,57 @@ fn get_instance_property_value(
 }
 pub fn binary_operation_error(
     stack: &Stack,
-    operator: String,
+    operator: &str,
     left: RefAgalValue,
-    rigth: Option<RefAgalValue>,
+    right: RefAgalValue,
 ) -> RefAgalValue {
     let left = left.as_ref().borrow();
-    let message = match rigth {
-        Some(r) => format!(
+    let right = right.as_ref().borrow();
+
+    AgalValue::Throw(AgalThrow::Params {
+        type_error: ErrorNames::CustomError("Error Operacion"),
+        message: format!(
             "No se puede realizar la operacion {} {} {}",
             left.get_type(),
             operator,
-            r.as_ref().borrow().get_type()
+            right.get_type()
         ),
-        None => format!(
-            "No se puede realizar la operacion {} con {}",
-            operator,
-            left.get_type()
-        ),
-    };
+        stack: Box::new(stack.clone()),
+    })
+    .as_ref()
+}
+pub fn unary_operation_error(stack: &Stack, operator: &str, value: RefAgalValue) -> RefAgalValue {
+    let value = value.as_ref().borrow();
 
     AgalValue::Throw(AgalThrow::Params {
-        type_error: ErrorNames::CustomError("Error Operacion".to_string()),
-        message,
+        type_error: ErrorNames::CustomError("Error Operacion"),
+        message: format!(
+            "No se puede realizar la operacion {} {}",
+            operator,
+            value.get_type(),
+        ),
+        stack: Box::new(stack.clone()),
+    })
+    .as_ref()
+}
+pub fn unary_back_operation_error(
+    stack: &Stack,
+    operator: &str,
+    value: RefAgalValue,
+) -> RefAgalValue {
+    let value: std::cell::Ref<'_, AgalValue> = value.as_ref().borrow();
+
+    if value.is_throw() && operator == "?" {
+        return AgalValue::Null.as_ref();
+    }
+
+    AgalValue::Throw(AgalThrow::Params {
+        type_error: ErrorNames::CustomError("Error Operacion"),
+        message: format!(
+            "No se puede realizar la operacion {} {}",
+            value.get_type(),
+            operator,
+        ),
         stack: Box::new(stack.clone()),
     })
     .as_ref()

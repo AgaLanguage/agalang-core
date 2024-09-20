@@ -1,6 +1,7 @@
 use crate::runtime::{
-    delete_property_error, env::RefEnviroment, get_instance_property_error, get_property_error,
-    set_property_error, AgalArray, AgalThrow, AgalValuable, AgalValue, RefAgalValue, Stack,
+    delete_property_error, env::RefEnvironment, get_instance_property_error, get_property_error,
+    set_property_error, unary_operation_error, AgalArray, AgalThrow, AgalValuable, AgalValue,
+    RefAgalValue, Stack,
 };
 
 use super::{AgalBoolean, AgalString};
@@ -15,7 +16,17 @@ impl AgalNumber {
         self.0
     }
     pub fn multiply(&self, other: AgalNumber) -> AgalNumber {
-        AgalNumber::new(self.0 * other.0)
+        AgalNumber(self.0 * other.0)
+    }
+    pub fn neg(&self) -> AgalNumber {
+        AgalNumber(-self.0)
+    }
+    pub fn flo(&self) -> AgalNumber {
+        let str = format!("{}", self.0);
+        let int_str: &str = str.split(".").collect::<Vec<_>>().get(0).unwrap_or(&"0");
+        let int = int_str.parse().unwrap_or_default();
+
+        AgalNumber(int)
     }
 }
 impl AgalValuable for AgalNumber {
@@ -25,12 +36,12 @@ impl AgalValuable for AgalNumber {
     fn binary_operation(
         &self,
         stack: &Stack,
-        _env: RefEnviroment,
-        operator: String,
+        _env: RefEnvironment,
+        operator: &str,
         other: RefAgalValue,
     ) -> RefAgalValue {
         let other: &AgalValue = &other.borrow();
-        match (other, operator.as_str()) {
+        match (other, operator) {
             (AgalValue::Number(other), "+") => AgalNumber::new(self.0 + other.0).to_ref_value(),
             (AgalValue::Number(other), "-") => AgalNumber::new(self.0 - other.0).to_ref_value(),
             (AgalValue::Number(other), "*") => AgalNumber::new(self.0 * other.0).to_ref_value(),
@@ -40,7 +51,8 @@ impl AgalValuable for AgalNumber {
                         type_error: crate::internal::ErrorNames::MathError,
                         message: "No se puede dividir por cero".to_string(),
                         stack: Box::new(stack.clone()),
-                    }.to_ref_value();
+                    }
+                    .to_ref_value();
                 }
                 AgalNumber::new(self.0 / other.0).to_ref_value()
             }
@@ -50,66 +62,73 @@ impl AgalValuable for AgalNumber {
                         type_error: crate::internal::ErrorNames::MathError,
                         message: "No se puede dividir por cero".to_string(),
                         stack: Box::new(stack.clone()),
-                    }.to_ref_value();
+                    }
+                    .to_ref_value();
                 }
                 AgalNumber::new(self.0 % other.0).to_ref_value()
             }
-            (AgalValue::Number(other), "==") => {
-                AgalBoolean::new(self.0 == other.0).to_ref_value()
-            }
-            (AgalValue::Number(other), "!=") => {
-                AgalBoolean::new(self.0 != other.0).to_ref_value()
-            }
-            (AgalValue::Number(other), "<") => {
-                AgalBoolean::new(self.0 < other.0).to_ref_value()
-            }
-            (AgalValue::Number(other), "<=") => {
-                AgalBoolean::new(self.0 <= other.0).to_ref_value()
-            }
-            (AgalValue::Number(other), ">") => {
-                AgalBoolean::new(self.0 > other.0).to_ref_value()
-            }
-            (AgalValue::Number(other), ">=") => {
-                AgalBoolean::new(self.0 >= other.0).to_ref_value()
-            }
+            (AgalValue::Number(other), "==") => AgalBoolean::new(self.0 == other.0).to_ref_value(),
+            (AgalValue::Number(other), "!=") => AgalBoolean::new(self.0 != other.0).to_ref_value(),
+            (AgalValue::Number(other), "<") => AgalBoolean::new(self.0 < other.0).to_ref_value(),
+            (AgalValue::Number(other), "<=") => AgalBoolean::new(self.0 <= other.0).to_ref_value(),
+            (AgalValue::Number(other), ">") => AgalBoolean::new(self.0 > other.0).to_ref_value(),
+            (AgalValue::Number(other), ">=") => AgalBoolean::new(self.0 >= other.0).to_ref_value(),
             (AgalValue::Number(other), "&&") => {
-                (if self.0 == 0f64 { self } else { other })
-                    .to_value()
-                    .to_ref_value()
+                (if self.0 == 0f64 { self } else { other }).to_ref_value()
             }
             (AgalValue::Number(other), "||") => {
-                (if self.0 != 0f64 { self } else { other })
-                    .to_value()
-                    .to_ref_value()
+                (if self.0 != 0f64 { self } else { other }).to_ref_value()
             }
 
             _ => AgalThrow::Params {
                 type_error: crate::internal::ErrorNames::TypeError,
                 message: "No se puede operar con un valor no numerico".to_string(),
                 stack: Box::new(stack.clone()),
-            }.to_ref_value()
+            }
+            .to_ref_value(),
         }
     }
-    fn to_agal_number(self, _: &Stack, _: RefEnviroment) -> Result<AgalNumber, AgalThrow> {
+    fn unary_operator(&self, stack: &Stack, env: RefEnvironment, operator: &str) -> RefAgalValue {
+        match operator {
+            "?" => match self.to_agal_boolean(stack, env) {
+                Ok(bool) => bool.to_ref_value(),
+                Err(throw) => throw.to_ref_value(),
+            },
+            "!" => match self.to_agal_boolean(stack, env) {
+                Ok(bool) => AgalBoolean::new(!bool.to_bool()).to_ref_value(),
+                Err(throw) => throw.to_ref_value(),
+            },
+            "&" | "+" => self.to_ref_value(),
+            "-" => self.neg().to_ref_value(),
+            "~" => self.flo().to_ref_value(),
+            _ => unary_operation_error(stack, operator, self.to_ref_value()),
+        }
+    }
+    fn to_agal_number(self, _: &Stack, _: RefEnvironment) -> Result<AgalNumber, AgalThrow> {
         Ok(self)
     }
-    fn to_agal_boolean(self, _: &Stack, _: RefEnviroment) -> Result<AgalBoolean, AgalThrow> {
+    fn to_agal_boolean(self, _: &Stack, _: RefEnvironment) -> Result<AgalBoolean, AgalThrow> {
         Ok(AgalBoolean(self.0 != 0f64))
     }
-    fn to_agal_string(self, _: &Stack, _: RefEnviroment) -> Result<AgalString, AgalThrow> {
+    fn to_agal_string(self, _: &Stack, _: RefEnvironment) -> Result<AgalString, AgalThrow> {
         Ok(AgalString::from_string(self.0.to_string()))
     }
-    fn to_agal_console(self, _: &Stack, _: RefEnviroment) -> Result<AgalString, AgalThrow> {
+    fn to_agal_console(self, _: &Stack, _: RefEnvironment) -> Result<AgalString, AgalThrow> {
         Ok(AgalString::from_string(format!("\x1b[33{}\x1b[39", self.0)))
     }
-    fn get_instance_property(self, stack: &Stack, env: RefEnviroment, key: String) -> RefAgalValue {
+    fn get_instance_property(
+        self,
+        stack: &Stack,
+        env: RefEnvironment,
+        key: String,
+    ) -> RefAgalValue {
         let value = AgalValue::Number(self);
         get_instance_property_error(stack, env, key, value)
     }
     fn call(
         self,
         stack: &Stack,
-        env: RefEnviroment,
+        env: RefEnvironment,
         _: RefAgalValue,
         list: Vec<RefAgalValue>,
     ) -> RefAgalValue {
@@ -137,39 +156,39 @@ impl AgalValuable for AgalNumber {
 
     fn to_agal_array(self, stack: &Stack) -> Result<AgalArray, AgalThrow> {
         Err(AgalThrow::Params {
-            type_error: crate::internal::ErrorNames::CustomError("Error Iterable".to_string()),
+            type_error: crate::internal::ErrorNames::CustomError("Error Iterable"),
             message: "El valor no es iterable".to_string(),
             stack: Box::new(stack.clone()),
         })
     }
 
-    fn to_agal_value(self, stack: &Stack, env: RefEnviroment) -> Result<AgalString, AgalThrow> {
+    fn to_agal_value(self, stack: &Stack, env: RefEnvironment) -> Result<AgalString, AgalThrow> {
         self.to_agal_console(stack, env)
     }
 
-    fn get_object_property(self, stack: &Stack, env: RefEnviroment, key: String) -> RefAgalValue {
+    fn get_object_property(self, stack: &Stack, env: RefEnvironment, key: String) -> RefAgalValue {
         get_property_error(stack, env, key)
     }
 
     fn set_object_property(
         self,
         stack: &Stack,
-        env: RefEnviroment,
+        env: RefEnvironment,
         key: String,
         _value: RefAgalValue,
     ) -> RefAgalValue {
         set_property_error(stack, env, key, "No se puede asignar".to_string())
     }
 
-    fn delete_object_property(self, stack: &Stack, env: RefEnviroment, key: String) {
+    fn delete_object_property(self, stack: &Stack, env: RefEnvironment, key: String) {
         delete_property_error(stack, env, key);
     }
 
-    fn construct(self, _: &Stack, _: RefEnviroment, _: Vec<RefAgalValue>) -> RefAgalValue {
+    fn construct(self, _: &Stack, _: RefEnvironment, _: Vec<RefAgalValue>) -> RefAgalValue {
         AgalValue::Never.as_ref()
     }
 }
-/* 
+/*
 #[derive(Clone)]
 pub struct Number(Vec<u8>);
 

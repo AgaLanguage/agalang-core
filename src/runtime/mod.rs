@@ -1,5 +1,5 @@
 pub mod env;
-pub use env::Enviroment;
+pub use env::Environment;
 mod interpreter;
 pub use interpreter::interpreter;
 pub mod stack;

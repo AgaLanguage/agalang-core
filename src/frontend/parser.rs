@@ -533,6 +533,14 @@ impl Parser {
                 meta: name.meta,
             });
         }
+
+        let extend_of = if self.at().token_type == TokenType::Keyword(KeywordsType::Extender) {
+            self.eat();
+            Some(self.parse_expr().to_box())
+        } else {
+            None
+        };
+
         let open_brace = self.expect(
             TokenType::Punctuation(PunctuationType::RegularBracketOpen),
             "",
@@ -579,6 +587,7 @@ impl Parser {
         }
         ast::Node::Class(ast::NodeClass {
             name: name.value.clone(),
+            extend_of,
             body,
             column: token.position.column,
             line: token.position.line,
@@ -1322,11 +1331,15 @@ impl Parser {
         } else {
             "".to_string()
         };
+        println!(
+            "line: {}, column: {}",
+            operator_t.position.line, operator_t.position.column
+        );
         self.parse_complex_expr(
             left,
             SemiToken {
                 value: operator,
-                column: operator_t.position.column - 1,
+                column: operator_t.position.column,
                 line: operator_t.position.line,
             },
         )
@@ -1550,9 +1563,7 @@ impl Parser {
             return self.parse_assignment_expr(left, operator_st);
         }
         match token.value.as_str() {
-            "=" => {
-                self.parse_assignment_expr(left, operator_st)
-            }
+            "=" => self.parse_assignment_expr(left, operator_st),
             "?" | "|" | "&" => {
                 self.eat();
                 if operator_st.line != token.position.line
@@ -1605,8 +1616,10 @@ impl Parser {
         mut operator_st: SemiToken,
     ) -> (ast::Node, SemiToken) {
         let token = self.at();
-        if operator_st.value == "!"
-            && (token.token_type != TokenType::Operator(OperatorType::Equals))
+        if operator_st.value == "?"
+            && !(token.token_type == TokenType::Operator(OperatorType::QuestionMark)
+                && operator_st.line == token.position.line
+                && operator_st.column == (token.position.column - 1))
         {
             let operator = operator_st.value;
             let new_operator = if let TokenType::Operator(_) = token.token_type {
@@ -1846,6 +1859,12 @@ impl Parser {
                     file: token.meta,
                 }));
             }
+            TokenType::Byte => Ok(ast::Node::Byte(ast::NodeByte {
+                value: u8::from_str_radix(&self.eat().value, 2).expect("no es un byte"),
+                column: token.position.column,
+                line: token.position.line,
+                file: token.meta,
+            })),
             TokenType::StringLiteral => Ok(ast::Node::String(ast::NodeString {
                 value: List::from_vec(vec![ast::StringData::Str(self.eat().value)]),
                 column: token.position.column,

@@ -1,11 +1,11 @@
 # Expreciones
   - `?(value)` transforma a valor booleano
   - `!(value) == !?(value)` niega el valor booleano
-  - `&(value)` transforma a referencia
+  - `&(value)` transforma a inmutable
   - `+(value)` transforma a numero
   - `-(value)` transforma a negativo
-  - `~(value)` transforma a entero (redondea hacia abajo)
-  - `(value)!` si el valor es un error (lanzado) se transforma a nulo. Ejemplo: `1/0?` es nulo.
+  - `~(value)` quita presicion (redondea hacia abajo)
+  - `(value)?` si el valor es un error (lanzado) se transforma a nulo. Ejemplo: `1/0?` es nulo.
   - `(value1) && (value2)` comprueba si ambos valores son verdaderos
   - `(value1) || (value2)` comprueba si uno de los valores es verdadero
   - `(value1) ?? (value2)` si el valor1 es nulo, devuelve el valor2

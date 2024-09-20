@@ -1,3 +1,7 @@
+use std::{cell::RefCell, rc::Rc};
+
+pub type RefValue<Value> = Rc<RefCell<Value>>;
+pub type OpRefValue<Value> = Option<RefValue<Value>>;
 pub fn to_cyan(s: &str) -> String {
   format!("\x1b[96m{}\x1b[0m", s)
 }

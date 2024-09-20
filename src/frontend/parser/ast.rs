@@ -14,6 +14,7 @@ pub enum Node {
     Number(NodeNumber),
     Object(NodeObject),
     Array(NodeArray),
+    Byte(NodeByte),
     Identifier(NodeIdentifier),
 
     // Statements //
@@ -72,6 +73,7 @@ impl Node {
     }
     pub fn get_column(&self) -> usize {
         match self {
+            Node::Byte(node) => node.column,
             Node::Program(node) => node.column,
             Node::String(node) => node.column,
             Node::Number(node) => node.column,
@@ -101,6 +103,7 @@ impl Node {
     }
     pub fn get_line(&self) -> usize {
         match self {
+            Node::Byte(node) => node.line,
             Node::Program(node) => node.line,
             Node::String(node) => node.line,
             Node::Number(node) => node.line,
@@ -130,6 +133,7 @@ impl Node {
     }
     pub fn get_file(&self) -> String {
         let file: &str = match self {
+            Node::Byte(node) => &node.file,
             Node::Program(node) => &node.file,
             Node::String(node) => &node.file,
             Node::Number(node) => &node.file,
@@ -160,6 +164,7 @@ impl Node {
     }
     pub fn get_type(&self) -> &str {
         match self {
+            Node::Byte(_) => "Byte",
             Node::Program(_) => "Programa",
             Node::String(_) => "Cadena",
             Node::Number(_) => "Numero",
@@ -193,10 +198,6 @@ impl Node {
     }
 }
 
-
-// TODO: delete this code
-
-
 impl NodeBlock {
     pub fn join(&self, separator: &str) -> String {
         self.body.map(|node| format!("{}", node)).join(separator)
@@ -211,6 +212,7 @@ impl std::fmt::Display for NodeBlock {
 impl std::fmt::Display for Node {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let str = match self {
+            Node::Byte(node) => format!("NodeByte: {}", node.value),
             Node::Block(node) => node.body.to_string(),
             Node::Program(node) => format!("NodeProgram:\n{}", data_format(node.body.to_string())),
             Node::String(node) => {
@@ -446,6 +448,13 @@ pub struct NodeNumber {
     pub file: String,
 }
 #[derive(Clone, PartialEq, Debug)]
+pub struct NodeByte {
+    pub value: u8,
+    pub column: usize,
+    pub line: usize,
+    pub file: String,
+}
+#[derive(Clone, PartialEq, Debug)]
 pub enum NodeProperty {
     Property(String, Node),
     Dynamic(Node, Node),
@@ -592,15 +601,15 @@ pub struct NodeClassProperty {
     pub name: String,
     pub value: Option<BNode>,
     /** bits
-
-    0: is_static
-    1: is_const
-    2: is_public */
+    1: is_static
+    2: is_const
+    4: is_public */
     pub meta: u8,
 }
 #[derive(Clone, PartialEq, Debug)]
 pub struct NodeClass {
     pub name: String,
+    pub extend_of: Option<BNode>,
     pub body: List<NodeClassProperty>,
     pub column: usize,
     pub line: usize,

@@ -14,10 +14,10 @@ pub enum TokenType {
     String, // "hello {variable}"
     Operator(OperatorType), // + - * / % & | ^ ~ ! = < >
     Punctuation(PunctuationType), // ( ) { } [ ] , ; : .
-
     Keyword(KeywordsType),
     Error,
     None,
+    Byte, // 0by00000000
     EOF,
 }
 impl PartialEq for TokenType {
