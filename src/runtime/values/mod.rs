@@ -317,7 +317,7 @@ impl AgalValuable for AgalValue {
         }
     }
     fn set_object_property(
-        mut self,
+        self,
         stack: &Stack,
         env: RefEnviroment,
         key: String,
@@ -462,6 +462,9 @@ where
     Self: Sized + Clone,
 {
     fn to_value(self) -> AgalValue;
+    fn to_ref_value(self) -> RefAgalValue {
+        self.to_value().as_ref()
+    }
     fn get_keys(self) -> Vec<String> {
         vec![]
     }
@@ -529,7 +532,7 @@ where
         get_property_error(stack, env, key)
     }
     fn set_object_property(
-        mut self,
+        self,
         stack: &Stack,
         env: RefEnviroment,
         key: String,
@@ -537,7 +540,7 @@ where
     ) -> RefAgalValue {
         set_property_error(stack, env, key, "No se puede asignar".to_string())
     }
-    fn delete_object_property(mut self, stack: &Stack, env: RefEnviroment, key: String) {
+    fn delete_object_property(self, stack: &Stack, env: RefEnviroment, key: String) {
         delete_property_error(stack, env, key);
     }
     // instance methods

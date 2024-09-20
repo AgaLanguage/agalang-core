@@ -13,20 +13,6 @@ pub enum AgalThrow {
     Error(AgalError),
 }
 impl AgalThrow {
-    // [x] pending to delete
-    pub fn from_value<T: AgalValuable>(v: T, stack: Box<Stack>, env: RefEnviroment) -> AgalThrow {
-        let str = v.to_agal_console(stack.as_ref(), env);
-        if str.is_err() {
-            return str.err().unwrap();
-        }
-        let str = str.ok().unwrap();
-        let message = str.get_string().clone();
-        AgalThrow::Params {
-            type_error: ErrorNames::None,
-            message,
-            stack,
-        }
-    }
     pub fn from_ref_value<T: AgalValuable>(v: Rc<RefCell<T>>, stack: Box<Stack>, env: RefEnviroment) -> AgalThrow {
         let str = v.borrow().clone().to_agal_console(stack.as_ref(), env);
         if str.is_err() {
@@ -39,9 +25,6 @@ impl AgalThrow {
             message,
             stack,
         }
-    }
-    pub fn from_error(v: AgalError) -> AgalThrow {
-        AgalThrow::Error(v)
     }
     pub fn get_error(&self) -> AgalError {
         match self {

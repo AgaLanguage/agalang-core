@@ -30,75 +30,64 @@ impl AgalValuable for AgalNumber {
         other: RefAgalValue,
     ) -> RefAgalValue {
         let other: &AgalValue = &other.borrow();
-        match other {
-            AgalValue::Number(other) => {
-                let number = match operator.as_str() {
-                    "+" => AgalNumber::new(self.0 + other.0),
-                    "-" => AgalNumber::new(self.0 - other.0),
-                    "*" => AgalNumber::new(self.0 * other.0),
-                    "/" => {
-                        if other.0 == 0f64 {
-                            return AgalValue::Throw(AgalThrow::Params {
-                                type_error: crate::internal::ErrorNames::TypeError,
-                                message: "No se puede dividir por cero".to_string(),
-                                stack: Box::new(stack.clone()),
-                            })
-                            .as_ref();
-                        }
-                        AgalNumber::new(self.0 / other.0)
-                    }
-                    "%" => {
-                        if other.0 == 0f64 {
-                            return AgalValue::Throw(AgalThrow::Params {
-                                type_error: crate::internal::ErrorNames::TypeError,
-                                message: "No se puede dividir por cero".to_string(),
-                                stack: Box::new(stack.clone()),
-                            })
-                            .as_ref();
-                        }
-                        AgalNumber::new(self.0 % other.0)
-                    }
-                    "==" => {
-                        return AgalValue::Boolean(AgalBoolean::new(self.0 == other.0)).as_ref()
-                    }
-                    "!=" => {
-                        return AgalValue::Boolean(AgalBoolean::new(self.0 != other.0)).as_ref()
-                    }
-                    "<" => return AgalValue::Boolean(AgalBoolean::new(self.0 < other.0)).as_ref(),
-                    "<=" => {
-                        return AgalValue::Boolean(AgalBoolean::new(self.0 <= other.0)).as_ref()
-                    }
-                    ">" => return AgalValue::Boolean(AgalBoolean::new(self.0 > other.0)).as_ref(),
-                    ">=" => {
-                        return AgalValue::Boolean(AgalBoolean::new(self.0 >= other.0)).as_ref()
-                    }
-                    "&&" => {
-                        return (if self.0 == 0f64 { self } else { other })
-                            .to_value()
-                            .as_ref()
-                    }
-                    "||" => {
-                        return (if self.0 != 0f64 { self } else { other })
-                            .to_value()
-                            .as_ref()
-                    }
-                    _ => {
-                        return AgalValue::Throw(AgalThrow::Params {
-                            type_error: crate::internal::ErrorNames::TypeError,
-                            message: format!("Operador {} no soportado", operator),
-                            stack: Box::new(stack.clone()),
-                        })
-                        .as_ref();
-                    }
-                };
-                AgalValue::Number(number).as_ref()
+        match (other, operator.as_str()) {
+            (AgalValue::Number(other), "+") => AgalNumber::new(self.0 + other.0).to_ref_value(),
+            (AgalValue::Number(other), "-") => AgalNumber::new(self.0 - other.0).to_ref_value(),
+            (AgalValue::Number(other), "*") => AgalNumber::new(self.0 * other.0).to_ref_value(),
+            (AgalValue::Number(other), "/") => {
+                if other.0 == 0f64 {
+                    return AgalThrow::Params {
+                        type_error: crate::internal::ErrorNames::MathError,
+                        message: "No se puede dividir por cero".to_string(),
+                        stack: Box::new(stack.clone()),
+                    }.to_ref_value();
+                }
+                AgalNumber::new(self.0 / other.0).to_ref_value()
             }
-            _ => AgalValue::Throw(AgalThrow::Params {
+            (AgalValue::Number(other), "%") => {
+                if other.0 == 0f64 {
+                    return AgalThrow::Params {
+                        type_error: crate::internal::ErrorNames::MathError,
+                        message: "No se puede dividir por cero".to_string(),
+                        stack: Box::new(stack.clone()),
+                    }.to_ref_value();
+                }
+                AgalNumber::new(self.0 % other.0).to_ref_value()
+            }
+            (AgalValue::Number(other), "==") => {
+                AgalBoolean::new(self.0 == other.0).to_ref_value()
+            }
+            (AgalValue::Number(other), "!=") => {
+                AgalBoolean::new(self.0 != other.0).to_ref_value()
+            }
+            (AgalValue::Number(other), "<") => {
+                AgalBoolean::new(self.0 < other.0).to_ref_value()
+            }
+            (AgalValue::Number(other), "<=") => {
+                AgalBoolean::new(self.0 <= other.0).to_ref_value()
+            }
+            (AgalValue::Number(other), ">") => {
+                AgalBoolean::new(self.0 > other.0).to_ref_value()
+            }
+            (AgalValue::Number(other), ">=") => {
+                AgalBoolean::new(self.0 >= other.0).to_ref_value()
+            }
+            (AgalValue::Number(other), "&&") => {
+                (if self.0 == 0f64 { self } else { other })
+                    .to_value()
+                    .to_ref_value()
+            }
+            (AgalValue::Number(other), "||") => {
+                (if self.0 != 0f64 { self } else { other })
+                    .to_value()
+                    .to_ref_value()
+            }
+
+            _ => AgalThrow::Params {
                 type_error: crate::internal::ErrorNames::TypeError,
                 message: "No se puede operar con un valor no numerico".to_string(),
                 stack: Box::new(stack.clone()),
-            })
-            .as_ref(),
+            }.to_ref_value()
         }
     }
     fn to_agal_number(self, _: &Stack, _: RefEnviroment) -> Result<AgalNumber, AgalThrow> {
@@ -163,7 +152,7 @@ impl AgalValuable for AgalNumber {
     }
 
     fn set_object_property(
-        mut self,
+        self,
         stack: &Stack,
         env: RefEnviroment,
         key: String,
@@ -172,7 +161,7 @@ impl AgalValuable for AgalNumber {
         set_property_error(stack, env, key, "No se puede asignar".to_string())
     }
 
-    fn delete_object_property(mut self, stack: &Stack, env: RefEnviroment, key: String) {
+    fn delete_object_property(self, stack: &Stack, env: RefEnviroment, key: String) {
         delete_property_error(stack, env, key);
     }
 

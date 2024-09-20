@@ -22,7 +22,6 @@ impl AgalArray {
         &self.0
     }
 }
-
 impl AgalValuable for AgalArray {
     fn get_length(self) -> usize {
         self.0.len()
@@ -119,7 +118,7 @@ impl AgalValuable for AgalObject {
         value.unwrap().clone()
     }
     fn set_object_property(
-        mut self,
+        self,
         _: &Stack,
         _: RefEnviroment,
         key: String,
@@ -143,6 +142,7 @@ impl AgalValuable for AgalObject {
         value.unwrap().clone()
     }
 }
+
 #[derive(Clone, PartialEq)]
 pub struct AgalError {
     type_error: ErrorNames,
