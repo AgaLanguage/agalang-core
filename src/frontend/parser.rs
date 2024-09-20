@@ -536,7 +536,24 @@ impl Parser {
 
         let extend_of = if self.at().token_type == TokenType::Keyword(KeywordsType::Extender) {
             self.eat();
-            Some(self.parse_expr().to_box())
+            let class_node = self.parse_literal_expr();
+            if let Ok(ast::Node::Identifier(id)) = class_node {
+                Some(id)
+            } else if let Err(token) = class_node {
+                return ast::Node::Error(ast::NodeError {
+                    message: "Se esperaba un identificador".to_string(),
+                    column: token.position.column,
+                    line: token.position.line,
+                    meta: token.meta,
+                });
+            } else {
+                return ast::Node::Error(ast::NodeError {
+                    message: "Se esperaba un identificador".to_string(),
+                    column: class_node.as_ref().ok().unwrap().get_column(),
+                    line: class_node.as_ref().ok().unwrap().get_line(),
+                    meta: class_node.as_ref().ok().unwrap().get_file(),
+                });
+            }
         } else {
             None
         };

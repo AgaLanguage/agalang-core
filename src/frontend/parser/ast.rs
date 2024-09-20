@@ -609,7 +609,7 @@ pub struct NodeClassProperty {
 #[derive(Clone, PartialEq, Debug)]
 pub struct NodeClass {
     pub name: String,
-    pub extend_of: Option<BNode>,
+    pub extend_of: Option<NodeIdentifier>,
     pub body: List<NodeClassProperty>,
     pub column: usize,
     pub line: usize,

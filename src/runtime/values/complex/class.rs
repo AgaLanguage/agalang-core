@@ -64,12 +64,12 @@ impl AgalClassProperty {
 #[derive(Clone, PartialEq)]
 pub struct AgalClass {
     name: String,
-    extend_of: OpRefValue<AgalValue>,
+    extend_of: OpRefValue<AgalClass>,
     properties: RefAgalHashMap,
 }
 
 impl AgalClass {
-    pub fn new(name: String, properties: RefAgalHashMap, extend_of: OpRefValue<AgalValue>) -> AgalClass{
+    pub fn new(name: String, properties: RefAgalHashMap, extend_of: OpRefValue<AgalClass>) -> AgalClass{
         AgalClass {
             name,
             properties,

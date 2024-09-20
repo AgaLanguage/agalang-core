@@ -130,19 +130,28 @@ pub fn interpreter(node: &Node, stack: &Stack, env: Rc<RefCell<Environment>>) ->
                 .call(&stack, env.clone(), callee, args)
         }
         Node::Class(class) => {
-            let mut properties = HashMap::new();
-            let mut _class_env = env.borrow().clone().crate_child(true);
-            let class_env = _class_env.clone().as_ref();
             let extend_of_value = if let Some(extend) = &class.extend_of {
-                let value = interpreter(extend.as_ref(), &stack, env.clone());
-                if value.borrow().is_throw() {
-                    return value;
-                } else {
-                    Some(value)
+                let value = env.borrow().get(&extend.name, node);
+                let value: &AgalValue = &value.borrow();
+                let value = value.clone();
+                match value {
+                    AgalValue::Class(class) => Some(Rc::new(RefCell::new(class))),
+                    AgalValue::Throw(th) => return th.to_ref_value(),
+                    _ => {
+                        return AgalThrow::Params {
+                            type_error: ErrorNames::TypeError,
+                            message: "Solo se puede extender de otras clases".to_string(),
+                            stack: Box::new(stack),
+                        }
+                        .to_ref_value()
+                    }
                 }
             } else {
                 None
             };
+            let mut properties = HashMap::new();
+            let mut _class_env = env.borrow().clone().crate_child(true);
+            let class_env = _class_env.clone().as_ref();
             for property in class.body.iter() {
                 let is_static = (property.meta & 1) != 0;
                 let is_const = (property.meta & 2) != 0;
@@ -234,19 +243,28 @@ pub fn interpreter(node: &Node, stack: &Stack, env: Rc<RefCell<Environment>>) ->
                 AgalValue::Export(name.name.clone(), value).as_ref()
             }
             Node::Class(class) => {
-                let mut properties = HashMap::new();
-                let mut _class_env = env.borrow().clone().crate_child(true);
-                let class_env = _class_env.clone().as_ref();
                 let extend_of_value = if let Some(extend) = &class.extend_of {
-                    let value = interpreter(extend.as_ref(), &stack, env.clone());
-                    if value.borrow().is_throw() {
-                        return value;
-                    } else {
-                        Some(value)
+                    let value = env.borrow().get(&extend.name, node);
+                    let value: &AgalValue = &value.borrow();
+                    let value = value.clone();
+                    match value {
+                        AgalValue::Class(class) => Some(Rc::new(RefCell::new(class))),
+                        AgalValue::Throw(th) => return th.to_ref_value(),
+                        _ => {
+                            return AgalThrow::Params {
+                                type_error: ErrorNames::TypeError,
+                                message: "Solo se puede extender de otras clases".to_string(),
+                                stack: Box::new(stack),
+                            }
+                            .to_ref_value()
+                        }
                     }
                 } else {
                     None
                 };
+                let mut properties = HashMap::new();
+                let mut _class_env = env.borrow().clone().crate_child(true);
+                let class_env = _class_env.clone().as_ref();
                 for property in class.body.iter() {
                     let is_static = (property.meta & 1) != 0;
                     let is_const = (property.meta & 2) != 0;
