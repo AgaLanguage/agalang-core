@@ -1,13 +1,13 @@
+use parser::{
+    ast::{Node, NodeLoopEditType, NodeProperty, StringData},
+    internal::ErrorNames,
+};
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use super::{
     env::THIS_KEYWORD, full_eval, AgalArray, AgalBoolean, AgalByte, AgalClass, AgalClassProperty,
     AgalError, AgalFunction, AgalNumber, AgalObject, AgalString, AgalThrow, AgalValuable,
     AgalValue, Environment, RefAgalValue, Stack,
-};
-use crate::{
-    frontend::ast::{Node, NodeLoopEditType, NodeProperty, StringData},
-    internal::ErrorNames,
 };
 
 pub fn interpreter(node: &Node, stack: &Stack, env: Rc<RefCell<Environment>>) -> RefAgalValue {
@@ -149,13 +149,12 @@ pub fn interpreter(node: &Node, stack: &Stack, env: Rc<RefCell<Environment>>) ->
             } else {
                 None
             };
-            let mut properties = HashMap::new();
+            let mut properties = Vec::new();
             let mut _class_env = env.borrow().clone().crate_child(true);
             let class_env = _class_env.clone().as_ref();
             for property in class.body.iter() {
                 let is_static = (property.meta & 1) != 0;
-                let is_const = (property.meta & 2) != 0;
-                let is_public = (property.meta & 4) != 0;
+                let is_public = (property.meta & 2) != 0;
 
                 let value = if let Some(b) = &property.value {
                     interpreter(b.as_ref(), &stack, class_env.clone())
@@ -163,24 +162,18 @@ pub fn interpreter(node: &Node, stack: &Stack, env: Rc<RefCell<Environment>>) ->
                     AgalValue::Never.to_ref_value()
                 };
 
-                properties.insert(
+                properties.push((
                     property.name.clone(),
                     AgalClassProperty {
-                        is_const,
                         is_public,
                         is_static,
-                        manager: super::AgalClassPropertyManager::Value,
                         value,
                     },
-                );
+                ));
             }
 
-            let class_value = AgalClass::new(
-                class.name.clone(),
-                Rc::new(RefCell::new(properties)),
-                extend_of_value,
-            )
-            .to_ref_value();
+            let class_value =
+                AgalClass::new(class.name.clone(), properties, extend_of_value).to_ref_value();
             _class_env.set(THIS_KEYWORD, class_value.clone());
             env.borrow_mut()
                 .define(&stack, &class.name, class_value, true, node)
@@ -262,13 +255,12 @@ pub fn interpreter(node: &Node, stack: &Stack, env: Rc<RefCell<Environment>>) ->
                 } else {
                     None
                 };
-                let mut properties = HashMap::new();
+                let mut properties = Vec::new();
                 let mut _class_env = env.borrow().clone().crate_child(true);
                 let class_env = _class_env.clone().as_ref();
                 for property in class.body.iter() {
                     let is_static = (property.meta & 1) != 0;
-                    let is_const = (property.meta & 2) != 0;
-                    let is_public = (property.meta & 4) != 0;
+                    let is_public = (property.meta & 2) != 0;
 
                     let value = if let Some(b) = &property.value {
                         interpreter(b.as_ref(), &stack, class_env.clone())
@@ -276,31 +268,21 @@ pub fn interpreter(node: &Node, stack: &Stack, env: Rc<RefCell<Environment>>) ->
                         AgalValue::Never.to_ref_value()
                     };
 
-                    properties.insert(
+                    properties.push((
                         property.name.clone(),
                         AgalClassProperty {
-                            is_const,
                             is_public,
                             is_static,
-                            manager: super::AgalClassPropertyManager::Value,
                             value,
                         },
-                    );
+                    ));
                 }
-                let class_value = AgalClass::new(
-                    class.name.clone(),
-                    Rc::new(RefCell::new(properties)),
-                    extend_of_value,
-                )
-                .to_ref_value();
+
+                let class_value =
+                    AgalClass::new(class.name.clone(), properties, extend_of_value).to_ref_value();
                 _class_env.set(THIS_KEYWORD, class_value.clone());
-                env.borrow_mut().define(
-                    &stack,
-                    &class.name.clone(),
-                    class_value.clone(),
-                    true,
-                    node,
-                );
+                env.borrow_mut()
+                    .define(&stack, &class.name, class_value.clone(), true, node);
 
                 AgalValue::Export(class.name.clone(), class_value).as_ref()
             }
@@ -484,7 +466,9 @@ pub fn interpreter(node: &Node, stack: &Stack, env: Rc<RefCell<Environment>>) ->
                     _ => {}
                 }
             }
-            AgalObject::from_hashmap(hasmap).to_value().as_ref()
+            AgalObject::from_hashmap(Rc::new(RefCell::new(hasmap)))
+                .to_value()
+                .as_ref()
         }
         Node::Program(program) => {
             let mut module_instance = HashMap::new();
@@ -504,13 +488,19 @@ pub fn interpreter(node: &Node, stack: &Stack, env: Rc<RefCell<Environment>>) ->
                         .as_ref();
                     }
                     let export = value.unwrap();
-                    module_instance.insert(export.0, export.1);
+                    module_instance.insert(
+                        export.0,
+                        AgalClassProperty {
+                            is_public: true,
+                            is_static: false,
+                            value: export.1,
+                        },
+                    );
                 }
             }
-            AgalValue::Object(AgalObject::from_hashmap_with_prototype(
-                HashMap::new(),
+            AgalValue::Object(AgalObject::from_prototype(Rc::new(RefCell::new(
                 module_instance,
-            ))
+            ))))
             .as_ref()
         }
         Node::Return(ret) => {

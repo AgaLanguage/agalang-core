@@ -1,80 +1,75 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
-use crate::{
-    runtime::{env::RefEnvironment, AgalThrow, AgalValuable, AgalValue, RefAgalValue, Stack},
-    util::OpRefValue,
-};
+use super::AgalObject;
+use crate::runtime::{env::RefEnvironment, AgalValuable, AgalValue, RefAgalValue, Stack};
+use parser::util::{OpRefValue, RefValue};
+pub type RefHasMap<Value> = Rc<RefCell<HashMap<String, Value>>>;
 
-use super::AgalFunction;
-
-pub type AgalHashMap = std::collections::HashMap<String, AgalClassProperty>;
-pub type RefAgalHashMap = Rc<RefCell<AgalHashMap>>;
+fn ref_hash_map<T: Clone>() -> RefHasMap<T> {
+    Rc::new(RefCell::new(HashMap::new()))
+}
 
 #[derive(Clone, PartialEq)]
-pub enum AgalClassPropertyManager {
-    Getter(AgalFunction),
-    Setter(AgalFunction),
-    GetterSetter(/*getter*/ AgalFunction, /*setter*/ AgalFunction),
-    Value,
-}
-#[derive(Clone,PartialEq)]
 pub struct AgalClassProperty {
-    pub is_const: bool,
-    pub is_static: bool,
     pub is_public: bool,
-    pub manager: AgalClassPropertyManager,
+    pub is_static: bool,
     pub value: RefAgalValue,
-}
-
-impl AgalClassProperty {
-    fn get(self, stack: &Stack, env: RefEnvironment, value: RefAgalValue) -> RefAgalValue {
-        match self.manager {
-            AgalClassPropertyManager::Getter(f) => f.call(stack, env, value, vec![]),
-            AgalClassPropertyManager::GetterSetter(f, _) => f.call(stack, env, value, vec![]),
-            AgalClassPropertyManager::Setter(_) => AgalValue::Never.as_ref(),
-            AgalClassPropertyManager::Value => self.value,
-        }
-    }
-    fn set(
-        mut self,
-        new_value: RefAgalValue,
-        stack: &Stack,
-        env: RefEnvironment,
-        value: RefAgalValue,
-    ) -> RefAgalValue {
-        let result = match self.manager {
-            AgalClassPropertyManager::Getter(_) => AgalValue::Never.as_ref(),
-            AgalClassPropertyManager::GetterSetter(_, f) => f.call(stack, env, value, vec![]),
-            AgalClassPropertyManager::Setter(f) => f.call(stack, env, value, vec![]),
-            AgalClassPropertyManager::Value => new_value,
-        };
-        if self.is_const {
-            return AgalThrow::Params {
-                type_error: crate::internal::ErrorNames::CustomError("Error de Lectura"),
-                message: "Las constantes no pueden ser reaccignadas".to_string(),
-                stack: Box::new(stack.clone()),
-            }
-            .to_ref_value();
-        }
-        self.value = result.clone();
-        result
-    }
 }
 
 #[derive(Clone, PartialEq)]
 pub struct AgalClass {
     name: String,
     extend_of: OpRefValue<AgalClass>,
-    properties: RefAgalHashMap,
+    static_properties: RefHasMap<AgalClassProperty>,
+    instance_properties: RefHasMap<AgalClassProperty>,
 }
 
 impl AgalClass {
-    pub fn new(name: String, properties: RefAgalHashMap, extend_of: OpRefValue<AgalClass>) -> AgalClass{
+    pub fn new(
+        name: String,
+        properties: Vec<(String, AgalClassProperty)>,
+        extend_of: OpRefValue<AgalClass>,
+    ) -> AgalClass {
+        let static_properties = ref_hash_map();
+        let instance_properties = ref_hash_map();
+        for property in properties.iter() {
+            let mut properties = if property.1.is_static {
+                static_properties.as_ref().borrow_mut()
+            } else {
+                instance_properties.as_ref().borrow_mut()
+            };
+
+            properties.insert(property.0.clone(), property.1.clone());
+        }
         AgalClass {
             name,
-            properties,
+            static_properties,
+            instance_properties,
             extend_of,
         }
+    }
+    pub fn constructor(
+        self,
+        stack: &Stack,
+        env: RefEnvironment,
+        this: RefValue<AgalObject>,
+        args: Vec<RefAgalValue>,
+    ) -> RefAgalValue {
+        if let Some(class) = self.extend_of {
+            let value = class.as_ref().borrow();
+            value
+                .clone()
+                .constructor(stack, env.clone(), this.clone(), args.clone());
+        }
+        let sp = self.static_properties.borrow();
+        let constructor = sp.get("constructor");
+        if let Some(p) = constructor {
+            let tv = this.as_ref().borrow();
+            let pv = p.value.as_ref().borrow();
+            pv.clone().call(stack, env, tv.clone().to_ref_value(), args);
+        }
+        let object = this.borrow();
+        object.clone().to_ref_value()
     }
 }
 impl AgalValuable for AgalClass {
@@ -83,23 +78,42 @@ impl AgalValuable for AgalClass {
     }
     fn get_instance_property(
         self,
-        stack: &crate::runtime::Stack,
+        _: &crate::runtime::Stack,
         env: crate::runtime::env::RefEnvironment,
         key: String,
     ) -> RefAgalValue {
+        if key == "constructor" {
+            return self.to_ref_value();
+        }
         let this = self.clone();
-        let prop = this.properties.borrow();
+        let prop = this.static_properties.borrow();
         let prop = prop.get(&key);
         if let Some(property) = prop {
             if property.is_public && property.is_static {
-                property.clone().get(stack, env.clone(), self.to_ref_value())
-            } else if !property.is_public && property.is_static && env.borrow().clone().use_private() {
-                property.clone().get(stack, env, self.to_ref_value())
+                property.clone().value
+            } else if !property.is_public
+                && property.is_static
+                && env.borrow().clone().use_private()
+            {
+                property.clone().value
             } else {
                 AgalValue::Never.as_ref()
             }
         } else {
             AgalValue::Never.as_ref()
         }
+    }
+
+    fn call(
+        self,
+        stack: &Stack,
+        env: RefEnvironment,
+        _: RefAgalValue,
+        args: Vec<RefAgalValue>,
+    ) -> RefAgalValue {
+        let this = Rc::new(RefCell::new(AgalObject::from_prototype(
+            self.clone().instance_properties,
+        )));
+        self.constructor(stack, env, this, args)
     }
 }

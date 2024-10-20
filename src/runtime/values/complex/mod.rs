@@ -1,13 +1,9 @@
-use std::{
-    cell::RefCell,
-    rc::Rc,
-};
-
-use crate::{
-    frontend::node_error,
+use crate::runtime::{env::RefEnvironment, AgalString, Stack};
+use parser::{
     internal::{ErrorNames, ErrorTypes},
-    runtime::{env::RefEnvironment, AgalString, Stack},
+    node_error,
 };
+use std::{cell::RefCell, rc::Rc};
 mod class;
 pub use class::*;
 mod function;
@@ -15,7 +11,10 @@ pub use function::*;
 mod object;
 pub use object::*;
 
-use super::{get_instance_property_error, get_property_error, AgalThrow, AgalValuable, AgalValue, RefAgalValue};
+use super::{
+    get_instance_property_error, get_property_error, AgalThrow, AgalValuable, AgalValue,
+    RefAgalValue,
+};
 
 pub type AgalVec = Vec<Rc<RefCell<AgalValue>>>;
 #[derive(Clone, PartialEq)]
@@ -58,11 +57,10 @@ impl AgalValuable for AgalArray {
     fn to_agal_string(self, stack: &Stack, env: RefEnvironment) -> Result<AgalString, AgalThrow> {
         let mut result = String::new();
         for value in self.0.iter() {
-            let str = value
-                .as_ref()
-                .borrow()
-                .clone()
-                .to_agal_string(stack, env.as_ref().borrow().clone().crate_child(false).as_ref());
+            let str = value.as_ref().borrow().clone().to_agal_string(
+                stack,
+                env.as_ref().borrow().clone().crate_child(false).as_ref(),
+            );
             if str.is_err() {
                 return str;
             }
@@ -72,13 +70,18 @@ impl AgalValuable for AgalArray {
         }
         Ok(AgalString::from_string(result))
     }
-    fn get_instance_property(self, stack: &Stack, env: RefEnvironment, key: String) -> RefAgalValue {
+    fn get_instance_property(
+        self,
+        stack: &Stack,
+        env: RefEnvironment,
+        key: String,
+    ) -> RefAgalValue {
         let value = AgalValue::Array(self);
         get_instance_property_error(stack, env, key, value)
     }
     fn get_object_property(self, stack: &Stack, env: RefEnvironment, key: String) -> RefAgalValue {
         let int = key.parse::<usize>();
-        if int.is_err(){
+        if int.is_err() {
             return get_property_error(stack, env, key);
         }
         let int = int.unwrap();
@@ -146,7 +149,12 @@ impl AgalValuable for AgalError {
     fn to_value(self) -> AgalValue {
         AgalValue::Error(self)
     }
-    fn get_instance_property(self, stack: &Stack, env: RefEnvironment, key: String) -> RefAgalValue {
+    fn get_instance_property(
+        self,
+        stack: &Stack,
+        env: RefEnvironment,
+        key: String,
+    ) -> RefAgalValue {
         let value = AgalValue::Error(self);
         get_instance_property_error(stack, env, key, value)
     }

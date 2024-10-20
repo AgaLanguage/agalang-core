@@ -1,9 +1,4 @@
-#[warn(dead_code)]
-mod frontend;
-mod internal;
 mod runtime;
-mod util;
-
 use std::process::ExitCode;
 
 fn main() -> ExitCode {

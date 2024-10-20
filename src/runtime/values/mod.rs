@@ -4,7 +4,7 @@ use super::{
     env::{RefEnvironment, FALSE_KEYWORD, NOTHING_KEYWORD, NULL_KEYWORD, TRUE_KEYWORD},
     Stack,
 };
-use crate::{frontend::ast::Node, internal::ErrorNames};
+use parser::{ast::Node, internal::ErrorNames};
 
 pub mod primitive;
 pub use primitive::*;
@@ -347,6 +347,7 @@ impl AgalValuable for AgalValue {
                 let v = (f.func)(arguments);
                 v
             }
+            AgalValue::Class(c) => c.call(stack, env, this, arguments),
             _ => {
                 let message = format!("No se puede llamar a {}", self.get_type());
                 AgalValue::Throw(AgalThrow::Params {
@@ -364,7 +365,7 @@ impl AgalValuable for AgalValue {
 impl std::fmt::Display for AgalValue {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            AgalValue::Class(c) => write!(f, "clase <nombrada>"),
+            AgalValue::Class(_c) => write!(f, "Clase"),
             AgalValue::Error(_e) => write!(f, "Error"),
             AgalValue::Char(c) => write!(f, "{}", c.to_char()),
             AgalValue::Number(n) => write!(f, "{}", n.to_f64()),
@@ -399,9 +400,9 @@ impl std::fmt::Display for AgalValue {
                 }
                 let proto = o.get_prototype();
                 if let Some(proto) = proto {
-                    let proto: &HashMap<String, RefAgalValue> = &proto;
-                    for (key, value) in proto {
-                        let value: &AgalValue = &value.as_ref().borrow();
+                    let proto: &HashMap<String, AgalClassProperty> = &proto;
+                    for (key, prop) in proto {
+                        let value: &AgalValue = &prop.value.as_ref().borrow();
                         data.push_str(&format!("{}: {},\n", key, value).replace("\n", "\n  "));
                     }
                 }

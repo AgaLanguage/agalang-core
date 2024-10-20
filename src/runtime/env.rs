@@ -5,7 +5,7 @@ use std::{
 };
 
 use super::{AgalBoolean, AgalThrow::Params, AgalValue, RefAgalValue, Stack};
-use crate::{frontend::ast::Node, internal::ErrorNames};
+use parser::{ast::Node, internal::ErrorNames};
 
 pub type RefEnvironment = Rc<RefCell<Environment>>;
 

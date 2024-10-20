@@ -1,4 +1,4 @@
-use crate::frontend::ast::Node;
+use parser::ast::Node;
 
 #[derive(Clone, PartialEq)]
 pub struct Stack {

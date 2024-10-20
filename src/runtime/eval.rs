@@ -1,7 +1,10 @@
 use std::rc::Rc;
 
 use super::{env::RefEnvironment, AgalValue, RefAgalValue, Stack};
-use crate::{frontend, internal, runtime};
+use parser as frontend;
+use parser::internal;
+
+use crate::runtime;
 
 type EvalResult = Result<RefAgalValue, ()>;
 

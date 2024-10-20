@@ -59,7 +59,7 @@ impl AgalValuable for AgalBoolean {
                     "!=" => AgalBoolean::new(self.0 != other.0),
                     _ => {
                         return AgalValue::Throw(AgalThrow::Params {
-                            type_error: crate::internal::ErrorNames::TypeError,
+                            type_error: parser::internal::ErrorNames::TypeError,
                             message: format!("Operador {} no soportado", operator),
                             stack: Box::new(stack.clone()),
                         })
@@ -69,7 +69,7 @@ impl AgalValuable for AgalBoolean {
                 AgalValue::Boolean(boolean).as_ref()
             }
             _ => AgalValue::Throw(AgalThrow::Params {
-                type_error: crate::internal::ErrorNames::TypeError,
+                type_error: parser::internal::ErrorNames::TypeError,
                 message: "No se puede operar con un valor no booleano".to_string(),
                 stack: Box::new(stack.clone()),
             })

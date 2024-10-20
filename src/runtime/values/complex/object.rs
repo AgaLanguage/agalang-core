@@ -1,29 +1,34 @@
 use std::{
-  cell::{Ref, RefCell},
-  rc::Rc,
+  cell::{Ref, RefCell}, collections::HashMap, rc::Rc
 };
 
 use crate::runtime::{env::RefEnvironment, get_instance_property_error, AgalString, AgalThrow, AgalValuable, AgalValue, RefAgalValue, Stack};
 
-pub type AgalHashMap = std::collections::HashMap<String, RefAgalValue>;
-pub type RefAgalHashMap = Rc<RefCell<AgalHashMap>>;
+use super::{AgalClassProperty, RefHasMap};
+
+pub type AgalHashMap<Value> = std::collections::HashMap<String, Value>;
+pub type RefAgalHashMap = Rc<RefCell<AgalHashMap<RefAgalValue>>>;
 
 #[derive(Clone, PartialEq)]
-pub struct AgalObject(RefAgalHashMap, Option<RefAgalHashMap>);
+#[allow(dead_code)]
+pub struct AgalObject(RefAgalHashMap, Option<RefHasMap<AgalClassProperty>>);
 impl AgalObject {
-    pub fn from_hashmap(hashmap: AgalHashMap) -> AgalObject {
-        AgalObject(Rc::new(RefCell::new(hashmap)), None)
+    pub fn from_hashmap(hashmap: RefAgalHashMap) -> AgalObject {
+        AgalObject(hashmap, None)
     }
-    pub fn from_hashmap_with_prototype(hashmap: AgalHashMap, prototype: AgalHashMap) -> AgalObject {
+    pub fn from_hashmap_with_prototype(hashmap: RefAgalHashMap, prototype: RefHasMap<AgalClassProperty>) -> AgalObject {
         AgalObject(
-            Rc::new(RefCell::new(hashmap)),
-            Some(Rc::new(RefCell::new(prototype))),
+            hashmap,
+            Some(prototype),
         )
     }
-    pub fn get_hashmap(&self) -> Ref<AgalHashMap> {
+    pub fn from_prototype(hashmap: RefHasMap<AgalClassProperty>) -> AgalObject {
+        AgalObject(Rc::new(RefCell::new(HashMap::new())), Some(hashmap))
+    }
+    pub fn get_hashmap(&self) -> Ref<AgalHashMap<RefAgalValue>> {
         self.0.as_ref().borrow()
     }
-    pub fn get_prototype(&self) -> Option<Ref<AgalHashMap>> {
+    pub fn get_prototype(&self) -> Option<Ref<AgalHashMap<AgalClassProperty>>> {
         if self.1.is_none() {
             return None;
         }
@@ -72,6 +77,6 @@ impl AgalValuable for AgalObject {
         if value.is_none() {
             return AgalValue::Never.as_ref();
         }
-        value.unwrap().clone()
+        value.unwrap().clone().value
     }
 }

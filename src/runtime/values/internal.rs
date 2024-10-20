@@ -1,7 +1,8 @@
 use std::{cell::RefCell, rc::Rc};
 
 use super::{get_instance_property_error, AgalString, AgalValuable};
-use crate::{internal::ErrorNames, runtime::{env::RefEnvironment, AgalError, AgalValue, RefAgalValue, Stack}};
+use crate::runtime::{env::RefEnvironment, AgalError, AgalValue, RefAgalValue, Stack};
+use parser::internal::ErrorNames;
 
 #[derive(Clone, PartialEq)]
 pub enum AgalThrow {
@@ -13,7 +14,11 @@ pub enum AgalThrow {
     Error(AgalError),
 }
 impl AgalThrow {
-    pub fn from_ref_value<T: AgalValuable>(v: Rc<RefCell<T>>, stack: Box<Stack>, env: RefEnvironment) -> AgalThrow {
+    pub fn from_ref_value<T: AgalValuable>(
+        v: Rc<RefCell<T>>,
+        stack: Box<Stack>,
+        env: RefEnvironment,
+    ) -> AgalThrow {
         let str = v.borrow().clone().to_agal_console(stack.as_ref(), env);
         if str.is_err() {
             return str.err().unwrap();
@@ -28,7 +33,11 @@ impl AgalThrow {
     }
     pub fn get_error(&self) -> AgalError {
         match self {
-            AgalThrow::Params { type_error, message, stack } => AgalError::new(type_error.clone(), message.clone(), stack.clone()),
+            AgalThrow::Params {
+                type_error,
+                message,
+                stack,
+            } => AgalError::new(type_error.clone(), message.clone(), stack.clone()),
             AgalThrow::Error(e) => e.clone(),
         }
     }
@@ -38,7 +47,13 @@ impl AgalValuable for AgalThrow {
     fn to_value(self) -> AgalValue {
         AgalValue::Throw(self)
     }
-    fn call(self, _: &Stack, _: RefEnvironment, _: RefAgalValue, _: Vec<RefAgalValue>) -> RefAgalValue {
+    fn call(
+        self,
+        _: &Stack,
+        _: RefEnvironment,
+        _: RefAgalValue,
+        _: Vec<RefAgalValue>,
+    ) -> RefAgalValue {
         AgalValue::Throw(self).as_ref()
     }
     fn get_instance_property(self, _: &Stack, _: RefEnvironment, _: String) -> RefAgalValue {
@@ -49,7 +64,11 @@ impl AgalValuable for AgalThrow {
 impl std::fmt::Display for AgalThrow {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            AgalThrow::Params { type_error, message, stack } => {
+            AgalThrow::Params {
+                type_error,
+                message,
+                stack,
+            } => {
                 write!(f, "{}: {}\n{}", type_error, message, stack)
             }
             AgalThrow::Error(_) => write!(f, "Error"),
@@ -74,9 +93,17 @@ impl AgalValuable for AgalNativeFunction {
         AgalValue::NativeFunction(self)
     }
     fn to_agal_string(self, _: &Stack, _: RefEnvironment) -> Result<AgalString, AgalThrow> {
-        Ok(AgalString::from_string(format!("<Funcion nativa {}>", self.name)))
+        Ok(AgalString::from_string(format!(
+            "<Funcion nativa {}>",
+            self.name
+        )))
     }
-    fn get_instance_property(self, stack: &Stack, env: RefEnvironment, key: String) -> RefAgalValue {
+    fn get_instance_property(
+        self,
+        stack: &Stack,
+        env: RefEnvironment,
+        key: String,
+    ) -> RefAgalValue {
         get_instance_property_error(stack, env, key, self.to_value())
     }
 }

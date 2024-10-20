@@ -48,7 +48,7 @@ impl AgalValuable for AgalNumber {
             (AgalValue::Number(other), "/") => {
                 if other.0 == 0f64 {
                     return AgalThrow::Params {
-                        type_error: crate::internal::ErrorNames::MathError,
+                        type_error: parser::internal::ErrorNames::MathError,
                         message: "No se puede dividir por cero".to_string(),
                         stack: Box::new(stack.clone()),
                     }
@@ -59,7 +59,7 @@ impl AgalValuable for AgalNumber {
             (AgalValue::Number(other), "%") => {
                 if other.0 == 0f64 {
                     return AgalThrow::Params {
-                        type_error: crate::internal::ErrorNames::MathError,
+                        type_error: parser::internal::ErrorNames::MathError,
                         message: "No se puede dividir por cero".to_string(),
                         stack: Box::new(stack.clone()),
                     }
@@ -81,7 +81,7 @@ impl AgalValuable for AgalNumber {
             }
 
             _ => AgalThrow::Params {
-                type_error: crate::internal::ErrorNames::TypeError,
+                type_error: parser::internal::ErrorNames::TypeError,
                 message: "No se puede operar con un valor no numerico".to_string(),
                 stack: Box::new(stack.clone()),
             }
@@ -156,7 +156,7 @@ impl AgalValuable for AgalNumber {
 
     fn to_agal_array(self, stack: &Stack) -> Result<AgalArray, AgalThrow> {
         Err(AgalThrow::Params {
-            type_error: crate::internal::ErrorNames::CustomError("Error Iterable"),
+            type_error: parser::internal::ErrorNames::CustomError("Error Iterable"),
             message: "El valor no es iterable".to_string(),
             stack: Box::new(stack.clone()),
         })
