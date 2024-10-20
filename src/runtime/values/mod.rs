@@ -368,7 +368,7 @@ impl std::fmt::Display for AgalValue {
             AgalValue::Class(_c) => write!(f, "Clase"),
             AgalValue::Error(_e) => write!(f, "Error"),
             AgalValue::Char(c) => write!(f, "{}", c.to_char()),
-            AgalValue::Number(n) => write!(f, "{}", n.to_f64()),
+            AgalValue::Number(n) => write!(f, "{}", n.to_number()),
             AgalValue::String(s) => write!(f, "'{}'", s.get_string()),
             AgalValue::Boolean(b) => write!(
                 f,

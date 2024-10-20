@@ -6,13 +6,15 @@ use crate::runtime::{
 
 use super::{AgalBoolean, AgalString};
 
+type BinNumber = f64;
+
 #[derive(Clone, Copy, PartialEq, PartialOrd)]
-pub struct AgalNumber(f64);
+pub struct AgalNumber(BinNumber);
 impl AgalNumber {
-    pub fn new(value: f64) -> AgalNumber {
+    pub fn new(value: BinNumber) -> AgalNumber {
         AgalNumber(value)
     }
-    pub fn to_f64(&self) -> f64 {
+    pub fn to_number(&self) -> BinNumber {
         self.0
     }
     pub fn multiply(&self, other: AgalNumber) -> AgalNumber {
