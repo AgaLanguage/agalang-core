@@ -138,7 +138,7 @@ impl AgalValuable for AgalError {
         let mut stack = String::new();
         let stack_vec = self.stack.iter();
         for (i, frame) in stack_vec.iter().enumerate() {
-            stack.push_str(&format!("{}:{}", frame.get_file(), frame.get_line()));
+            stack.push_str(&format!("{}:{}", frame.get_file(), frame.get_location().start.line));
             if i < stack_vec.len() - 1 {
                 stack.push_str(" -> ");
             }
