@@ -4,8 +4,7 @@ use parser::{
 };
 
 use crate::runtime::{
-    env::{RefEnvironment, THIS_KEYWORD},
-    get_instance_property_error, interpreter, AgalValuable, AgalValue, RefAgalValue, Stack,
+    env::{RefEnvironment, THIS_KEYWORD}, get_instance_property_error, interpreter, AgalString, AgalThrow, AgalValuable, AgalValue, RefAgalValue, Stack
 };
 
 #[derive(Clone, PartialEq)]
@@ -23,6 +22,9 @@ impl AgalFunction {
 impl AgalValuable for AgalFunction {
     fn to_value(self) -> crate::runtime::AgalValue {
         crate::runtime::AgalValue::Function(self)
+    }
+    fn to_agal_console(self, _: &Stack, _: RefEnvironment) -> Result<AgalString, AgalThrow> {
+        Ok(AgalString::from_string("\x1b[36m<Funcion>\x1b[39m".to_string()))
     }
     fn get_instance_property(
         self,

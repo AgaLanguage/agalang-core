@@ -1,7 +1,7 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use super::AgalObject;
-use crate::runtime::{env::RefEnvironment, AgalValuable, AgalValue, RefAgalValue, Stack};
+use crate::runtime::{env::RefEnvironment, AgalString, AgalThrow, AgalValuable, AgalValue, RefAgalValue, Stack};
 use parser::util::{OpRefValue, RefValue};
 pub type RefHasMap<Value> = Rc<RefCell<HashMap<String, Value>>>;
 
@@ -75,6 +75,12 @@ impl AgalClass {
 impl AgalValuable for AgalClass {
     fn to_value(self) -> AgalValue {
         AgalValue::Class(self)
+    }
+    fn to_agal_console(self, _: &Stack, _: RefEnvironment) -> Result<AgalString, AgalThrow> {
+        Ok(AgalString::from_string(format!(
+            "\x1b[36m<clase {}>\x1b[39m",
+            self.name
+        )))
     }
     fn get_instance_property(
         self,

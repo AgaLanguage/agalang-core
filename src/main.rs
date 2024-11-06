@@ -1,4 +1,5 @@
 mod runtime;
+mod modules;
 use std::process::ExitCode;
 
 fn main() -> ExitCode {
@@ -16,7 +17,6 @@ fn main() -> ExitCode {
     }
     let value = program.ok().unwrap();
     let value = value.borrow_mut();
-    println!("{}", value);
     return ExitCode::SUCCESS;
 }
 fn file() -> Option<String> {

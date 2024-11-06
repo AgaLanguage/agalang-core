@@ -1,4 +1,5 @@
-exportar fn hola() {
-  ret "Hola";
+exportar clase Nombre {
 }
-exportar const mundo = "Mundo";
+exportar fn Hola(){
+    ret 3;
+}

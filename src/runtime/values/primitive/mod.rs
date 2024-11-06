@@ -89,7 +89,7 @@ impl AgalValuable for AgalBoolean {
     }
     fn to_agal_console(self, _: &Stack, _: RefEnvironment) -> Result<AgalString, AgalThrow> {
         Ok(AgalString::from_string(format!(
-            "\x1b[33{}\x1b[39",
+            "\x1b[33m{}\x1b[39m",
             bool_to_str(self.0)
         )))
     }

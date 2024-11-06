@@ -359,7 +359,9 @@ pub fn interpreter(node: &Node, stack: &Stack, env: Rc<RefCell<Environment>>) ->
             }
         }
         Node::Import(import) => {
-            let module = full_eval(import.path.clone(), &stack, env.borrow().get_global());
+            let module = if import.path.starts_with('>') {
+                crate::modules::get_module(&import.path)
+            } else {full_eval(import.path.clone(), &stack, env.borrow().get_global())};
             if module.is_err() {
                 return AgalValue::Never.as_ref();
             }

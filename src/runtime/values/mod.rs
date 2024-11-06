@@ -236,6 +236,28 @@ impl AgalValuable for AgalValue {
             }),
         }
     }
+    fn to_agal_console(self, stack: &Stack, env: RefEnvironment) -> Result<AgalString, AgalThrow> {
+        match self {
+            AgalValue::Array(a)=>a.to_agal_console(stack, env),
+            AgalValue::Boolean(b)=>b.to_agal_console(stack, env),
+            AgalValue::Byte(b)=>b.to_agal_console(stack, env),
+            AgalValue::Char(c)=>c.to_agal_console(stack, env),
+            AgalValue::Class(c)=>c.to_agal_console(stack, env),
+            AgalValue::Error(e)=>e.to_agal_console(stack, env),
+            AgalValue::Number(n)=>n.to_agal_console(stack, env),
+            AgalValue::Object(o)=>o.to_agal_console(stack, env),
+            AgalValue::Function(f)=>f.to_agal_console(stack, env),
+            AgalValue::NativeFunction(n)=>n.to_agal_console(stack, env),
+            AgalValue::String(s)=>s.to_agal_console(stack, env),
+            AgalValue::Null=>Ok(AgalString::from_string("\x1b[97mnulo\x1b[39m".to_string())),
+            _=>Ok(AgalString::from_string("\x1b[90mnada\x1b[39m".to_string())),
+        }
+    }    fn to_agal_value(self, stack: &Stack, env: RefEnvironment) -> Result<AgalString, AgalThrow> {
+        match self {
+            AgalValue::String(s)=>s.to_agal_value(stack, env),
+            _=>self.to_agal_console(stack, env),
+        }
+    }
     fn get_instance_property(
         self,
         stack: &Stack,
@@ -344,7 +366,7 @@ impl AgalValuable for AgalValue {
             AgalValue::Object(o) => o.call(stack, env, this, arguments),
             AgalValue::Function(f) => f.call(stack, env, this, arguments),
             AgalValue::NativeFunction(f) => {
-                let v = (f.func)(arguments);
+                let v = (f.func)(arguments, stack, env);
                 v
             }
             AgalValue::Class(c) => c.call(stack, env, this, arguments),
@@ -472,16 +494,7 @@ where
     fn to_agal_value(self, stack: &Stack, env: RefEnvironment) -> Result<AgalString, AgalThrow> {
         self.to_agal_console(stack, env)
     }
-    fn to_agal_console(self, stack: &Stack, env: RefEnvironment) -> Result<AgalString, AgalThrow> {
-        let value = self.to_agal_string(stack, env);
-        if value.is_err() {
-            return value;
-        }
-        let value = value.ok().unwrap();
-        let str = value.get_string();
-        let data = format!("\x1b[36m{}\x1b[39m", str);
-        Ok(AgalString::from_string(data))
-    }
+    fn to_agal_console(self, stack: &Stack, env: RefEnvironment) -> Result<AgalString, AgalThrow>;
 
     fn binary_operation(
         &self,
@@ -582,7 +595,7 @@ pub fn get_instance_property_error(
             let function = {
                 let e_stack = Rc::clone(&rc_stack);
                 let e_env = Rc::clone(&env);
-                move |_: Vec<RefAgalValue>| -> RefAgalValue {
+                move |_: Vec<RefAgalValue>, _:&Stack, _:RefEnvironment| -> RefAgalValue {
                     let data = get_instance_property_value(
                         e_stack.clone(),
                         e_env.clone(),
@@ -604,7 +617,7 @@ pub fn get_instance_property_error(
             let function = {
                 let e_stack = Rc::clone(&rc_stack);
                 let e_env = Rc::clone(&env);
-                move |_: Vec<RefAgalValue>| -> RefAgalValue {
+                move |_: Vec<RefAgalValue>, _:&Stack, _:RefEnvironment| -> RefAgalValue {
                     let data = get_instance_property_value(
                         e_stack.clone(),
                         e_env.clone(),
@@ -626,7 +639,7 @@ pub fn get_instance_property_error(
             let function = {
                 let e_stack = Rc::clone(&rc_stack);
                 let e_env = Rc::clone(&env);
-                move |_: Vec<RefAgalValue>| -> RefAgalValue {
+                move |_: Vec<RefAgalValue>, _:&Stack, _:RefEnvironment| -> RefAgalValue {
                     let data = get_instance_property_value(
                         e_stack.clone(),
                         e_env.clone(),
@@ -648,7 +661,7 @@ pub fn get_instance_property_error(
             let function = {
                 let e_stack = Rc::clone(&rc_stack);
                 let e_env = Rc::clone(&env);
-                move |_: Vec<RefAgalValue>| -> RefAgalValue {
+                move |_: Vec<RefAgalValue>, _:&Stack, _:RefEnvironment| -> RefAgalValue {
                     let data = get_instance_property_value(
                         e_stack.clone(),
                         e_env.clone(),
@@ -670,7 +683,7 @@ pub fn get_instance_property_error(
             let function = {
                 let e_stack = Rc::clone(&rc_stack);
                 let e_env = Rc::clone(&env);
-                move |_: Vec<RefAgalValue>| -> RefAgalValue {
+                move |_: Vec<RefAgalValue>, _:&Stack, _:RefEnvironment| -> RefAgalValue {
                     let data = get_instance_property_value(
                         e_stack.clone(),
                         e_env.clone(),

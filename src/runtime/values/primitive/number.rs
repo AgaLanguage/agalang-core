@@ -116,7 +116,7 @@ impl AgalValuable for AgalNumber {
         Ok(AgalString::from_string(self.0.to_string()))
     }
     fn to_agal_console(self, _: &Stack, _: RefEnvironment) -> Result<AgalString, AgalThrow> {
-        Ok(AgalString::from_string(format!("\x1b[33{}\x1b[39", self.0)))
+        Ok(AgalString::from_string(format!("\x1b[33m{}\x1b[39m", self.0)))
     }
     fn get_instance_property(
         self,
@@ -162,10 +162,6 @@ impl AgalValuable for AgalNumber {
             message: "El valor no es iterable".to_string(),
             stack: Box::new(stack.clone()),
         })
-    }
-
-    fn to_agal_value(self, stack: &Stack, env: RefEnvironment) -> Result<AgalString, AgalThrow> {
-        self.to_agal_console(stack, env)
     }
 
     fn get_object_property(self, stack: &Stack, env: RefEnvironment, key: String) -> RefAgalValue {

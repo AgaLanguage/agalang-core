@@ -59,6 +59,9 @@ impl AgalValuable for AgalThrow {
     fn get_instance_property(self, _: &Stack, _: RefEnvironment, _: String) -> RefAgalValue {
         AgalValue::Throw(self).as_ref()
     }
+    fn to_agal_console(self, stack: &Stack, env: RefEnvironment) -> Result<AgalString, AgalThrow> {
+        self.to_agal_string(stack, env)
+    }
 }
 
 impl std::fmt::Display for AgalThrow {
@@ -78,7 +81,7 @@ impl std::fmt::Display for AgalThrow {
 
 pub struct AgalNativeFunction {
     pub name: String,
-    pub func: Rc<dyn Fn(Vec<RefAgalValue>) -> RefAgalValue>,
+    pub func: Rc<dyn Fn(Vec<RefAgalValue>, &Stack, RefEnvironment) -> RefAgalValue>,
 }
 impl Clone for AgalNativeFunction {
     fn clone(&self) -> Self {
@@ -95,6 +98,12 @@ impl AgalValuable for AgalNativeFunction {
     fn to_agal_string(self, _: &Stack, _: RefEnvironment) -> Result<AgalString, AgalThrow> {
         Ok(AgalString::from_string(format!(
             "<Funcion nativa {}>",
+            self.name
+        )))
+    }
+    fn to_agal_console(self, _: &Stack, _: RefEnvironment) -> Result<AgalString, AgalThrow> {
+        Ok(AgalString::from_string(format!(
+            "\x1b[36m<Funcion nativa {}>\x1b[39m",
             self.name
         )))
     }

@@ -1,8 +1,8 @@
 use crate::runtime::{
-    binary_operation_error, env::RefEnvironment, get_instance_property_error, unary_operation_error, AgalArray, AgalValuable, AgalValue, RefAgalValue, Stack
+    binary_operation_error, env::RefEnvironment, get_instance_property_error, unary_operation_error, AgalArray, AgalThrow, AgalValuable, AgalValue, RefAgalValue, Stack
 };
 
-use super::AgalBoolean;
+use super::{AgalBoolean,AgalString};
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct AgalByte(u8, bool);
@@ -17,6 +17,9 @@ impl AgalByte {
 impl AgalValuable for AgalByte {
     fn to_value(self) -> AgalValue {
         AgalValue::Byte(self)
+    }
+    fn to_agal_console(self, _: &Stack, _: RefEnvironment) -> Result<AgalString, AgalThrow> {
+        Ok(AgalString::from_string(format!("\x1b[94m0by{:08b}\x1b[39m", self.0)))
     }
     fn binary_operation(
         &self,

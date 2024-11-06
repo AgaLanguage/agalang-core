@@ -33,7 +33,7 @@ impl AgalValuable for AgalArray {
     }
     fn to_agal_console(self, stack: &Stack, env: RefEnvironment) -> Result<AgalString, AgalThrow> {
         let mut result = String::new();
-        for value in self.0.iter() {
+        for (i, value) in self.0.iter().enumerate() {
             let str = value
                 .as_ref()
                 .borrow()
@@ -44,9 +44,12 @@ impl AgalValuable for AgalArray {
             }
             let str = str.ok().unwrap();
             let str = str.get_string();
-            result.push_str(&str);
+            let str = if i == 0 {str} else {
+                &format!(", {str}")
+            };
+            result.push_str(str);
         }
-        Ok(AgalString::from_string(result))
+        Ok(AgalString::from_string(format!("[ {result} ]")))
     }
     fn to_agal_array(self, _: &Stack) -> Result<AgalArray, AgalThrow> {
         Ok(self)

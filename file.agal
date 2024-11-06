@@ -1,5 +1,3 @@
-exportar clase Nombre {
-}
-exportar fn Hola(){
-    ret 3;
-}
+importar '>pintar' como pintar;
+importar './mod.agal' como mod;
+pintar('Hola', 0by10101010, 3, ["\nMundo", pintar], mod::Hola, mod::Nombre, { importar:'adrian'}, nulo, nada);
