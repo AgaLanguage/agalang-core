@@ -110,6 +110,7 @@ pub fn interpreter(node: &Node, stack: &Stack, env: Rc<RefCell<Environment>>) ->
             let mut args = vec![];
             for arg in call.arguments.iter() {
                 let arg = interpreter(arg, &stack, env.clone());
+                if arg.borrow().is_throw(){return arg}
                 args.push(arg);
             }
             callee

@@ -12,8 +12,8 @@ mod object;
 pub use object::*;
 
 use super::{
-    get_instance_property_error, get_property_error, AgalThrow, AgalValuable, AgalValue,
-    RefAgalValue,
+    get_instance_property_error, get_property_error, AgalNumber, AgalThrow, AgalValuable,
+    AgalValue, RefAgalValue,
 };
 
 pub type AgalVec = Vec<Rc<RefCell<AgalValue>>>;
@@ -44,9 +44,7 @@ impl AgalValuable for AgalArray {
             }
             let str = str.ok().unwrap();
             let str = str.get_string();
-            let str = if i == 0 {str} else {
-                &format!(", {str}")
-            };
+            let str = if i == 0 { str } else { &format!(", {str}") };
             result.push_str(str);
         }
         Ok(AgalString::from_string(format!("[ {result} ]")))
@@ -79,8 +77,51 @@ impl AgalValuable for AgalArray {
         env: RefEnvironment,
         key: String,
     ) -> RefAgalValue {
-        let value = AgalValue::Array(self);
-        get_instance_property_error(stack, env, key, value)
+        match key.as_str() {
+            "unir" => {
+                let function =
+                    move |args: Vec<RefAgalValue>, stack: &Stack, env: RefEnvironment| {
+                        let sep = args.get(0);
+                        let sep = if let Some(s) = sep {
+                            s.borrow().clone()
+                        } else {
+                            AgalValue::Never
+                        };
+                        let sep = sep.to_agal_string(stack, env.clone());
+                        let sep = if let Ok(s) = &sep {
+                            s.get_string()
+                        } else if let Err(e) = sep {
+                            return e.to_ref_value();
+                        } else {
+                            ""
+                        };
+                        let mut result = String::new();
+                        for (i, value) in self.0.iter().enumerate() {
+                            let data = value.borrow().clone().to_agal_string(stack, env.clone());
+                            let str = if let Ok(s) = &data {
+                                s.get_string()
+                            } else if let Err(e) = data {
+                                return e.to_ref_value();
+                            } else {
+                                ""
+                            };
+                            if i > 0 {
+                                result.push_str(sep);
+                            }
+                            result.push_str(str);
+                        }
+                        AgalString::from_string(result).to_ref_value()
+                    };
+                let func = Rc::new(function);
+                AgalValue::NativeFunction(crate::runtime::AgalNativeFunction {
+                    name: "unir".to_string(),
+                    func,
+                })
+                .as_ref()
+            }
+            "largo" => AgalNumber::new(self.get_length() as f64).to_ref_value(),
+            _ => get_instance_property_error(stack, env, key, self.to_value()),
+        }
     }
     fn get_object_property(self, stack: &Stack, env: RefEnvironment, key: String) -> RefAgalValue {
         let int = key.parse::<usize>();
@@ -141,7 +182,11 @@ impl AgalValuable for AgalError {
         let mut stack = String::new();
         let stack_vec = self.stack.iter();
         for (i, frame) in stack_vec.iter().enumerate() {
-            stack.push_str(&format!("{}:{}", frame.get_file(), frame.get_location().start.line));
+            stack.push_str(&format!(
+                "{}:{}",
+                frame.get_file(),
+                frame.get_location().start.line
+            ));
             if i < stack_vec.len() - 1 {
                 stack.push_str(" -> ");
             }

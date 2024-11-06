@@ -19,15 +19,8 @@ impl AgalString {
     pub fn get_string(&self) -> &String {
         &self.0
     }
-    pub fn string_to_array(value: AgalString) -> AgalArray {
-        let vec = value.get_string().clone();
-        let mut new_vec: Vec<RefAgalValue> = vec![];
-
-        for c in vec.chars() {
-            let i = AgalValue::Char(AgalChar::new(c)).as_ref();
-            new_vec.push(i);
-        }
-        AgalArray::from_vec(new_vec)
+    pub fn string_to_array(value: &AgalString) -> AgalArray {
+        get_chars(value)
     }
 }
 impl AgalValuable for AgalString {
@@ -38,7 +31,7 @@ impl AgalValuable for AgalString {
         Ok(AgalString::from_string(format!("{}", self.0)))
     }
     fn to_agal_array(self, _: &Stack) -> Result<AgalArray, AgalThrow> {
-        Ok(AgalString::string_to_array(self))
+        Ok(AgalString::string_to_array(&self))
     }
     fn to_agal_value(self, _: &Stack, _: RefEnvironment) -> Result<AgalString, AgalThrow> {
         Ok(AgalString::from_string(format!(
@@ -170,7 +163,7 @@ impl AgalValuable for AgalChar {
     }
     fn to_agal_console(self, _: &Stack, _: RefEnvironment) -> Result<AgalString, AgalThrow> {
         Ok(AgalString::from_string(format!(
-            "\x1b[32m'{}'\x1b[39m",
+            "\x1b[34m'{}'\x1b[39m",
             match self.0 {
                 '\n' => "\\n".to_string(),
                 '\r' => "\\r".to_string(),
