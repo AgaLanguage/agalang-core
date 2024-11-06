@@ -15,8 +15,6 @@ fn main() -> ExitCode {
     if program.is_err() {
         return ExitCode::FAILURE;
     }
-    let value = program.ok().unwrap();
-    let value = value.borrow_mut();
     return ExitCode::SUCCESS;
 }
 fn file() -> Option<String> {
