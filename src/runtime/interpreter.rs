@@ -66,7 +66,7 @@ pub fn interpreter(node: &Node, stack: &Stack, env: Rc<RefCell<Environment>>) ->
                         if member.member.is_identifier() {
                             member.member.get_identifier().unwrap().name.clone()
                         } else {
-                            // [x] No deberia ser posible llegar a este punto
+                            // No deberia ser posible llegar a este punto
                             return AgalValue::Throw(AgalThrow::Params {
                                 type_error: ErrorNames::TypeError,
                                 message: "No se puede asignar a un objeto no identificado"
@@ -381,7 +381,7 @@ pub fn interpreter(node: &Node, stack: &Stack, env: Rc<RefCell<Environment>>) ->
                 let key = if !member.computed && member.member.is_identifier() {
                     member.member.get_identifier().unwrap().name.clone()
                 } else {
-                    // [x] No deberia ser posible llegar a este punto
+                    // No deberia ser posible llegar a este punto
                     return AgalValue::Throw(AgalThrow::Params {
                         type_error: ErrorNames::TypeError,
                         message: "No se puede obtener la propiedad".to_string(),
@@ -400,7 +400,7 @@ pub fn interpreter(node: &Node, stack: &Stack, env: Rc<RefCell<Environment>>) ->
                     if member.member.is_identifier() {
                         member.member.get_identifier().unwrap().name.clone()
                     } else {
-                        // [x] No deberia ser posible llegar a este punto
+                        // No deberia ser posible llegar a este punto
                         return AgalValue::Throw(AgalThrow::Params {
                             type_error: ErrorNames::TypeError,
                             message: "No se puede asignar a un objeto no identificado".to_string(),
