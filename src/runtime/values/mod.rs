@@ -1,4 +1,4 @@
-use std::{borrow::Borrow, cell::RefCell, collections::HashMap, rc::Rc};
+use std::{borrow::Borrow, cell::RefCell, rc::Rc};
 
 use super::{
     env::{RefEnvironment, FALSE_KEYWORD, NOTHING_KEYWORD, NULL_KEYWORD, TRUE_KEYWORD},
@@ -378,68 +378,6 @@ impl AgalValuable for AgalValue {
                     stack: Box::new(stack.clone()),
                 })
                 .as_ref()
-            }
-        }
-    }
-}
-
-// TODO: Delete
-impl std::fmt::Display for AgalValue {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            AgalValue::Class(_c) => write!(f, "Clase"),
-            AgalValue::Error(_e) => write!(f, "Error"),
-            AgalValue::Char(c) => write!(f, "{}", c.to_char()),
-            AgalValue::Number(n) => write!(f, "{}", n.to_number()),
-            AgalValue::String(s) => write!(f, "'{}'", s.get_string()),
-            AgalValue::Boolean(b) => write!(
-                f,
-                "{}",
-                if b.to_bool() {
-                    TRUE_KEYWORD
-                } else {
-                    FALSE_KEYWORD
-                }
-            ),
-            AgalValue::Byte(b) => {
-                let data = b.to_u8();
-                write!(f, "{data:08b}")
-            }
-            AgalValue::Null => write!(f, "nulo"),
-            AgalValue::Never => write!(f, "nada"),
-            AgalValue::Break => write!(f, "romper"),
-            AgalValue::Continue => write!(f, "continuar"),
-            AgalValue::Throw(t) => write!(f, "{}", t),
-            AgalValue::Function(_) => write!(f, "Funcion"),
-            AgalValue::Array(_) => write!(f, "[..]"),
-            AgalValue::Object(o) => {
-                let mut data = String::new();
-                data.push('{');
-                data.push_str("\n  ");
-                for (key, value) in o.get_hashmap().clone() {
-                    let value: &AgalValue = &value.as_ref().borrow();
-                    data.push_str(&format!("['{}']: {},\n", key, value).replace("\n", "\n  "));
-                }
-                let proto = o.get_prototype();
-                if let Some(proto) = proto {
-                    let proto: &HashMap<String, AgalClassProperty> = &proto;
-                    for (key, prop) in proto {
-                        let value: &AgalValue = &prop.value.as_ref().borrow();
-                        data.push_str(&format!("{}: {},\n", key, value).replace("\n", "\n  "));
-                    }
-                }
-                data.push_str("\0}");
-                write!(
-                    f,
-                    "{}",
-                    data.replace(",\n  \0}", "\n  \0}")
-                        .replace("\n  \0}", "\n}")
-                )
-            }
-            AgalValue::NativeFunction(_) => write!(f, "Funcion nativa"),
-            AgalValue::Return(r) => write!(f, "Retorno: {}", r.as_ref().borrow()),
-            AgalValue::Export(name, value) => {
-                write!(f, "Exportar {}: {}", name, value.as_ref().borrow())
             }
         }
     }

@@ -154,18 +154,6 @@ impl Environment {
         return self.clone().as_ref();
     }
 }
-impl std::fmt::Display for Environment {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let mut output = String::new();
-        for (name, value) in &self.variables {
-            output.push_str(&format!("{}: {};\n", name, value.borrow()));
-        }
-        if self.parent.is_some() {
-            output.push_str(&format!("{}", self.parent.clone().unwrap().borrow()));
-        }
-        write!(f, "{}", output)
-    }
-}
 pub fn get_default() -> Environment {
     let mut env = Environment {
         in_class: false,
