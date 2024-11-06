@@ -1,3 +1,4 @@
+#![allow(warnings)]
 mod runtime;
 mod modules;
 use std::process::ExitCode;
