@@ -62,19 +62,8 @@ pub fn interpreter(node: &Node, stack: &Stack, env: Rc<RefCell<Environment>>) ->
                         })
                         .as_ref();
                     }
-                    let key = if !member.computed {
-                        if member.member.is_identifier() {
-                            member.member.get_identifier().unwrap().name.clone()
-                        } else {
-                            // No deberia ser posible llegar a este punto
-                            return AgalValue::Throw(AgalThrow::Params {
-                                type_error: ErrorNames::TypeError,
-                                message: "No se puede asignar a un objeto no identificado"
-                                    .to_string(),
-                                stack: Box::new(stack),
-                            })
-                            .as_ref();
-                        }
+                    let key = if !member.computed && member.member.is_identifier(){
+                        member.member.get_identifier().unwrap().name.clone()
                     } else {
                         let key = interpreter(&member.member, &stack, env.clone());
                         let key = key.borrow().clone().to_agal_string(&stack, env.clone());
@@ -382,12 +371,12 @@ pub fn interpreter(node: &Node, stack: &Stack, env: Rc<RefCell<Environment>>) ->
                     member.member.get_identifier().unwrap().name.clone()
                 } else {
                     // No deberia ser posible llegar a este punto
-                    return AgalValue::Throw(AgalThrow::Params {
-                        type_error: ErrorNames::TypeError,
-                        message: "No se puede obtener la propiedad".to_string(),
-                        stack: Box::new(stack),
-                    })
-                    .as_ref();
+                    let key = interpreter(&member.member, &stack, env.clone());
+                    let key = key.borrow().clone().to_agal_string(&stack, env.clone());
+                    match key {
+                        Ok(key) => key.get_string().to_string(),
+                        Err(err) => return AgalValue::Throw(err).as_ref(),
+                    }
                 };
                 object
                     .clone()
@@ -396,18 +385,8 @@ pub fn interpreter(node: &Node, stack: &Stack, env: Rc<RefCell<Environment>>) ->
                     .get_instance_property(&stack, env, key)
             } else {
                 let object = interpreter(&member.object, &stack, env.clone());
-                let key = if !member.computed {
-                    if member.member.is_identifier() {
-                        member.member.get_identifier().unwrap().name.clone()
-                    } else {
-                        // No deberia ser posible llegar a este punto
-                        return AgalValue::Throw(AgalThrow::Params {
-                            type_error: ErrorNames::TypeError,
-                            message: "No se puede asignar a un objeto no identificado".to_string(),
-                            stack: Box::new(stack),
-                        })
-                        .as_ref();
-                    }
+                let key = if !member.computed && member.member.is_identifier(){
+                    member.member.get_identifier().unwrap().name.clone()
                 } else {
                     let key = interpreter(&member.member, &stack, env.clone());
                     let key = key.borrow().clone().to_agal_string(&stack, env.clone());
