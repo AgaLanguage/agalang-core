@@ -12,7 +12,7 @@ mod object;
 pub use object::*;
 
 use super::{
-    get_instance_property_error, get_property_error, AgalNumber, AgalThrow, AgalValuable,
+    get_instance_property_error, get_property_error, AgalByte, AgalNumber, AgalThrow, AgalValuable,
     AgalValue, RefAgalValue,
 };
 
@@ -20,6 +20,13 @@ pub type AgalVec = Vec<Rc<RefCell<AgalValue>>>;
 #[derive(Clone, PartialEq)]
 pub struct AgalArray(AgalVec);
 impl AgalArray {
+    pub fn from_buffer(buffer: &[u8]) -> AgalArray {
+        let mut vec = Vec::new();
+        for byte in buffer {
+            vec.push(AgalByte::new(*byte).to_ref_value());
+        }
+        AgalArray(vec)
+    }
     pub fn from_vec(vec: AgalVec) -> AgalArray {
         AgalArray(vec)
     }

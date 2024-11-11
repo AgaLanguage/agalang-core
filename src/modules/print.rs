@@ -21,3 +21,6 @@ pub fn get_module() -> RefAgalValue {
     }
     .to_ref_value()
 }
+pub fn get_name(prefix: &str) -> String {
+    format!("{}{}", prefix, "pintar")
+}

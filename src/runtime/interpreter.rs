@@ -373,7 +373,7 @@ pub fn interpreter(node: &Node, stack: &Stack, env: Rc<RefCell<Environment>>) ->
             }
         }
         Node::Import(import) => {
-            let module = if import.path.starts_with('>') {
+            let module = if import.path.starts_with(crate::modules::PREFIX_NATIVE_MODULES) {
                 crate::modules::get_module(&import.path)
             } else {full_eval(import.path.clone(), &stack, env.borrow().get_global())};
             if module.is_err() {
