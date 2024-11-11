@@ -5,9 +5,7 @@ use parser::{
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use super::{
-    env::THIS_KEYWORD, full_eval, AgalArray, AgalBoolean, AgalByte, AgalClass, AgalClassProperty,
-    AgalError, AgalFunction, AgalNumber, AgalObject, AgalString, AgalThrow, AgalValuable,
-    AgalValue, Environment, RefAgalValue, Stack,
+    env::THIS_KEYWORD, full_eval, AgalArray, AgalBoolean, AgalByte, AgalClass, AgalClassProperty, AgalError, AgalFunction, AgalNumber, AgalObject, AgalPrototype, AgalString, AgalThrow, AgalValuable, AgalValue, Environment, RefAgalValue, Stack
 };
 
 pub fn interpreter(node: &Node, stack: &Stack, env: Rc<RefCell<Environment>>) -> RefAgalValue {
@@ -74,7 +72,7 @@ pub fn interpreter(node: &Node, stack: &Stack, env: Rc<RefCell<Environment>>) ->
                     };
 
                     let object = interpreter(&member.object, &stack, env.clone());
-                    object.clone().borrow_mut().clone().set_object_property(
+                    object.clone().borrow().clone().set_object_property(
                         &stack,
                         env,
                         key,
@@ -106,7 +104,33 @@ pub fn interpreter(node: &Node, stack: &Stack, env: Rc<RefCell<Environment>>) ->
         }
         Node::Byte(byte_node) => AgalByte::new(byte_node.value).to_ref_value(),
         Node::Call(call) => {
-            let callee = interpreter(&call.callee, &stack, env.clone());
+            let callee = call.callee.as_ref();
+            let (callee, this) = if let Node::Member(member) = callee {
+                let this = interpreter(member.object.as_ref(), &stack, env.clone());
+                let this = this.clone();
+                let key = if !member.computed && member.member.is_identifier() {
+                    member.member.get_identifier().unwrap().name.clone()
+                } else {
+                    // No deberia ser posible llegar a este punto
+                    let key = interpreter(&member.member, &stack, env.clone());
+                    let key = key.borrow().clone().to_agal_string(&stack, env.clone());
+                    match key {
+                        Ok(key) => key.get_string().to_string(),
+                        Err(err) => return AgalValue::Throw(err).as_ref(),
+                    }
+                };
+                let callee = this
+                    .clone()
+                    .borrow()
+                    .clone()
+                    .get_instance_property(&stack, env.clone(), key);
+                (callee, this)
+            } else {
+                let callee = interpreter(&callee, &stack, env.clone());
+                (callee.clone(), callee)
+            };
+            
+            
             let mut args = vec![];
             for arg in call.arguments.iter() {
                 let arg = interpreter(arg, &stack, env.clone());
@@ -117,7 +141,7 @@ pub fn interpreter(node: &Node, stack: &Stack, env: Rc<RefCell<Environment>>) ->
                 .clone()
                 .borrow()
                 .clone()
-                .call(&stack, env.clone(), callee, args)
+                .call(&stack, env.clone(), this, args)
         }
         Node::Class(class) => {
             let extend_of_value = if let Some(extend) = &class.extend_of {
@@ -480,9 +504,10 @@ pub fn interpreter(node: &Node, stack: &Stack, env: Rc<RefCell<Environment>>) ->
                     );
                 }
             }
-            AgalValue::Object(AgalObject::from_prototype(Rc::new(RefCell::new(
+            let prototype = AgalPrototype::new(Rc::new(RefCell::new(
                 module_instance,
-            ))))
+            )), None);
+            AgalValue::Object(AgalObject::from_prototype(prototype.as_ref()))
             .as_ref()
         }
         Node::Return(ret) => {

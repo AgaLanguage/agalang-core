@@ -1,5 +1,16 @@
-importar '>pintar' como pintar;
-importar './mod.agal' como mod;
-const Hola = 'Hola';
-pintar(Hola, 0by10101010, 3, ["\nMundo", pintar], mod::Hola, mod::Nombre, { importar:'adrian'}, nulo, nada);
-pintar([Hola, Hola]::unir("_"));
+importar ':pintar' como pintar;
+
+clase A {
+  x = 1;
+}
+clase Aga extiende A {
+  x = 2;
+  y = 2;
+  constructor(){
+    este.y = 4;
+  };
+  pub say(texto) {
+    pintar(este::super::x, este::x);
+  };
+}
+Aga()::say("Hola");

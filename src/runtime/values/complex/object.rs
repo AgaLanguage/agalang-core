@@ -1,38 +1,39 @@
 use std::{
-  cell::{Ref, RefCell}, collections::HashMap, rc::Rc
+  borrow::Borrow, cell::{Ref, RefCell}, collections::HashMap, rc::Rc
 };
 
 use crate::runtime::{env::RefEnvironment, get_instance_property_error, AgalString, AgalThrow, AgalValuable, AgalValue, RefAgalValue, Stack};
 
-use super::{AgalClassProperty, RefHasMap};
+use super::{AgalPrototype, RefHasMap};
 
 pub type AgalHashMap<Value> = std::collections::HashMap<String, Value>;
 pub type RefAgalHashMap = Rc<RefCell<AgalHashMap<RefAgalValue>>>;
+pub type RefAgalProto = Rc<RefCell<AgalPrototype>>;
 
 #[derive(Clone, PartialEq)]
 #[allow(dead_code)]
-pub struct AgalObject(RefAgalHashMap, Option<RefHasMap<AgalClassProperty>>);
+pub struct AgalObject(RefAgalHashMap, Option<RefAgalProto>);
 impl AgalObject {
     pub fn from_hashmap(hashmap: RefAgalHashMap) -> AgalObject {
         AgalObject(hashmap, None)
     }
-    pub fn from_hashmap_with_prototype(hashmap: RefAgalHashMap, prototype: RefHasMap<AgalClassProperty>) -> AgalObject {
+    pub fn from_hashmap_with_prototype(hashmap: RefAgalHashMap, prototype: RefAgalProto) -> AgalObject {
         AgalObject(
             hashmap,
             Some(prototype),
         )
     }
-    pub fn from_prototype(hashmap: RefHasMap<AgalClassProperty>) -> AgalObject {
+    pub fn from_prototype(hashmap: RefAgalProto) -> AgalObject {
         AgalObject(Rc::new(RefCell::new(HashMap::new())), Some(hashmap))
     }
     pub fn get_hashmap(&self) -> Ref<AgalHashMap<RefAgalValue>> {
         self.0.as_ref().borrow()
     }
-    pub fn get_prototype(&self) -> Option<Ref<AgalHashMap<AgalClassProperty>>> {
-        if self.1.is_none() {
-            return None;
-        }
-        Some(self.1.as_ref().unwrap().borrow())
+    pub fn get_prototype(&self) -> Option<Ref<AgalPrototype>> {
+        if let Some(a) = &self.1 {
+            Some(a.as_ref().borrow())
+        }else {
+            None}
     }
 }
 impl AgalValuable for AgalObject {
@@ -42,8 +43,8 @@ impl AgalValuable for AgalObject {
     }
     fn to_agal_console(self, stack: &Stack, env: RefEnvironment) -> Result<AgalString, AgalThrow> {
         let mut result = String::new();
-        for (i, (key, value)) in self.0.borrow().iter().enumerate(){
-            let data = value.borrow().clone().to_agal_console(stack, env.clone());
+        for (i, (key, value)) in self.0.as_ref().borrow().iter().enumerate(){
+            let data = value.as_ref().borrow().clone().to_agal_console(stack, env.clone());
             let str = if let Ok(st) = &data {st.get_string()} else {return data};
             if i > 0 {
                 result.push_str(", ");
@@ -78,13 +79,9 @@ impl AgalValuable for AgalObject {
         let proto = this.get_prototype();
         if proto.is_none() {
             let value = AgalValue::Object(self);
-            return get_instance_property_error(stack, env, key, value);
+            return get_instance_property_error(stack, env.clone(), key, value);
         }
         let value = proto.unwrap();
-        let value = value.get(&key);
-        if value.is_none() {
-            return AgalValue::Never.as_ref();
-        }
-        value.unwrap().clone().value
+        value.clone().get_instance_property(stack, env, key)
     }
 }

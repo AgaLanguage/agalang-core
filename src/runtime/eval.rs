@@ -25,7 +25,6 @@ fn code(filename: &str) -> Option<String> {
 pub fn full_eval(path: String, stack: &Stack, env: RefEnvironment) -> EvalResult {
     let contents = code(&path);
     if contents.is_none() {
-        println!("Error al leer el archivo");
         return Err(());
     }
 

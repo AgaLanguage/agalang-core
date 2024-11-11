@@ -17,6 +17,7 @@ pub type RefAgalValue = Rc<RefCell<AgalValue>>;
 
 pub enum AgalValue {
     NativeFunction(AgalNativeFunction),
+    SuperInstance(AgalPrototype),
     Export(String, RefAgalValue),
     Function(AgalFunction),
     Boolean(AgalBoolean),
@@ -38,6 +39,7 @@ pub enum AgalValue {
 impl Clone for AgalValue {
     fn clone(&self) -> Self {
         match self {
+            AgalValue::SuperInstance(s) => s.clone().to_value(),
             AgalValue::Class(c) => c.clone().to_value(),
             AgalValue::Byte(b) => b.clone().to_value(),
             AgalValue::NativeFunction(f) => AgalValue::NativeFunction(f.clone()),
@@ -141,6 +143,7 @@ impl AgalValue {
     }
     pub fn get_type(&self) -> &str {
         match self {
+            AgalValue::SuperInstance(_) => "Super",
             AgalValue::Class(_) => "Clase",
             AgalValue::Error(_) => "Error",
             AgalValue::Number(_) => "Numero",
@@ -171,6 +174,8 @@ impl AgalValuable for AgalValue {
             AgalValue::Number(n) => Ok(n),
             AgalValue::String(s) => s.to_agal_number(stack, env),
             AgalValue::Boolean(b) => b.to_agal_number(stack, env),
+            AgalValue::Object(o) => o.to_agal_number(stack, env),
+            AgalValue::SuperInstance(s) => s.to_agal_number(stack, env),
             AgalValue::Null => Ok(AgalNumber::new(0f64)),
             AgalValue::Throw(t) => Err(t),
             _ => Err(AgalThrow::Params {
@@ -187,6 +192,8 @@ impl AgalValuable for AgalValue {
             AgalValue::Boolean(b) => b.to_agal_string(stack, env),
             AgalValue::Null => Ok(AgalString::from_string(NULL_KEYWORD.to_string())),
             AgalValue::Never => Ok(AgalString::from_string(NOTHING_KEYWORD.to_string())),
+            AgalValue::Object(o) => o.to_agal_string(stack, env),
+            AgalValue::SuperInstance(s) => s.to_agal_string(stack, env),
             AgalValue::Throw(t) => Err(t),
             AgalValue::Array(a) => a.to_agal_string(stack, env),
             AgalValue::Char(c) => c.to_agal_string(stack, env),
@@ -211,6 +218,15 @@ impl AgalValuable for AgalValue {
                 .borrow()
                 .clone()
                 .to_agal_boolean(stack, env.clone()),
+                
+            AgalValue::Object(_) | AgalValue::SuperInstance(_) => env
+            .as_ref()
+            .borrow()
+            .get(TRUE_KEYWORD, &Node::None)
+            .as_ref()
+            .borrow()
+            .clone()
+            .to_agal_boolean(stack, env.clone()),
             AgalValue::Never => Err(AgalThrow::Params {
                 type_error: ErrorNames::CustomError("Error Parseo"),
                 message: "No se pudo convertir en booleano".to_string(),
@@ -229,6 +245,8 @@ impl AgalValuable for AgalValue {
             AgalValue::Array(a) => Ok(a),
             AgalValue::String(a) => a.to_agal_array(stack),
             AgalValue::Throw(t) => Err(t),
+            AgalValue::Object(o) => o.to_agal_array(stack),
+            AgalValue::SuperInstance(s) => s.to_agal_array(stack),
             _ => Err(AgalThrow::Params {
                 type_error: ErrorNames::CustomError("Error Iterable"),
                 message: "El valor no es iterable".to_string(),
@@ -248,13 +266,18 @@ impl AgalValuable for AgalValue {
             AgalValue::Object(o)=>o.to_agal_console(stack, env),
             AgalValue::Function(f)=>f.to_agal_console(stack, env),
             AgalValue::NativeFunction(n)=>n.to_agal_console(stack, env),
+            AgalValue::Object(o) => o.to_agal_console(stack, env),
+            AgalValue::SuperInstance(s) => s.to_agal_console(stack, env),
             AgalValue::String(s)=>s.to_agal_console(stack, env),
             AgalValue::Null=>Ok(AgalString::from_string("\x1b[97mnulo\x1b[39m".to_string())),
             _=>Ok(AgalString::from_string("\x1b[90mnada\x1b[39m".to_string())),
         }
-    }    fn to_agal_value(self, stack: &Stack, env: RefEnvironment) -> Result<AgalString, AgalThrow> {
+    }
+    fn to_agal_value(self, stack: &Stack, env: RefEnvironment) -> Result<AgalString, AgalThrow> {
         match self {
             AgalValue::String(s)=>s.to_agal_value(stack, env),
+            AgalValue::Object(o) => o.to_agal_value(stack, env),
+            AgalValue::SuperInstance(s) => s.to_agal_value(stack, env),
             _=>self.to_agal_console(stack, env),
         }
     }
@@ -288,6 +311,7 @@ impl AgalValuable for AgalValue {
                 Box::new(stack.clone()),
             ))
             .as_ref(),
+            AgalValue::SuperInstance(s)=>s.get_instance_property(stack, env, key),
             _ => self.as_ref(),
         }
     }
@@ -398,7 +422,7 @@ where
         0
     }
     // types
-    fn to_agal_number(self, stack: &Stack, _: RefEnvironment) -> Result<AgalNumber, AgalThrow> {
+    fn to_agal_number(self, stack: &Stack, env: RefEnvironment) -> Result<AgalNumber, AgalThrow> {
         Err(AgalThrow::Params {
             type_error: ErrorNames::CustomError("Error Parseo"),
             message: "No se pudo convertir en numero".to_string(),

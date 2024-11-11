@@ -13,8 +13,8 @@ pub type RefEnvironment = Rc<RefCell<Environment>>;
 pub struct Environment {
     in_class: bool,
     parent: Option<RefEnvironment>,
-    variables: HashMap<String, RefAgalValue>,
-    constants: HashSet<String>,
+    variables: Rc<RefCell<HashMap<String, RefAgalValue>>>,
+    constants: Rc<RefCell<HashSet<String>>>,
 }
 pub const TRUE_KEYWORD: &str = "cierto";
 pub const FALSE_KEYWORD: &str = "falso";
@@ -55,8 +55,8 @@ impl Environment {
         Environment {
             in_class,
             parent: Some(self.as_ref()),
-            variables: HashMap::new(),
-            constants: HashSet::new(),
+            variables: Rc::new(RefCell::new(HashMap::new())),
+            constants: Rc::new(RefCell::new(HashSet::new())),
         }
     }
     fn is_keyword(&self, ref name: &str) -> bool {
@@ -88,9 +88,9 @@ impl Environment {
             return value.as_ref();
         }
         if is_constant {
-            self.constants.insert(name.to_string());
+            self.constants.borrow_mut().insert(name.to_string());
         }
-        self.variables.insert(name.to_string(), value.clone());
+        self.variables.borrow_mut().insert(name.to_string(), value.clone());
         value
     }
     pub fn assign(&mut self, name: &str, value: RefAgalValue, node: &Node) -> RefAgalValue {
@@ -110,7 +110,7 @@ impl Environment {
             });
             return value.as_ref();
         }
-        if self.constants.contains(name) {
+        if self.constants.borrow_mut().contains(name) {
             let value = AgalValue::Throw(Params {
                 type_error: ErrorNames::EnviromentError,
                 message: "No se puede reasignar una constante".to_string(),
@@ -118,16 +118,16 @@ impl Environment {
             });
             return value.as_ref();
         }
-        self.variables.insert(name.to_string(), value.clone());
+        self.variables.borrow_mut().insert(name.to_string(), value.clone());
         value
     }
     pub fn set(&mut self, name: &str, value: RefAgalValue) -> RefAgalValue {
-        self.variables.insert(name.to_string(), value.clone());
+        self.variables.borrow_mut().insert(name.to_string(), value.clone());
         value
     }
     pub fn get(&self, name: &str, node: &Node) -> RefAgalValue {
-        let env = self.resolve(name, node);
-        let env = env.borrow();
+        let _env = self.resolve(name, node);
+        let env = _env.borrow_mut();
         if !env.has(name, node) {
             let value = AgalValue::Throw(Params {
                 type_error: ErrorNames::EnviromentError,
@@ -136,16 +136,17 @@ impl Environment {
             });
             return value.as_ref();
         }
-        env.variables.get(name).unwrap().clone()
+        let a = env.variables.borrow_mut().get(name).unwrap().clone();
+        a
     }
     fn _has(&self, name: &str) -> bool {
-        self.variables.contains_key(name)
+        self.variables.borrow_mut().contains_key(name)
     }
     pub fn has(&self, name: &str, node: &Node) -> bool {
         self.resolve(name, node)
             .borrow()
             .variables
-            .contains_key(name)
+            .borrow_mut().contains_key(name)
     }
     fn resolve(&self, name: &str, node: &Node) -> RefEnvironment {
         if !self._has(name) && self.parent.is_some() {
@@ -158,20 +159,20 @@ pub fn get_default() -> Environment {
     let mut env = Environment {
         in_class: false,
         parent: None,
-        variables: HashMap::new(),
-        constants: HashSet::new(),
+            variables: Rc::new(RefCell::new(HashMap::new())),
+            constants: Rc::new(RefCell::new(HashSet::new())),
     };
-    env.variables.insert(
+    env.variables.borrow_mut().insert(
         TRUE_KEYWORD.to_string(),
         AgalValue::Boolean(AgalBoolean::new(true)).as_ref(),
     );
-    env.variables.insert(
+    env.variables.borrow_mut().insert(
         FALSE_KEYWORD.to_string(),
         AgalValue::Boolean(AgalBoolean::new(false)).as_ref(),
     );
     env.variables
-        .insert(NULL_KEYWORD.to_string(), AgalValue::Null.as_ref());
+    .borrow_mut().insert(NULL_KEYWORD.to_string(), AgalValue::Null.as_ref());
     env.variables
-        .insert(NOTHING_KEYWORD.to_string(), AgalValue::Never.as_ref());
+    .borrow_mut().insert(NOTHING_KEYWORD.to_string(), AgalValue::Never.as_ref());
     env
 }

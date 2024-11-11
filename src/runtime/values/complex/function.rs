@@ -57,7 +57,7 @@ impl AgalValuable for AgalFunction {
                 &Node::Identifier(arg.clone()),
             );
         }
-        let value = interpreter(&self.body.to_node(), stack, self.env);
+        let value = interpreter(&self.body.to_node(), stack, new_env.as_ref());
         if value.as_ref().borrow().is_throw() {
             return value;
         }
