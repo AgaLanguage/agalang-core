@@ -3,9 +3,9 @@ use parser::{
     util::List,
 };
 
-use crate::runtime::{
+use crate::{runtime::{
     env::{RefEnvironment, THIS_KEYWORD}, get_instance_property_error, interpreter, AgalString, AgalThrow, AgalValuable, AgalValue, RefAgalValue, Stack
-};
+}, Modules};
 
 #[derive(Clone, PartialEq)]
 pub struct AgalFunction {
@@ -40,6 +40,7 @@ impl AgalValuable for AgalFunction {
         _: RefEnvironment,
         this: RefAgalValue,
         arguments: Vec<RefAgalValue>,
+        modules_manager: &Modules
     ) -> RefAgalValue {
         let mut new_env = self.env.as_ref().borrow().clone().crate_child(false);
         new_env.set(THIS_KEYWORD, this);
@@ -57,7 +58,7 @@ impl AgalValuable for AgalFunction {
                 &Node::Identifier(arg.clone()),
             );
         }
-        let value = interpreter(&self.body.to_node(), stack, new_env.as_ref());
+        let value = interpreter(&self.body.to_node(), stack, new_env.as_ref(), &modules_manager.clone());
         if value.as_ref().borrow().is_throw() {
             return value;
         }

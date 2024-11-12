@@ -1,15 +1,14 @@
-use std::rc::Rc;
+use std::{path::Path, rc::Rc};
 
 use super::{env::RefEnvironment, AgalValue, RefAgalValue, Stack};
 use parser as frontend;
 use parser::internal;
 
-use crate::runtime;
+use crate::{runtime, Modules, ToResult};
 
 type EvalResult = Result<RefAgalValue, ()>;
 
-fn code(filename: &str) -> Option<String> {
-    let path = std::path::Path::new(filename);
+fn code(path: &Path) -> Option<String> {
     let contents = std::fs::read_to_string(path);
     match contents {
         Ok(contents) => Some(contents),
@@ -22,17 +21,38 @@ fn code(filename: &str) -> Option<String> {
     }
 }
 
-pub fn full_eval(path: String, stack: &Stack, env: RefEnvironment) -> EvalResult {
+pub fn full_eval(
+    filename: String,
+    stack: &Stack,
+    env: RefEnvironment,
+    modules_manager: &Modules,
+) -> EvalResult {
+    let path = Path::new(&filename);
+    let canonical = path.canonicalize().unwrap();
+    let filename = canonical.to_str().to_result()?;
+    if modules_manager.has(filename) {
+        return Ok(modules_manager.get(filename));
+    }
     let contents = code(&path);
     if contents.is_none() {
         return Err(());
     }
 
     let contents = contents.unwrap();
-    eval(contents, path, stack, env)
+    let value = eval(contents, filename.to_string(), stack, env, &modules_manager.clone());
+    if let Ok(value) = &value {
+        modules_manager.add(filename, value.clone());
+    }
+    value
 }
 
-pub fn eval(code: String, path: String, stack: &Stack, env: RefEnvironment) -> EvalResult {
+fn eval(
+    code: String,
+    path: String,
+    stack: &Stack,
+    env: RefEnvironment,
+    modules_manager: &Modules,
+) -> EvalResult {
     let program: frontend::ast::Node = {
         let mut parser = frontend::Parser::new(code, &path);
         parser.produce_ast()
@@ -46,7 +66,7 @@ pub fn eval(code: String, path: String, stack: &Stack, env: RefEnvironment) -> E
         return Err(());
     }
     let env = env.borrow().clone().crate_child(false).as_ref();
-    let value = runtime::interpreter(&program, stack, Rc::clone(&env));
+    let value = runtime::interpreter(&program, stack, Rc::clone(&env), &modules_manager.clone());
     let result = Ok(value.clone());
     let value: &AgalValue = &value.borrow();
     if let AgalValue::Throw(err) = value {

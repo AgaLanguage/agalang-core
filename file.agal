@@ -1,4 +1,7 @@
-importar ':pintar' como pintar;
+importar ':consola' como consola;
+importar './mod.agal' como m;
+importar './src/../mod.agal' como a;
+
 
 clase A {
   x = 1;
@@ -9,8 +12,15 @@ clase Aga extiende A {
   constructor(){
     este.y = 4;
   };
-  pub say(texto) {
-    pintar(este::super::x, este::x);
+  pub agrega(cantidad) {
+    consola::pintar(este);
+    este.y += cantidad;
+    ret este;
+  };
+  pub anunciar(texto){
+    def cantidad = este.y;
+    consola::pintar("\x1b[35m{texto}\x1b[39m",cantidad,"\x1b[35munidades\x1b[39m");
   };
 }
-Aga()::say("Hola");
+Aga()::agrega(2).agrega(4).anunciar('tenemos en existencia');
+consola::pintar(a::Lista);

@@ -1,7 +1,7 @@
 use std::{cell::RefCell, rc::Rc};
 
 use super::{get_instance_property_error, AgalString, AgalValuable};
-use crate::runtime::{env::RefEnvironment, AgalError, AgalValue, RefAgalValue, Stack};
+use crate::{runtime::{env::RefEnvironment, AgalError, AgalValue, RefAgalValue, Stack}, Modules};
 use parser::internal::ErrorNames;
 
 #[derive(Clone, PartialEq)]
@@ -53,6 +53,7 @@ impl AgalValuable for AgalThrow {
         _: RefEnvironment,
         _: RefAgalValue,
         _: Vec<RefAgalValue>,
+        _: &Modules,
     ) -> RefAgalValue {
         AgalValue::Throw(self).as_ref()
     }

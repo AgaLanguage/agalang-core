@@ -3,3 +3,4 @@ exportar clase Nombre {
 exportar fn Hola(){
     ret 3;
 }
+exportar const Lista = [];

@@ -1,8 +1,8 @@
-use crate::runtime::{
+use crate::{runtime::{
     delete_property_error, env::RefEnvironment, get_instance_property_error, get_property_error,
     set_property_error, unary_operation_error, AgalArray, AgalThrow, AgalValuable, AgalValue,
     RefAgalValue, Stack,
-};
+}, Modules};
 
 use super::{AgalBoolean, AgalString};
 
@@ -133,6 +133,7 @@ impl AgalValuable for AgalNumber {
         env: RefEnvironment,
         _: RefAgalValue,
         list: Vec<RefAgalValue>,
+        _: &Modules
     ) -> RefAgalValue {
         let value = list.get(0);
         if value.is_none() {

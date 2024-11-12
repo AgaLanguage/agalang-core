@@ -4,11 +4,20 @@ use parser::{
 };
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
+use crate::Modules;
+
 use super::{
-    env::THIS_KEYWORD, full_eval, AgalArray, AgalBoolean, AgalByte, AgalClass, AgalClassProperty, AgalError, AgalFunction, AgalNumber, AgalObject, AgalPrototype, AgalString, AgalThrow, AgalValuable, AgalValue, Environment, RefAgalValue, Stack
+    env::THIS_KEYWORD, full_eval, AgalArray, AgalBoolean, AgalByte, AgalClass, AgalClassProperty,
+    AgalError, AgalFunction, AgalNumber, AgalObject, AgalPrototype, AgalString, AgalThrow,
+    AgalValuable, AgalValue, Environment, RefAgalValue, Stack,
 };
 
-pub fn interpreter(node: &Node, stack: &Stack, env: Rc<RefCell<Environment>>) -> RefAgalValue {
+pub fn interpreter(
+    node: &Node,
+    stack: &Stack,
+    env: Rc<RefCell<Environment>>,
+    modules_manager: &Modules,
+) -> RefAgalValue {
     let pre_stack = stack;
     let stack = pre_stack.next(node);
     match node {
@@ -17,11 +26,12 @@ pub fn interpreter(node: &Node, stack: &Stack, env: Rc<RefCell<Environment>>) ->
             for n in list.elements.iter() {
                 match n {
                     NodeProperty::Indexable(value) => {
-                        let data = interpreter(value, &stack, env.clone());
+                        let data =
+                            interpreter(value, &stack, env.clone(), &modules_manager.clone());
                         vec.push(data);
                     }
                     NodeProperty::Iterable(iter) => {
-                        let data = interpreter(iter, &stack, env.clone());
+                        let data = interpreter(iter, &stack, env.clone(), modules_manager);
                         let list = data.borrow().clone().to_agal_array(&stack);
                         match list {
                             Ok(list) => {
@@ -38,7 +48,7 @@ pub fn interpreter(node: &Node, stack: &Stack, env: Rc<RefCell<Environment>>) ->
             AgalArray::from_vec(vec).to_value().as_ref()
         }
         Node::Assignment(assignment) => {
-            let value = interpreter(&assignment.value, &stack, env.clone());
+            let value = interpreter(&assignment.value, &stack, env.clone(), modules_manager);
             if value.borrow().is_never() {
                 return AgalValue::Throw(AgalThrow::Params {
                     type_error: ErrorNames::TypeError,
@@ -60,10 +70,10 @@ pub fn interpreter(node: &Node, stack: &Stack, env: Rc<RefCell<Environment>>) ->
                         })
                         .as_ref();
                     }
-                    let key = if !member.computed && member.member.is_identifier(){
+                    let key = if !member.computed && member.member.is_identifier() {
                         member.member.get_identifier().unwrap().name.clone()
                     } else {
-                        let key = interpreter(&member.member, &stack, env.clone());
+                        let key = interpreter(&member.member, &stack, env.clone(), modules_manager);
                         let key = key.borrow().clone().to_agal_string(&stack, env.clone());
                         match key {
                             Ok(key) => key.get_string().to_string(),
@@ -71,7 +81,7 @@ pub fn interpreter(node: &Node, stack: &Stack, env: Rc<RefCell<Environment>>) ->
                         }
                     };
 
-                    let object = interpreter(&member.object, &stack, env.clone());
+                    let object = interpreter(&member.object, &stack, env.clone(), modules_manager);
                     object.clone().borrow().clone().set_object_property(
                         &stack,
                         env,
@@ -83,8 +93,8 @@ pub fn interpreter(node: &Node, stack: &Stack, env: Rc<RefCell<Environment>>) ->
             }
         }
         Node::Binary(binary) => {
-            let left = interpreter(&binary.left, &stack, env.clone());
-            let right = interpreter(&binary.right, &stack, env.clone());
+            let left = interpreter(&binary.left, &stack, env.clone(), modules_manager);
+            let right = interpreter(&binary.right, &stack, env.clone(), modules_manager);
             left.clone()
                 .borrow()
                 .binary_operation(&stack, env.clone(), &binary.operator, right)
@@ -92,7 +102,7 @@ pub fn interpreter(node: &Node, stack: &Stack, env: Rc<RefCell<Environment>>) ->
         Node::Block(block) => {
             let env = env.borrow().clone().crate_child(false).as_ref();
             for n in block.body.iter() {
-                let value = interpreter(n, pre_stack, env.clone());
+                let value = interpreter(n, pre_stack, env.clone(), modules_manager);
                 if value.borrow().is_return() || value.borrow().is_throw() {
                     return value;
                 }
@@ -106,42 +116,44 @@ pub fn interpreter(node: &Node, stack: &Stack, env: Rc<RefCell<Environment>>) ->
         Node::Call(call) => {
             let callee = call.callee.as_ref();
             let (callee, this) = if let Node::Member(member) = callee {
-                let this = interpreter(member.object.as_ref(), &stack, env.clone());
+                let this =
+                    interpreter(member.object.as_ref(), &stack, env.clone(), modules_manager);
                 let this = this.clone();
                 let key = if !member.computed && member.member.is_identifier() {
                     member.member.get_identifier().unwrap().name.clone()
                 } else {
                     // No deberia ser posible llegar a este punto
-                    let key = interpreter(&member.member, &stack, env.clone());
+                    let key = interpreter(&member.member, &stack, env.clone(), modules_manager);
                     let key = key.borrow().clone().to_agal_string(&stack, env.clone());
                     match key {
                         Ok(key) => key.get_string().to_string(),
                         Err(err) => return AgalValue::Throw(err).as_ref(),
                     }
                 };
-                let callee = this
-                    .clone()
-                    .borrow()
-                    .clone()
-                    .get_instance_property(&stack, env.clone(), key);
+                let callee =
+                    this.clone()
+                        .borrow()
+                        .clone()
+                        .get_instance_property(&stack, env.clone(), key);
                 (callee, this)
             } else {
-                let callee = interpreter(&callee, &stack, env.clone());
+                let callee = interpreter(&callee, &stack, env.clone(), modules_manager);
                 (callee.clone(), callee)
             };
-            
-            
+
             let mut args = vec![];
             for arg in call.arguments.iter() {
-                let arg = interpreter(arg, &stack, env.clone());
-                if arg.borrow().is_throw(){return arg}
+                let arg = interpreter(arg, &stack, env.clone(), modules_manager);
+                if arg.borrow().is_throw() {
+                    return arg;
+                }
                 args.push(arg);
             }
             callee
                 .clone()
                 .borrow()
                 .clone()
-                .call(&stack, env.clone(), this, args)
+                .call(&stack, env.clone(), this, args, modules_manager)
         }
         Node::Class(class) => {
             let extend_of_value = if let Some(extend) = &class.extend_of {
@@ -171,7 +183,7 @@ pub fn interpreter(node: &Node, stack: &Stack, env: Rc<RefCell<Environment>>) ->
                 let is_public = (property.meta & 2) != 0;
 
                 let value = if let Some(b) = &property.value {
-                    interpreter(b.as_ref(), &stack, class_env.clone())
+                    interpreter(b.as_ref(), &stack, class_env.clone(), modules_manager)
                 } else {
                     AgalValue::Never.to_ref_value()
                 };
@@ -204,7 +216,12 @@ pub fn interpreter(node: &Node, stack: &Stack, env: Rc<RefCell<Environment>>) ->
                     }
                     Err(err) => return AgalValue::Throw(err).as_ref(),
                 }
-                value = interpreter(&do_while.body.clone().to_node(), &stack, env.clone());
+                value = interpreter(
+                    &do_while.body.clone().to_node(),
+                    &stack,
+                    env.clone(),
+                    modules_manager,
+                );
                 let cv = value.clone();
                 let v = cv.borrow();
                 if v.is_return() {
@@ -216,7 +233,8 @@ pub fn interpreter(node: &Node, stack: &Stack, env: Rc<RefCell<Environment>>) ->
                 if v.is_break() {
                     break;
                 }
-                let pre_condition = interpreter(&do_while.condition, &stack, env.clone());
+                let pre_condition =
+                    interpreter(&do_while.condition, &stack, env.clone(), modules_manager);
                 condition = pre_condition
                     .borrow()
                     .clone()
@@ -232,7 +250,12 @@ pub fn interpreter(node: &Node, stack: &Stack, env: Rc<RefCell<Environment>>) ->
         .as_ref(),
         Node::Export(export) => match export.value.as_ref() {
             Node::VarDecl(var) => {
-                let value = interpreter(&var.value.clone().unwrap(), &stack, env.clone());
+                let value = interpreter(
+                    &var.value.clone().unwrap(),
+                    &stack,
+                    env.clone(),
+                    modules_manager,
+                );
                 env.borrow_mut()
                     .define(&stack, &var.name, value.clone(), var.is_const, node);
                 AgalValue::Export(var.name.clone(), value).as_ref()
@@ -277,7 +300,7 @@ pub fn interpreter(node: &Node, stack: &Stack, env: Rc<RefCell<Environment>>) ->
                     let is_public = (property.meta & 2) != 0;
 
                     let value = if let Some(b) = &property.value {
-                        interpreter(b.as_ref(), &stack, class_env.clone())
+                        interpreter(b.as_ref(), &stack, class_env.clone(), modules_manager)
                     } else {
                         AgalValue::Never.to_ref_value()
                     };
@@ -312,7 +335,7 @@ pub fn interpreter(node: &Node, stack: &Stack, env: Rc<RefCell<Environment>>) ->
             let mut value = AgalValue::Never.as_ref();
             let mut condition = Ok(AgalBoolean::new(true));
             let env = env.borrow().clone().crate_child(false).as_ref();
-            interpreter(&for_node.init, &stack, env.clone()); // init value
+            interpreter(&for_node.init, &stack, env.clone(), modules_manager); // init value
             loop {
                 match condition {
                     Ok(condition) => {
@@ -322,7 +345,12 @@ pub fn interpreter(node: &Node, stack: &Stack, env: Rc<RefCell<Environment>>) ->
                     }
                     Err(err) => return AgalValue::Throw(err).as_ref(),
                 }
-                value = interpreter(&for_node.body.clone().to_node(), &stack, env.clone());
+                value = interpreter(
+                    &for_node.body.clone().to_node(),
+                    &stack,
+                    env.clone(),
+                    modules_manager,
+                );
                 let cv = value.clone();
                 let v = cv.borrow();
                 if v.is_return() {
@@ -334,12 +362,14 @@ pub fn interpreter(node: &Node, stack: &Stack, env: Rc<RefCell<Environment>>) ->
                 if v.is_break() {
                     break;
                 }
-                let pre_condition = interpreter(&for_node.condition, &stack, env.clone());
+                let pre_condition =
+                    interpreter(&for_node.condition, &stack, env.clone(), modules_manager);
                 condition = pre_condition
                     .borrow()
                     .clone()
                     .to_agal_boolean(&stack, env.clone());
-                let pre_update = interpreter(&for_node.update, &stack, env.clone());
+                let pre_update =
+                    interpreter(&for_node.update, &stack, env.clone(), modules_manager);
                 if pre_update.borrow().is_throw() {
                     return pre_update;
                 }
@@ -354,7 +384,7 @@ pub fn interpreter(node: &Node, stack: &Stack, env: Rc<RefCell<Environment>>) ->
         }
         Node::Identifier(id) => env.borrow().get(&id.name, node),
         Node::If(if_node) => {
-            let condition = interpreter(&if_node.condition, &stack, env.clone());
+            let condition = interpreter(&if_node.condition, &stack, env.clone(), modules_manager);
             let condition = condition
                 .borrow()
                 .clone()
@@ -362,10 +392,20 @@ pub fn interpreter(node: &Node, stack: &Stack, env: Rc<RefCell<Environment>>) ->
             match condition {
                 Ok(condition) => {
                     if condition.to_bool() {
-                        return interpreter(&if_node.body.clone().to_node(), &stack, env.clone());
+                        return interpreter(
+                            &if_node.body.clone().to_node(),
+                            &stack,
+                            env.clone(),
+                            modules_manager,
+                        );
                     }
                     if let Some(else_body) = &if_node.else_body {
-                        return interpreter(&else_body.clone().to_node(), &stack, env.clone());
+                        return interpreter(
+                            &else_body.clone().to_node(),
+                            &stack,
+                            env.clone(),
+                            modules_manager,
+                        );
                     }
                     return AgalValue::Never.as_ref();
                 }
@@ -373,9 +413,19 @@ pub fn interpreter(node: &Node, stack: &Stack, env: Rc<RefCell<Environment>>) ->
             }
         }
         Node::Import(import) => {
-            let module = if import.path.starts_with(crate::modules::PREFIX_NATIVE_MODULES) {
-                crate::modules::get_module(&import.path)
-            } else {full_eval(import.path.clone(), &stack, env.borrow().get_global())};
+            let module = if import
+                .path
+                .starts_with(crate::libraries::PREFIX_NATIVE_MODULES)
+            {
+                crate::libraries::get_module(&import.path, &modules_manager.clone())
+            } else {
+                full_eval(
+                    import.path.clone(),
+                    &stack,
+                    env.borrow().get_global(),
+                    modules_manager,
+                )
+            };
             if module.is_err() {
                 return AgalValue::Never.as_ref();
             }
@@ -391,12 +441,12 @@ pub fn interpreter(node: &Node, stack: &Stack, env: Rc<RefCell<Environment>>) ->
         },
         Node::Member(member) => {
             if member.instance {
-                let object = interpreter(&member.object, &stack, env.clone());
+                let object = interpreter(&member.object, &stack, env.clone(), modules_manager);
                 let key = if !member.computed && member.member.is_identifier() {
                     member.member.get_identifier().unwrap().name.clone()
                 } else {
                     // No deberia ser posible llegar a este punto
-                    let key = interpreter(&member.member, &stack, env.clone());
+                    let key = interpreter(&member.member, &stack, env.clone(), modules_manager);
                     let key = key.borrow().clone().to_agal_string(&stack, env.clone());
                     match key {
                         Ok(key) => key.get_string().to_string(),
@@ -409,11 +459,11 @@ pub fn interpreter(node: &Node, stack: &Stack, env: Rc<RefCell<Environment>>) ->
                     .clone()
                     .get_instance_property(&stack, env, key)
             } else {
-                let object = interpreter(&member.object, &stack, env.clone());
-                let key = if !member.computed && member.member.is_identifier(){
+                let object = interpreter(&member.object, &stack, env.clone(), modules_manager);
+                let key = if !member.computed && member.member.is_identifier() {
                     member.member.get_identifier().unwrap().name.clone()
                 } else {
-                    let key = interpreter(&member.member, &stack, env.clone());
+                    let key = interpreter(&member.member, &stack, env.clone(), modules_manager);
                     let key = key.borrow().clone().to_agal_string(&stack, env.clone());
                     match key {
                         Ok(key) => key.get_string().to_string(),
@@ -442,23 +492,24 @@ pub fn interpreter(node: &Node, stack: &Stack, env: Rc<RefCell<Environment>>) ->
             for prop in obj.properties.iter() {
                 match prop {
                     NodeProperty::Property(key, value) => {
-                        let value = interpreter(value, &stack, env.clone());
+                        let value = interpreter(value, &stack, env.clone(), modules_manager);
                         hasmap.insert(key.clone(), value);
                     }
                     NodeProperty::Dynamic(key, value) => {
-                        let key = interpreter(key, &stack, env.clone());
+                        let key = interpreter(key, &stack, env.clone(), modules_manager);
                         let key = key.borrow().clone().to_agal_string(&stack, env.clone());
                         match key {
                             Ok(key) => {
                                 let key = key.get_string();
-                                let value = interpreter(value, &stack, env.clone());
+                                let value =
+                                    interpreter(value, &stack, env.clone(), modules_manager);
                                 hasmap.insert(key.clone(), value);
                             }
                             Err(err) => return AgalValue::Throw(err).as_ref(),
                         }
                     }
                     NodeProperty::Iterable(iter) => {
-                        let value = interpreter(iter, &stack, env.clone());
+                        let value = interpreter(iter, &stack, env.clone(), modules_manager);
                         let keys = value.borrow().clone().get_keys();
                         for key in keys.iter() {
                             let value = value.borrow().clone().get_object_property(
@@ -479,7 +530,7 @@ pub fn interpreter(node: &Node, stack: &Stack, env: Rc<RefCell<Environment>>) ->
         Node::Program(program) => {
             let mut module_instance = HashMap::new();
             for n in program.body.iter() {
-                let value = interpreter(n, pre_stack, env.clone());
+                let value = interpreter(n, pre_stack, env.clone(), modules_manager);
                 if value.borrow().is_stop() {
                     return value;
                 }
@@ -504,18 +555,15 @@ pub fn interpreter(node: &Node, stack: &Stack, env: Rc<RefCell<Environment>>) ->
                     );
                 }
             }
-            let prototype = AgalPrototype::new(Rc::new(RefCell::new(
-                module_instance,
-            )), None);
-            AgalValue::Object(AgalObject::from_prototype(prototype.as_ref()))
-            .as_ref()
+            let prototype = AgalPrototype::new(Rc::new(RefCell::new(module_instance)), None);
+            AgalValue::Object(AgalObject::from_prototype(prototype.as_ref())).as_ref()
         }
         Node::Return(ret) => {
             if ret.value.is_none() {
                 return AgalValue::Return(AgalValue::Never.as_ref()).as_ref();
             }
             let ret_value = ret.value.clone().unwrap();
-            let value = interpreter(&ret_value, &stack, env.clone());
+            let value = interpreter(&ret_value, &stack, env.clone(), modules_manager);
             AgalValue::Return(value).as_ref()
         }
         Node::String(str) => {
@@ -538,12 +586,17 @@ pub fn interpreter(node: &Node, stack: &Stack, env: Rc<RefCell<Environment>>) ->
             AgalValue::String(AgalString::from_string(string)).as_ref()
         }
         Node::Throw(throw) => {
-            let value = interpreter(&throw.value, &stack, env.clone());
+            let value = interpreter(&throw.value, &stack, env.clone(), modules_manager);
             AgalValue::Throw(AgalThrow::from_ref_value(value, Box::new(stack), env)).as_ref()
         }
         Node::Try(try_node) => {
             let try_env = env.borrow().clone().crate_child(false).as_ref();
-            let try_val = interpreter(&try_node.body.clone().to_node(), &stack, try_env);
+            let try_val = interpreter(
+                &try_node.body.clone().to_node(),
+                &stack,
+                try_env,
+                modules_manager,
+            );
             if try_val.borrow().is_throw() {
                 let env = env.borrow().clone().crate_child(false).as_ref();
                 env.borrow_mut().define(
@@ -559,19 +612,26 @@ pub fn interpreter(node: &Node, stack: &Stack, env: Rc<RefCell<Environment>>) ->
                     true,
                     node,
                 );
-                return interpreter(&try_node.catch.1.clone().to_node(), &stack, env);
+                return interpreter(
+                    &try_node.catch.1.clone().to_node(),
+                    &stack,
+                    env,
+                    modules_manager,
+                );
             }
             try_val
         }
-        Node::UnaryBack(unary) => interpreter(&unary.operand, &stack, env.clone())
+        Node::UnaryBack(unary) => interpreter(&unary.operand, &stack, env.clone(), modules_manager)
             .borrow()
             .unary_back_operator(&stack, env, &unary.operator),
-        Node::UnaryFront(unary) => interpreter(&unary.operand, &stack, env.clone())
-            .borrow()
-            .unary_operator(&stack, env, &unary.operator),
+        Node::UnaryFront(unary) => {
+            interpreter(&unary.operand, &stack, env.clone(), modules_manager)
+                .borrow()
+                .unary_operator(&stack, env, &unary.operator)
+        }
         Node::VarDecl(var) => match &var.value {
             Some(value) => {
-                let value = interpreter(value, &stack, env.clone());
+                let value = interpreter(value, &stack, env.clone(), modules_manager);
                 if value.borrow().is_never() {
                     return AgalValue::Throw(AgalThrow::Params {
                         type_error: ErrorNames::TypeError,
@@ -595,7 +655,8 @@ pub fn interpreter(node: &Node, stack: &Stack, env: Rc<RefCell<Environment>>) ->
             let mut value = AgalValue::Never.as_ref();
             let body = &while_node.body.clone().to_node();
             loop {
-                let condition = interpreter(&while_node.condition, &stack, env.clone());
+                let condition =
+                    interpreter(&while_node.condition, &stack, env.clone(), modules_manager);
                 let condition = condition
                     .borrow()
                     .clone()
@@ -608,7 +669,7 @@ pub fn interpreter(node: &Node, stack: &Stack, env: Rc<RefCell<Environment>>) ->
                     }
                     Err(err) => return AgalValue::Throw(err).as_ref(),
                 }
-                value = interpreter(body, &stack, env.clone());
+                value = interpreter(body, &stack, env.clone(), modules_manager);
                 let vc = value.clone();
                 let v = vc.borrow();
                 if v.is_return() {

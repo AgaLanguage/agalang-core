@@ -1,5 +1,7 @@
 use std::{borrow::Borrow, cell::RefCell, rc::Rc};
 
+use crate::Modules;
+
 use super::{
     env::{RefEnvironment, FALSE_KEYWORD, NOTHING_KEYWORD, NULL_KEYWORD, TRUE_KEYWORD},
     Stack,
@@ -218,15 +220,15 @@ impl AgalValuable for AgalValue {
                 .borrow()
                 .clone()
                 .to_agal_boolean(stack, env.clone()),
-                
+
             AgalValue::Object(_) | AgalValue::SuperInstance(_) => env
-            .as_ref()
-            .borrow()
-            .get(TRUE_KEYWORD, &Node::None)
-            .as_ref()
-            .borrow()
-            .clone()
-            .to_agal_boolean(stack, env.clone()),
+                .as_ref()
+                .borrow()
+                .get(TRUE_KEYWORD, &Node::None)
+                .as_ref()
+                .borrow()
+                .clone()
+                .to_agal_boolean(stack, env.clone()),
             AgalValue::Never => Err(AgalThrow::Params {
                 type_error: ErrorNames::CustomError("Error Parseo"),
                 message: "No se pudo convertir en booleano".to_string(),
@@ -256,29 +258,29 @@ impl AgalValuable for AgalValue {
     }
     fn to_agal_console(self, stack: &Stack, env: RefEnvironment) -> Result<AgalString, AgalThrow> {
         match self {
-            AgalValue::Array(a)=>a.to_agal_console(stack, env),
-            AgalValue::Boolean(b)=>b.to_agal_console(stack, env),
-            AgalValue::Byte(b)=>b.to_agal_console(stack, env),
-            AgalValue::Char(c)=>c.to_agal_console(stack, env),
-            AgalValue::Class(c)=>c.to_agal_console(stack, env),
-            AgalValue::Error(e)=>e.to_agal_console(stack, env),
-            AgalValue::Number(n)=>n.to_agal_console(stack, env),
-            AgalValue::Object(o)=>o.to_agal_console(stack, env),
-            AgalValue::Function(f)=>f.to_agal_console(stack, env),
-            AgalValue::NativeFunction(n)=>n.to_agal_console(stack, env),
+            AgalValue::Array(a) => a.to_agal_console(stack, env),
+            AgalValue::Boolean(b) => b.to_agal_console(stack, env),
+            AgalValue::Byte(b) => b.to_agal_console(stack, env),
+            AgalValue::Char(c) => c.to_agal_console(stack, env),
+            AgalValue::Class(c) => c.to_agal_console(stack, env),
+            AgalValue::Error(e) => e.to_agal_console(stack, env),
+            AgalValue::Number(n) => n.to_agal_console(stack, env),
+            AgalValue::Object(o) => o.to_agal_console(stack, env),
+            AgalValue::Function(f) => f.to_agal_console(stack, env),
+            AgalValue::NativeFunction(n) => n.to_agal_console(stack, env),
             AgalValue::Object(o) => o.to_agal_console(stack, env),
             AgalValue::SuperInstance(s) => s.to_agal_console(stack, env),
-            AgalValue::String(s)=>s.to_agal_console(stack, env),
-            AgalValue::Null=>Ok(AgalString::from_string("\x1b[97mnulo\x1b[39m".to_string())),
-            _=>Ok(AgalString::from_string("\x1b[90mnada\x1b[39m".to_string())),
+            AgalValue::String(s) => s.to_agal_console(stack, env),
+            AgalValue::Null => Ok(AgalString::from_string("\x1b[97mnulo\x1b[39m".to_string())),
+            _ => Ok(AgalString::from_string("\x1b[90mnada\x1b[39m".to_string())),
         }
     }
     fn to_agal_value(self, stack: &Stack, env: RefEnvironment) -> Result<AgalString, AgalThrow> {
         match self {
-            AgalValue::String(s)=>s.to_agal_value(stack, env),
+            AgalValue::String(s) => s.to_agal_value(stack, env),
             AgalValue::Object(o) => o.to_agal_value(stack, env),
             AgalValue::SuperInstance(s) => s.to_agal_value(stack, env),
-            _=>self.to_agal_console(stack, env),
+            _ => self.to_agal_console(stack, env),
         }
     }
     fn get_instance_property(
@@ -311,7 +313,7 @@ impl AgalValuable for AgalValue {
                 Box::new(stack.clone()),
             ))
             .as_ref(),
-            AgalValue::SuperInstance(s)=>s.get_instance_property(stack, env, key),
+            AgalValue::SuperInstance(s) => s.get_instance_property(stack, env, key),
             _ => self.as_ref(),
         }
     }
@@ -350,7 +352,11 @@ impl AgalValuable for AgalValue {
             AgalValue::Array(a) => a.binary_operation(stack, env, operator, other),
             AgalValue::Object(o) => o.binary_operation(stack, env, operator, other),
             AgalValue::Throw(t) => AgalValue::Throw(t.clone()).as_ref(),
-            _ => AgalValue::Never.as_ref(),
+            _ => {
+                let a: &AgalValue = self.borrow();
+                let b: &AgalValue = &other.as_ref().borrow();
+                AgalBoolean::new(a == b).to_ref_value()
+            }
         }
     }
     fn unary_operator(&self, stack: &Stack, env: RefEnvironment, operator: &str) -> RefAgalValue {
@@ -383,17 +389,18 @@ impl AgalValuable for AgalValue {
         env: RefEnvironment,
         this: RefAgalValue,
         arguments: Vec<RefAgalValue>,
+        modules_manager: &Modules
     ) -> RefAgalValue {
         match self {
-            AgalValue::Throw(t) => t.call(stack, env, this, arguments),
-            AgalValue::Number(n) => n.call(stack, env, this, arguments),
-            AgalValue::Object(o) => o.call(stack, env, this, arguments),
-            AgalValue::Function(f) => f.call(stack, env, this, arguments),
+            AgalValue::Throw(t) => t.call(stack, env, this, arguments, modules_manager),
+            AgalValue::Number(n) => n.call(stack, env, this, arguments, modules_manager),
+            AgalValue::Object(o) => o.call(stack, env, this, arguments, modules_manager),
+            AgalValue::Function(f) => f.call(stack, env, this, arguments, modules_manager),
             AgalValue::NativeFunction(f) => {
                 let v = (f.func)(arguments, stack, env);
                 v
             }
-            AgalValue::Class(c) => c.call(stack, env, this, arguments),
+            AgalValue::Class(c) => c.call(stack, env, this, arguments, modules_manager),
             _ => {
                 let message = format!("No se puede llamar a {}", self.get_type());
                 AgalValue::Throw(AgalThrow::Params {
@@ -507,6 +514,7 @@ where
         _: RefEnvironment,
         _: RefAgalValue,
         _: Vec<RefAgalValue>,
+        _: &Modules
     ) -> RefAgalValue {
         AgalValue::Never.as_ref()
     }
@@ -557,7 +565,7 @@ pub fn get_instance_property_error(
             let function = {
                 let e_stack = Rc::clone(&rc_stack);
                 let e_env = Rc::clone(&env);
-                move |_: Vec<RefAgalValue>, _:&Stack, _:RefEnvironment| -> RefAgalValue {
+                move |_: Vec<RefAgalValue>, _: &Stack, _: RefEnvironment| -> RefAgalValue {
                     let data = get_instance_property_value(
                         e_stack.clone(),
                         e_env.clone(),
@@ -579,7 +587,7 @@ pub fn get_instance_property_error(
             let function = {
                 let e_stack = Rc::clone(&rc_stack);
                 let e_env = Rc::clone(&env);
-                move |_: Vec<RefAgalValue>, _:&Stack, _:RefEnvironment| -> RefAgalValue {
+                move |_: Vec<RefAgalValue>, _: &Stack, _: RefEnvironment| -> RefAgalValue {
                     let data = get_instance_property_value(
                         e_stack.clone(),
                         e_env.clone(),
@@ -601,7 +609,7 @@ pub fn get_instance_property_error(
             let function = {
                 let e_stack = Rc::clone(&rc_stack);
                 let e_env = Rc::clone(&env);
-                move |_: Vec<RefAgalValue>, _:&Stack, _:RefEnvironment| -> RefAgalValue {
+                move |_: Vec<RefAgalValue>, _: &Stack, _: RefEnvironment| -> RefAgalValue {
                     let data = get_instance_property_value(
                         e_stack.clone(),
                         e_env.clone(),
@@ -623,7 +631,7 @@ pub fn get_instance_property_error(
             let function = {
                 let e_stack = Rc::clone(&rc_stack);
                 let e_env = Rc::clone(&env);
-                move |_: Vec<RefAgalValue>, _:&Stack, _:RefEnvironment| -> RefAgalValue {
+                move |_: Vec<RefAgalValue>, _: &Stack, _: RefEnvironment| -> RefAgalValue {
                     let data = get_instance_property_value(
                         e_stack.clone(),
                         e_env.clone(),
@@ -645,7 +653,7 @@ pub fn get_instance_property_error(
             let function = {
                 let e_stack = Rc::clone(&rc_stack);
                 let e_env = Rc::clone(&env);
-                move |_: Vec<RefAgalValue>, _:&Stack, _:RefEnvironment| -> RefAgalValue {
+                move |_: Vec<RefAgalValue>, _: &Stack, _: RefEnvironment| -> RefAgalValue {
                     let data = get_instance_property_value(
                         e_stack.clone(),
                         e_env.clone(),
@@ -675,9 +683,10 @@ fn get_instance_property_value(
     let stack = &stack.as_ref().borrow();
     match key {
         "aCadena" => {
-            let data = value
-                .clone()
-                .to_agal_string(stack, env.as_ref().borrow().clone().crate_child(false).as_ref());
+            let data = value.clone().to_agal_string(
+                stack,
+                env.as_ref().borrow().clone().crate_child(false).as_ref(),
+            );
             let data = match data {
                 Ok(s) => AgalValue::String(s),
                 Err(e) => AgalValue::Throw(e),
@@ -685,9 +694,10 @@ fn get_instance_property_value(
             data.as_ref()
         }
         "__aConsola__" => {
-            let data = value
-                .clone()
-                .to_agal_console(stack, env.as_ref().borrow().clone().crate_child(false).as_ref());
+            let data = value.clone().to_agal_console(
+                stack,
+                env.as_ref().borrow().clone().crate_child(false).as_ref(),
+            );
             let data = match data {
                 Ok(s) => AgalValue::String(s),
                 Err(e) => AgalValue::Throw(e),
@@ -695,9 +705,10 @@ fn get_instance_property_value(
             data.as_ref()
         }
         "aNumero" => {
-            let data = value
-                .clone()
-                .to_agal_number(stack, env.as_ref().borrow().clone().crate_child(false).as_ref());
+            let data = value.clone().to_agal_number(
+                stack,
+                env.as_ref().borrow().clone().crate_child(false).as_ref(),
+            );
             let data = match data {
                 Ok(s) => AgalValue::Number(s),
                 Err(e) => AgalValue::Throw(e),
@@ -705,9 +716,10 @@ fn get_instance_property_value(
             data.as_ref()
         }
         "aBuleano" => {
-            let data = value
-                .clone()
-                .to_agal_boolean(stack, env.as_ref().borrow().clone().crate_child(false).as_ref());
+            let data = value.clone().to_agal_boolean(
+                stack,
+                env.as_ref().borrow().clone().crate_child(false).as_ref(),
+            );
             let data = match data {
                 Ok(s) => AgalValue::Boolean(s),
                 Err(e) => AgalValue::Throw(e),

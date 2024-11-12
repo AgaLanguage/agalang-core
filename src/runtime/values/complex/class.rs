@@ -1,9 +1,9 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use super::AgalObject;
-use crate::runtime::{
+use crate::{runtime::{
     env::RefEnvironment, AgalString, AgalThrow, AgalValuable, AgalValue, RefAgalValue, Stack,
-};
+}, Modules};
 use parser::util::{OpRefValue, RefValue};
 pub type RefHasMap<Value> = Rc<RefCell<HashMap<String, Value>>>;
 
@@ -128,10 +128,11 @@ impl AgalClass {
         env: RefEnvironment,
         this: RefValue<AgalObject>,
         args: Vec<RefAgalValue>,
+        modules_manager:&Modules
     ) -> RefAgalValue {
         if let Some(class) = &self.extend_of {
             let value = class.as_ref().borrow();
-            value.constructor(stack, env.clone(), this.clone(), args.clone());
+            value.constructor(stack, env.clone(), this.clone(), args.clone(), modules_manager);
         }
         let instance = self.instance.borrow();
         let instance_properties = instance.instance_properties.borrow();
@@ -141,7 +142,7 @@ impl AgalClass {
             let property_value = property.value.as_ref().borrow();
             property_value
                 .clone()
-                .call(stack, env, this_value.clone().to_ref_value(), args);
+                .call(stack, env, this_value.clone().to_ref_value(), args, modules_manager);
         }
         let object = this.borrow();
         object.clone().to_ref_value()
@@ -188,10 +189,11 @@ impl AgalValuable for AgalClass {
         env: RefEnvironment,
         _: RefAgalValue,
         args: Vec<RefAgalValue>,
+        modules_manager:&Modules
     ) -> RefAgalValue {
         let o = AgalObject::from_prototype(self.clone().instance);
         let this = Rc::new(RefCell::new(o.clone()));
-        self.constructor(stack, env, this, args);
+        self.constructor(stack, env, this, args, modules_manager);
         o.to_ref_value()
     }
 }
