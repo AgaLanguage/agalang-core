@@ -1,6 +1,7 @@
 #![allow(warnings)]
 mod runtime;
 mod libraries;
+mod path;
 use std::{cell::RefCell, collections::HashMap, process::ExitCode, rc::Rc};
 
 use runtime::RefAgalValue;
@@ -53,7 +54,7 @@ fn main() -> ExitCode {
     let ref stack = runtime::Stack::get_default();
     let global_env = runtime::env::get_default().as_ref();
 
-    let program = runtime::full_eval(filename, stack, global_env, &modules_manager);
+    let program = runtime::full_eval(&filename, stack, global_env, &modules_manager);
     if program.is_err() {
         return ExitCode::FAILURE;
     }
@@ -61,7 +62,7 @@ fn main() -> ExitCode {
 }
 fn file() -> Option<String> {
     let mut args: Vec<_> = std::env::args().collect();
-    args.push("file.agal".to_string());
+    args.push("./file.agal".to_string());
     let args = args;
     if args.len() < 2 {
         let blue_usage = "\x1b[94m\x1b[1mUsage\x1b[39m:\x1b[0m";

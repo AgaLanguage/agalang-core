@@ -2,9 +2,9 @@ use parser::{
     ast::{Node, NodeLoopEditType, NodeProperty, StringData},
     internal::ErrorNames,
 };
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, path::Path, rc::Rc};
 
-use crate::Modules;
+use crate::{path::absolute_path, Modules, ToResult};
 
 use super::{
     env::THIS_KEYWORD, full_eval, AgalArray, AgalBoolean, AgalByte, AgalClass, AgalClassProperty,
@@ -419,14 +419,17 @@ pub fn interpreter(
             {
                 crate::libraries::get_module(&import.path, &modules_manager.clone())
             } else {
-                full_eval(
-                    import.path.clone(),
-                    &stack,
-                    env.borrow().get_global(),
-                    modules_manager,
-                )
+                let path = absolute_path(&import.file);
+                let path = Path::new(&path).parent();
+                if let Some(path) = path{
+                    let filename = format!("{}/{}", path.to_string_lossy(), import.path);
+                    let filename = absolute_path(&filename);
+                    full_eval(&filename, &stack, env.borrow().get_global(), modules_manager)
+                } else {
+                    Err(())
+                }
             };
-            if module.is_err() {
+            if let Err(e) = module{
                 return AgalValue::Never.as_ref();
             }
             let module = module.unwrap();

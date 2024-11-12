@@ -8,7 +8,7 @@ use crate::{runtime, Modules, ToResult};
 
 type EvalResult = Result<RefAgalValue, ()>;
 
-fn code(path: &Path) -> Option<String> {
+fn code(path: &str) -> Option<String> {
     let contents = std::fs::read_to_string(path);
     match contents {
         Ok(contents) => Some(contents),
@@ -22,16 +22,13 @@ fn code(path: &Path) -> Option<String> {
 }
 
 pub fn full_eval(
-    filename: String,
+    path: &str,
     stack: &Stack,
     env: RefEnvironment,
     modules_manager: &Modules,
 ) -> EvalResult {
-    let path = Path::new(&filename);
-    let canonical = path.canonicalize().unwrap();
-    let filename = canonical.to_str().to_result()?;
-    if modules_manager.has(filename) {
-        return Ok(modules_manager.get(filename));
+    if modules_manager.has(path) {
+        return Ok(modules_manager.get(path));
     }
     let contents = code(&path);
     if contents.is_none() {
@@ -39,16 +36,16 @@ pub fn full_eval(
     }
 
     let contents = contents.unwrap();
-    let value = eval(contents, filename.to_string(), stack, env, &modules_manager.clone());
+    let value = eval(contents, path, stack, env, &modules_manager.clone());
     if let Ok(value) = &value {
-        modules_manager.add(filename, value.clone());
+        modules_manager.add(path, value.clone());
     }
     value
 }
 
 fn eval(
     code: String,
-    path: String,
+    path: &str,
     stack: &Stack,
     env: RefEnvironment,
     modules_manager: &Modules,

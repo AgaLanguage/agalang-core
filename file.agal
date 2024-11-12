@@ -1,6 +1,5 @@
 importar ':consola' como consola;
-importar './mod.agal' como m;
-importar './src/../mod.agal' como a;
+importar './test/mod.agal' como mod;
 
 
 clase A {
@@ -19,8 +18,8 @@ clase Aga extiende A {
   };
   pub anunciar(texto){
     def cantidad = este.y;
-    consola::pintar("\x1b[35m{texto}\x1b[39m",cantidad,"\x1b[35munidades\x1b[39m");
+    consola::pintar("\x1b[35m{texto}\x1b[39m", cantidad, "\x1b[35munidades\x1b[39m");
   };
 }
 Aga()::agrega(2).agrega(4).anunciar('tenemos en existencia');
-consola::pintar(a::Lista);
+consola::pintar(mod::test::Lista);
