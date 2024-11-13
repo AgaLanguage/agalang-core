@@ -42,6 +42,9 @@ impl Environment {
     pub fn as_ref(self) -> RefEnvironment {
         Rc::new(RefCell::new(self))
     }
+    pub fn get_this(self, node: &Node) -> RefAgalValue {
+        self.get(THIS_KEYWORD, node)
+    }
     pub fn use_private(self) -> bool {
         if self.in_class {
             true

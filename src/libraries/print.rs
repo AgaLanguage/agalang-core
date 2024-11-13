@@ -17,7 +17,7 @@ pub fn get_module(prefix: &str) -> RefAgalValue {
             is_static: true,
             value: AgalNativeFunction {
                 name: format!("{module_name}::pintar"),
-                func: Rc::new(|arguments, stack, env| {
+                func: Rc::new(|arguments, stack, env, modules_manager, this| {
                     for arg in arguments {
                         let data = arg.borrow().clone().to_agal_console(stack, env.clone());
                         if let Ok(str) = data {
@@ -28,21 +28,6 @@ pub fn get_module(prefix: &str) -> RefAgalValue {
                         }
                     }
                     print!("\n");
-                    AgalValue::Never.as_ref()
-                }),
-            }
-            .to_ref_value(),
-        },
-    );
-    hashmap.insert(
-        "limpiar".to_string(),
-        AgalClassProperty {
-            is_public: true,
-            is_static: true,
-            value: AgalNativeFunction {
-                name: format!("{module_name}::limpiar"),
-                func: Rc::new(|_, stack, env| {
-                    print!("\x1B[0;0H");
                     AgalValue::Never.as_ref()
                 }),
             }

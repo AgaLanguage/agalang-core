@@ -397,7 +397,7 @@ impl AgalValuable for AgalValue {
             AgalValue::Object(o) => o.call(stack, env, this, arguments, modules_manager),
             AgalValue::Function(f) => f.call(stack, env, this, arguments, modules_manager),
             AgalValue::NativeFunction(f) => {
-                let v = (f.func)(arguments, stack, env);
+                let v = (f.func)(arguments, stack, env, modules_manager, this);
                 v
             }
             AgalValue::Class(c) => c.call(stack, env, this, arguments, modules_manager),
@@ -518,9 +518,6 @@ where
     ) -> RefAgalValue {
         AgalValue::Never.as_ref()
     }
-    fn construct(self, _: &Stack, _: RefEnvironment, _: Vec<RefAgalValue>) -> RefAgalValue {
-        AgalValue::Never.as_ref()
-    }
 }
 
 pub fn set_property_error(
@@ -562,111 +559,101 @@ pub fn get_instance_property_error(
     match key.as_str() {
         "aCadena" => {
             let key_clone = key.clone();
-            let function = {
-                let e_stack = Rc::clone(&rc_stack);
-                let e_env = Rc::clone(&env);
-                move |_: Vec<RefAgalValue>, _: &Stack, _: RefEnvironment| -> RefAgalValue {
-                    let data = get_instance_property_value(
-                        e_stack.clone(),
-                        e_env.clone(),
-                        &key_clone,
-                        &value,
-                    );
-                    data
-                }
-            };
-            let func = Rc::new(function);
             let value = AgalValue::NativeFunction(crate::runtime::AgalNativeFunction {
                 name: "aCadena".to_string(),
-                func,
+                func: Rc::new({
+                    let e_stack = Rc::clone(&rc_stack);
+                    let e_env = Rc::clone(&env);
+                    move |_, _, _, _, _| -> RefAgalValue {
+                        let data = get_instance_property_value(
+                            e_stack.clone(),
+                            e_env.clone(),
+                            &key_clone,
+                            &value,
+                        );
+                        data
+                    }
+                }),
             });
             value.as_ref()
         }
         "__aConsola__" => {
             let key_clone = key.clone();
-            let function = {
-                let e_stack = Rc::clone(&rc_stack);
-                let e_env = Rc::clone(&env);
-                move |_: Vec<RefAgalValue>, _: &Stack, _: RefEnvironment| -> RefAgalValue {
-                    let data = get_instance_property_value(
-                        e_stack.clone(),
-                        e_env.clone(),
-                        &key_clone,
-                        &value,
-                    );
-                    data
-                }
-            };
-            let func = Rc::new(function);
             let value = AgalValue::NativeFunction(crate::runtime::AgalNativeFunction {
                 name: "__aConsola__".to_string(),
-                func,
+                func:Rc::new({
+                    let e_stack = Rc::clone(&rc_stack);
+                    let e_env = Rc::clone(&env);
+                    move |_, _, _, _, _| -> RefAgalValue {
+                        let data = get_instance_property_value(
+                            e_stack.clone(),
+                            e_env.clone(),
+                            &key_clone,
+                            &value,
+                        );
+                        data
+                    }
+                }),
             });
             value.as_ref()
         }
         "aNumero" => {
             let key_clone = key.clone();
-            let function = {
-                let e_stack = Rc::clone(&rc_stack);
-                let e_env = Rc::clone(&env);
-                move |_: Vec<RefAgalValue>, _: &Stack, _: RefEnvironment| -> RefAgalValue {
-                    let data = get_instance_property_value(
-                        e_stack.clone(),
-                        e_env.clone(),
-                        &key_clone,
-                        &value,
-                    );
-                    data
-                }
-            };
-            let func = Rc::new(function);
             let value = AgalValue::NativeFunction(crate::runtime::AgalNativeFunction {
                 name: "aNumero".to_string(),
-                func,
+                func:Rc::new({
+                    let e_stack = Rc::clone(&rc_stack);
+                    let e_env = Rc::clone(&env);
+                    move |_, _, _, _, _| -> RefAgalValue {
+                        let data = get_instance_property_value(
+                            e_stack.clone(),
+                            e_env.clone(),
+                            &key_clone,
+                            &value,
+                        );
+                        data
+                    }
+                }),
             });
             value.as_ref()
         }
         "aBuleano" => {
             let key_clone = key.clone();
-            let function = {
-                let e_stack = Rc::clone(&rc_stack);
-                let e_env = Rc::clone(&env);
-                move |_: Vec<RefAgalValue>, _: &Stack, _: RefEnvironment| -> RefAgalValue {
-                    let data = get_instance_property_value(
-                        e_stack.clone(),
-                        e_env.clone(),
-                        &key_clone,
-                        &value,
-                    );
-                    data
-                }
-            };
-            let func = Rc::new(function);
             let value = AgalValue::NativeFunction(crate::runtime::AgalNativeFunction {
                 name: "aBuleano".to_string(),
-                func,
+                func:Rc::new({
+                    let e_stack = Rc::clone(&rc_stack);
+                    let e_env = Rc::clone(&env);
+                    move |_, _, _, _, _| -> RefAgalValue {
+                        let data = get_instance_property_value(
+                            e_stack.clone(),
+                            e_env.clone(),
+                            &key_clone,
+                            &value,
+                        );
+                        data
+                    }
+                }),
             });
             value.as_ref()
         }
         "__aIterable__" => {
             let key_clone = key.clone();
-            let function = {
-                let e_stack = Rc::clone(&rc_stack);
-                let e_env = Rc::clone(&env);
-                move |_: Vec<RefAgalValue>, _: &Stack, _: RefEnvironment| -> RefAgalValue {
-                    let data = get_instance_property_value(
-                        e_stack.clone(),
-                        e_env.clone(),
-                        &key_clone,
-                        &value,
-                    );
-                    data
-                }
-            };
-            let func = Rc::new(function);
             let value = AgalValue::NativeFunction(crate::runtime::AgalNativeFunction {
                 name: "__aIterable__".to_string(),
-                func,
+                func:Rc::new({
+                    let e_stack = Rc::clone(&rc_stack);
+                    let e_env = Rc::clone(&env);
+                    move |_, _, _, _, _| -> RefAgalValue {
+                        let data = get_instance_property_value(
+                            e_stack.clone(),
+                            e_env.clone(),
+                            &key_clone,
+                            &value,
+                        );
+                        data
+                    }
+                }),
             });
             value.as_ref()
         }

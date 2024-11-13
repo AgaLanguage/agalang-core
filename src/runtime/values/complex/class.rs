@@ -43,6 +43,9 @@ impl AgalValuable for AgalPrototype {
     fn to_value(self) -> AgalValue {
         AgalValue::SuperInstance(self)
     }
+    fn to_agal_string(self, stack: &Stack, env: RefEnvironment) -> Result<AgalString, AgalThrow> {
+        Ok(AgalString::from_string("<instancia super>".to_string()))
+    }
     fn to_agal_console(self, stack: &Stack, env: RefEnvironment) -> Result<AgalString, AgalThrow> {
         Ok(AgalString::from_string("\x1b[36m<instancia super>\x1b[39m".to_string()))
     }

@@ -23,6 +23,9 @@ impl AgalValuable for AgalFunction {
     fn to_value(self) -> crate::runtime::AgalValue {
         crate::runtime::AgalValue::Function(self)
     }
+    fn to_agal_string(self, _: &Stack, _: RefEnvironment) -> Result<AgalString, AgalThrow> {
+        Ok(AgalString::from_string("<Funcion>".to_string()))
+    }
     fn to_agal_console(self, _: &Stack, _: RefEnvironment) -> Result<AgalString, AgalThrow> {
         Ok(AgalString::from_string("\x1b[36m<Funcion>\x1b[39m".to_string()))
     }

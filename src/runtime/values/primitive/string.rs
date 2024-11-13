@@ -1,12 +1,12 @@
 use std::rc::Rc;
 
-use crate::runtime::{
+use crate::{runtime::{
     binary_operation_error,
     env::RefEnvironment,
     get_instance_property_error, unary_operation_error,
     values::{AgalNumber, AgalThrow, AgalValuable, AgalValue},
     AgalArray, RefAgalValue, Stack,
-};
+}, Modules};
 
 use super::AgalBoolean;
 
@@ -54,7 +54,7 @@ impl AgalValuable for AgalString {
     ) -> RefAgalValue {
         match key.as_str() {
             "caracteres" => {
-                let function = move |_: Vec<RefAgalValue>, _: &Stack, _: RefEnvironment| {
+                let function = move |_: Vec<RefAgalValue>, _: &Stack, _: RefEnvironment, _:&Modules, _:RefAgalValue| {
                     AgalValue::Array(get_chars(&self)).as_ref()
                 };
                 let func = Rc::new(function);

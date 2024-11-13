@@ -41,10 +41,13 @@ impl AgalValuable for AgalObject {
         let hashmap = self.get_hashmap();
         hashmap.keys().cloned().collect()
     }
+    fn to_agal_string(self, stack: &Stack, env: RefEnvironment) -> Result<AgalString, AgalThrow> {
+        Ok(AgalString::from_string(format!("<Objeto>")))
+    }
     fn to_agal_console(self, stack: &Stack, env: RefEnvironment) -> Result<AgalString, AgalThrow> {
         let mut result = String::new();
         for (i, (key, value)) in self.0.as_ref().borrow().iter().enumerate(){
-            let data = value.as_ref().borrow().clone().to_agal_console(stack, env.clone());
+            let data = value.as_ref().borrow().clone().to_agal_value(stack, env.clone());
             let str = if let Ok(st) = &data {st.get_string()} else {return data};
             if i > 0 {
                 result.push_str(", ");

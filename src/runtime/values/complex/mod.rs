@@ -1,4 +1,4 @@
-use crate::runtime::{env::RefEnvironment, AgalString, Stack};
+use crate::{runtime::{env::RefEnvironment, AgalString, Stack}, Modules};
 use parser::{
     internal::{ErrorNames, ErrorTypes},
     node_error,
@@ -87,7 +87,7 @@ impl AgalValuable for AgalArray {
         match key.as_str() {
             "unir" => {
                 let function =
-                    move |args: Vec<RefAgalValue>, stack: &Stack, env: RefEnvironment| {
+                    move |args: Vec<RefAgalValue>, stack: &Stack, env: RefEnvironment, _: &Modules, _:RefAgalValue| {
                         let sep = args.get(0);
                         let sep = if let Some(s) = sep {
                             s.borrow().clone()

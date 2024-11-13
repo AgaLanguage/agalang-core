@@ -182,10 +182,6 @@ impl AgalValuable for AgalNumber {
     fn delete_object_property(self, stack: &Stack, env: RefEnvironment, key: String) {
         delete_property_error(stack, env, key);
     }
-
-    fn construct(self, _: &Stack, _: RefEnvironment, _: Vec<RefAgalValue>) -> RefAgalValue {
-        AgalValue::Never.as_ref()
-    }
 }
 /*
 #[derive(Clone)]
