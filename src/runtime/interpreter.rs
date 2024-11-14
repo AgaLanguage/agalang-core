@@ -601,10 +601,13 @@ pub fn interpreter(
                 modules_manager,
             );
             if try_val.borrow().is_throw() {
+                if try_node.catch == None {
+                    return AgalValue::Never.to_ref_value()
+                }
                 let env = env.borrow().clone().crate_child(false).as_ref();
                 env.borrow_mut().define(
                     &stack,
-                    &try_node.catch.0,
+                    &node_catch.0,
                     try_val
                         .borrow()
                         .get_throw()
@@ -616,7 +619,7 @@ pub fn interpreter(
                     node,
                 );
                 return interpreter(
-                    &try_node.catch.1.clone().to_node(),
+                    &node_catch.1.clone().to_node(),
                     &stack,
                     env,
                     modules_manager,
