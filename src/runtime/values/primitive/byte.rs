@@ -21,6 +21,9 @@ impl AgalValuable for AgalByte {
     fn to_agal_console(self, _: &Stack, _: RefEnvironment) -> Result<AgalString, AgalThrow> {
         Ok(AgalString::from_string(format!("\x1b[94m0by{:08b}\x1b[39m", self.0)))
     }
+    fn to_agal_byte(self, _: &Stack) -> Result<AgalByte, AgalThrow> {
+        Ok(self)
+    }
     fn binary_operation(
         &self,
         stack: &Stack,

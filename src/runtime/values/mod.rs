@@ -256,6 +256,19 @@ impl AgalValuable for AgalValue {
             }),
         }
     }
+    fn to_agal_byte(self, stack: &Stack) -> Result<AgalByte, AgalThrow> {
+        match self {
+            AgalValue::Byte(a) => Ok(a),
+            AgalValue::Throw(t) => Err(t),
+            AgalValue::Object(o) => o.to_agal_byte(stack),
+            AgalValue::SuperInstance(s) => s.to_agal_byte(stack),
+            _ => Err(AgalThrow::Params {
+                type_error: ErrorNames::CustomError("Error Iterable"),
+                message: "El valor no es iterable".to_string(),
+                stack: Box::new(stack.clone()),
+            }),
+        }
+    }
     fn to_agal_console(self, stack: &Stack, env: RefEnvironment) -> Result<AgalString, AgalThrow> {
         match self {
             AgalValue::Array(a) => a.to_agal_console(stack, env),
@@ -455,6 +468,13 @@ where
         Err(AgalThrow::Params {
             type_error: ErrorNames::CustomError("Error Iterable"),
             message: "El valor no es iterable".to_string(),
+            stack: Box::new(stack.clone()),
+        })
+    }
+    fn to_agal_byte(self, stack: &Stack) -> Result<AgalByte, AgalThrow> {
+        Err(AgalThrow::Params {
+            type_error: ErrorNames::TypeError,
+            message: "El valor no es un byte".to_string(),
             stack: Box::new(stack.clone()),
         })
     }

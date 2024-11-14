@@ -35,7 +35,7 @@ pub fn interpreter(
                         let list = data.borrow().clone().to_agal_array(&stack);
                         match list {
                             Ok(list) => {
-                                for n in list.get_vec().iter() {
+                                for n in list.get_vec().borrow().iter() {
                                     vec.push(n.clone());
                                 }
                             }
@@ -605,6 +605,7 @@ pub fn interpreter(
                     return AgalValue::Never.to_ref_value()
                 }
                 let env = env.borrow().clone().crate_child(false).as_ref();
+                let node_catch = try_node.catch.clone().unwrap();
                 env.borrow_mut().define(
                     &stack,
                     &node_catch.0,

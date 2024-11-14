@@ -2,3 +2,4 @@
 target/
 base/
 Cargo.lock
+*.txt

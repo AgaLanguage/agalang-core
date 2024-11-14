@@ -1,24 +1,12 @@
 importar ':consola' como consola;
 importar ':sa' como sa;
 
-clase A {
-  x = 1;
+
+fn abrir_archivo(path, buf){
+  intentar sa::crear_archivo(path);
+  def bufA = sa::leer_archivo(path);
+  sa::escribir_archivo(path, [..bufA, ..buf]);
 }
-clase Aga extiende A {
-  y = 2;
-  constructor(){
-    este.y = 4;
-  };
-  pub agrega(cantidad) {
-    consola::pintar(este);
-    este.y += cantidad;
-    ret este;
-  };
-  pub anunciar(texto){
-    def cantidad = este.y;
-    consola::pintar("\x1b[35m{texto}\x1b[39m", cantidad, "\x1b[35munidades\x1b[39m");
-    ret este;
-  };
-}
-def a = Aga()::agrega(2).agrega(4).anunciar('tenemos en existencia');
-consola::pintar(sa::obtener_ruta('./src')::es_archivo());
+
+def buf = [0by01001000, 0by01101111, 0by01101100, 0by01100001, 0by00100000, 0by01001101, 0by01110101, 0by01101110, 0by01100100, 0by01101111];
+consola::pintar(abrir_archivo('./test.txt', buf));
