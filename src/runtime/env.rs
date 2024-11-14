@@ -4,7 +4,7 @@ use std::{
     rc::Rc,
 };
 
-use super::{AgalBoolean, AgalThrow::Params, AgalValue, RefAgalValue, Stack};
+use super::{AgalBoolean, AgalThrow, AgalValuable, AgalValue, RefAgalValue, Stack};
 use parser::{ast::Node, internal::ErrorNames};
 
 pub type RefEnvironment = Rc<RefCell<Environment>>;
@@ -28,7 +28,7 @@ const KEYWORDS: [&str; 6] = [
     NULL_KEYWORD,
     NOTHING_KEYWORD,
     THIS_KEYWORD,
-    SUPER_KEYWORD
+    SUPER_KEYWORD,
 ];
 
 impl Environment {
@@ -42,8 +42,8 @@ impl Environment {
     pub fn as_ref(self) -> RefEnvironment {
         Rc::new(RefCell::new(self))
     }
-    pub fn get_this(self, node: &Node) -> RefAgalValue {
-        self.get(THIS_KEYWORD, node)
+    pub fn get_this(self, stack: &Stack, node: &Node) -> RefAgalValue {
+        self.get(stack, THIS_KEYWORD, node)
     }
     pub fn use_private(self) -> bool {
         if self.in_class {
@@ -74,70 +74,76 @@ impl Environment {
         node: &Node,
     ) -> RefAgalValue {
         if self.is_keyword(name) {
-            let value = AgalValue::Throw(Params {
+            return AgalThrow::Params {
                 type_error: ErrorNames::EnviromentError,
                 message: "No se puede declarar una variable con el nombre de una palabra clave"
                     .to_string(),
                 stack: Box::new(stack.clone()),
-            });
-            return value.as_ref();
+            }
+            .to_ref_value();
         }
         if self.has(name, node) {
-            let value = AgalValue::Throw(Params {
+            return AgalThrow::Params {
                 type_error: ErrorNames::EnviromentError,
                 message: format!("La variable {} ya ha sido declarada", name),
                 stack: Box::new(stack.clone()),
-            });
-            return value.as_ref();
+            }
+            .to_ref_value();
         }
         if is_constant {
             self.constants.borrow_mut().insert(name.to_string());
         }
-        self.variables.borrow_mut().insert(name.to_string(), value.clone());
+        self.variables
+            .borrow_mut()
+            .insert(name.to_string(), value.clone());
         value
     }
-    pub fn assign(&mut self, name: &str, value: RefAgalValue, node: &Node) -> RefAgalValue {
+    pub fn assign(&mut self, stack: &Stack, name: &str, value: RefAgalValue, node: &Node) -> RefAgalValue {
         if self.is_keyword(name) {
-            let value = AgalValue::Throw(Params {
+            return AgalThrow::Params {
                 type_error: ErrorNames::EnviromentError,
                 message: "No se puede reasignar una palabra clave".to_string(),
-                stack: Box::new(Stack::get_default()),
-            });
-            return value.as_ref();
+                stack: Box::new(stack.clone()),
+            }
+            .to_ref_value();
         }
         if !self.has(name, node) {
-            let value = AgalValue::Throw(Params {
+            return AgalThrow::Params {
                 type_error: ErrorNames::EnviromentError,
-                message: format!("La variable {} no ha sido declarada", name),
-                stack: Box::new(Stack::get_default()),
-            });
-            return value.as_ref();
+                message: format!("La variable {} ya ha sido declarada", name),
+                stack: Box::new(stack.clone()),
+            }
+            .to_ref_value();
         }
         if self.constants.borrow_mut().contains(name) {
-            let value = AgalValue::Throw(Params {
+            return AgalThrow::Params {
                 type_error: ErrorNames::EnviromentError,
                 message: "No se puede reasignar una constante".to_string(),
-                stack: Box::new(Stack::get_default()),
-            });
-            return value.as_ref();
+                stack: Box::new(stack.clone()),
+            }
+            .to_ref_value();
         }
-        self.variables.borrow_mut().insert(name.to_string(), value.clone());
+        self.variables
+            .borrow_mut()
+            .insert(name.to_string(), value.clone());
         value
     }
     pub fn set(&mut self, name: &str, value: RefAgalValue) -> RefAgalValue {
-        self.variables.borrow_mut().insert(name.to_string(), value.clone());
+        self.variables
+            .borrow_mut()
+            .insert(name.to_string(), value.clone());
         value
     }
-    pub fn get(&self, name: &str, node: &Node) -> RefAgalValue {
+    pub fn get(&self, stack: &Stack, name: &str, node: &Node) -> RefAgalValue {
         let _env = self.resolve(name, node);
         let env = _env.borrow_mut();
         if !env.has(name, node) {
-            let value = AgalValue::Throw(Params {
+            return AgalThrow::Params {
                 type_error: ErrorNames::EnviromentError,
-                message: format!("La variable {} no ha sido declarada", name),
-                stack: Box::new(Stack::get_default()),
-            });
-            return value.as_ref();
+                message:  format!("La variable {} no ha sido declarada", name),
+                stack: Box::new(stack.clone()),
+            }
+            .to_ref_value();
         }
         let a = env.variables.borrow_mut().get(name).unwrap().clone();
         a
@@ -149,7 +155,8 @@ impl Environment {
         self.resolve(name, node)
             .borrow()
             .variables
-            .borrow_mut().contains_key(name)
+            .borrow_mut()
+            .contains_key(name)
     }
     fn resolve(&self, name: &str, node: &Node) -> RefEnvironment {
         if !self._has(name) && self.parent.is_some() {
@@ -162,20 +169,22 @@ pub fn get_default() -> Environment {
     let mut env = Environment {
         in_class: false,
         parent: None,
-            variables: Rc::new(RefCell::new(HashMap::new())),
-            constants: Rc::new(RefCell::new(HashSet::new())),
+        variables: Rc::new(RefCell::new(HashMap::new())),
+        constants: Rc::new(RefCell::new(HashSet::new())),
     };
     env.variables.borrow_mut().insert(
         TRUE_KEYWORD.to_string(),
-        AgalValue::Boolean(AgalBoolean::new(true)).as_ref(),
+        AgalBoolean::new(true).to_ref_value(),
     );
     env.variables.borrow_mut().insert(
         FALSE_KEYWORD.to_string(),
-        AgalValue::Boolean(AgalBoolean::new(false)).as_ref(),
+        AgalBoolean::new(false).to_ref_value(),
     );
     env.variables
-    .borrow_mut().insert(NULL_KEYWORD.to_string(), AgalValue::Null.as_ref());
+        .borrow_mut()
+        .insert(NULL_KEYWORD.to_string(), AgalValue::Null.as_ref());
     env.variables
-    .borrow_mut().insert(NOTHING_KEYWORD.to_string(), AgalValue::Never.as_ref());
+        .borrow_mut()
+        .insert(NOTHING_KEYWORD.to_string(), AgalValue::Never.as_ref());
     env
 }

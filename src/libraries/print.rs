@@ -1,8 +1,8 @@
 use std::{cell::RefCell, rc::Rc};
 
 use crate::runtime::{
-    AgalClassProperty, AgalNativeFunction, AgalObject, AgalPrototype, AgalValuable, AgalValue,
-    RefAgalValue,
+    AgalClassProperty, AgalNativeFunction, AgalObject, AgalPrototype, AgalValuable,
+    AgalValuableManager, AgalValue, RefAgalValue,
 };
 
 pub fn get_module(prefix: &str) -> RefAgalValue {

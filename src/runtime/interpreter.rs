@@ -4,12 +4,15 @@ use parser::{
 };
 use std::{cell::RefCell, collections::HashMap, path::Path, rc::Rc};
 
-use crate::{path::absolute_path, Modules, ToResult};
-
-use super::{
-    env::THIS_KEYWORD, full_eval, AgalArray, AgalBoolean, AgalByte, AgalClass, AgalClassProperty,
-    AgalError, AgalFunction, AgalNumber, AgalObject, AgalPrototype, AgalString, AgalThrow,
-    AgalValuable, AgalValue, Environment, RefAgalValue, Stack,
+use crate::{
+    path::absolute_path,
+    runtime::{
+        env::THIS_KEYWORD, full_eval, AgalArray, AgalBoolean, AgalByte, AgalClass,
+        AgalClassProperty, AgalComplex, AgalError, AgalFunction, AgalInternal, AgalNumber,
+        AgalObject, AgalPrototype, AgalString, AgalThrow, AgalValuable, AgalValuableManager,
+        AgalValue, Environment, RefAgalValue, Stack,
+    },
+    Modules, ToResult,
 };
 
 pub fn interpreter(
@@ -39,7 +42,7 @@ pub fn interpreter(
                                     vec.push(n.clone());
                                 }
                             }
-                            Err(err) => return AgalValue::Throw(err).as_ref(),
+                            Err(err) => return err.to_ref_value(),
                         }
                     }
                     _ => {}
@@ -50,25 +53,26 @@ pub fn interpreter(
         Node::Assignment(assignment) => {
             let value = interpreter(&assignment.value, &stack, env.clone(), modules_manager);
             if value.borrow().is_never() {
-                return AgalValue::Throw(AgalThrow::Params {
+                return AgalThrow::Params {
                     type_error: ErrorNames::TypeError,
                     message: "No se puede asignar \"nada\" a una variable".to_string(),
                     stack: Box::new(stack),
-                })
-                .as_ref();
+                }
+                .to_ref_value();
             }
             match assignment.identifier.as_ref() {
                 Node::Identifier(identifier) => {
-                    env.borrow_mut().assign(&identifier.name, value, node)
+                    env.borrow_mut()
+                        .assign(&stack, &identifier.name, value, node)
                 }
                 Node::Member(member) => {
                     if member.instance {
-                        return AgalValue::Throw(AgalThrow::Params {
+                        return AgalThrow::Params {
                             type_error: ErrorNames::TypeError,
                             message: "No se puede asignar una propiedad de instancia".to_string(),
                             stack: Box::new(stack),
-                        })
-                        .as_ref();
+                        }
+                        .to_ref_value();
                     }
                     let key = if !member.computed && member.member.is_identifier() {
                         member.member.get_identifier().unwrap().name.clone()
@@ -77,7 +81,7 @@ pub fn interpreter(
                         let key = key.borrow().clone().to_agal_string(&stack, env.clone());
                         match key {
                             Ok(key) => key.get_string().to_string(),
-                            Err(err) => return AgalValue::Throw(err).as_ref(),
+                            Err(err) => return err.to_ref_value(),
                         }
                     };
 
@@ -127,7 +131,7 @@ pub fn interpreter(
                     let key = key.borrow().clone().to_agal_string(&stack, env.clone());
                     match key {
                         Ok(key) => key.get_string().to_string(),
-                        Err(err) => return AgalValue::Throw(err).as_ref(),
+                        Err(err) => return err.to_ref_value(),
                     }
                 };
                 let callee =
@@ -157,12 +161,14 @@ pub fn interpreter(
         }
         Node::Class(class) => {
             let extend_of_value = if let Some(extend) = &class.extend_of {
-                let value = env.borrow().get(&extend.name, node);
+                let value = env.borrow().get(&stack, &extend.name, node);
                 let value: &AgalValue = &value.borrow();
                 let value = value.clone();
                 match value {
-                    AgalValue::Class(class) => Some(Rc::new(RefCell::new(class))),
-                    AgalValue::Throw(th) => return th.to_ref_value(),
+                    AgalValue::Complex(AgalComplex::Class(class)) => {
+                        Some(Rc::new(RefCell::new(class)))
+                    }
+                    AgalValue::Internal(AgalInternal::Throw(th)) => return th.to_ref_value(),
                     _ => {
                         return AgalThrow::Params {
                             type_error: ErrorNames::TypeError,
@@ -206,7 +212,7 @@ pub fn interpreter(
         }
         Node::DoWhile(do_while) => {
             let mut value = AgalValue::Never.as_ref();
-            let mut condition = Ok(AgalBoolean::new(true));
+            let mut condition: Result<AgalBoolean, AgalThrow> = Ok(AgalBoolean::new(true));
             loop {
                 match condition {
                     Ok(condition) => {
@@ -214,7 +220,7 @@ pub fn interpreter(
                             break;
                         }
                     }
-                    Err(err) => return AgalValue::Throw(err).as_ref(),
+                    Err(err) => return err.to_ref_value(),
                 }
                 value = interpreter(
                     &do_while.body.clone().to_node(),
@@ -242,12 +248,12 @@ pub fn interpreter(
             }
             value
         }
-        Node::Error(error) => AgalValue::Throw(AgalThrow::Error(AgalError::new(
+        Node::Error(error) => AgalThrow::Error(AgalError::new(
             ErrorNames::SyntaxError,
             error.message.clone(),
             Box::new(stack),
-        )))
-        .as_ref(),
+        ))
+        .to_ref_value(),
         Node::Export(export) => match export.value.as_ref() {
             Node::VarDecl(var) => {
                 let value = interpreter(
@@ -269,17 +275,19 @@ pub fn interpreter(
                 AgalValue::Export(func.name.clone(), function).as_ref()
             }
             Node::Name(name) => {
-                let value = env.borrow().get(&name.name, node);
+                let value = env.borrow().get(&stack, &name.name, node);
                 AgalValue::Export(name.name.clone(), value).as_ref()
             }
             Node::Class(class) => {
                 let extend_of_value = if let Some(extend) = &class.extend_of {
-                    let value = env.borrow().get(&extend.name, node);
+                    let value = env.borrow().get(&stack, &extend.name, node);
                     let value: &AgalValue = &value.borrow();
                     let value = value.clone();
                     match value {
-                        AgalValue::Class(class) => Some(Rc::new(RefCell::new(class))),
-                        AgalValue::Throw(th) => return th.to_ref_value(),
+                        AgalValue::Complex(AgalComplex::Class(class)) => {
+                            Some(Rc::new(RefCell::new(class)))
+                        }
+                        AgalValue::Internal(AgalInternal::Throw(th)) => return th.to_ref_value(),
                         _ => {
                             return AgalThrow::Params {
                                 type_error: ErrorNames::TypeError,
@@ -333,7 +341,7 @@ pub fn interpreter(
         },
         Node::For(for_node) => {
             let mut value = AgalValue::Never.as_ref();
-            let mut condition = Ok(AgalBoolean::new(true));
+            let mut condition: Result<AgalBoolean, AgalThrow> = Ok(AgalBoolean::new(true));
             let env = env.borrow().clone().crate_child(false).as_ref();
             interpreter(&for_node.init, &stack, env.clone(), modules_manager); // init value
             loop {
@@ -343,7 +351,7 @@ pub fn interpreter(
                             break;
                         }
                     }
-                    Err(err) => return AgalValue::Throw(err).as_ref(),
+                    Err(err) => return err.to_ref_value(),
                 }
                 value = interpreter(
                     &for_node.body.clone().to_node(),
@@ -382,7 +390,7 @@ pub fn interpreter(
             env.borrow_mut()
                 .define(&stack, &func.name, function, true, node)
         }
-        Node::Identifier(id) => env.borrow().get(&id.name, node),
+        Node::Identifier(id) => env.borrow().get(&stack, &id.name, node),
         Node::If(if_node) => {
             let condition = interpreter(&if_node.condition, &stack, env.clone(), modules_manager);
             let condition = condition
@@ -409,7 +417,7 @@ pub fn interpreter(
                     }
                     return AgalValue::Never.as_ref();
                 }
-                Err(err) => return AgalValue::Throw(err).as_ref(),
+                Err(err) => return err.to_ref_value(),
             }
         }
         Node::Import(import) => {
@@ -421,15 +429,20 @@ pub fn interpreter(
             } else {
                 let path = absolute_path(&import.file);
                 let path = Path::new(&path).parent();
-                if let Some(path) = path{
+                if let Some(path) = path {
                     let filename = format!("{}/{}", path.to_string_lossy(), import.path);
                     let filename = absolute_path(&filename);
-                    full_eval(&filename, &stack, env.borrow().get_global(), modules_manager)
+                    full_eval(
+                        &filename,
+                        &stack,
+                        env.borrow().get_global(),
+                        modules_manager,
+                    )
                 } else {
                     Err(())
                 }
             };
-            if let Err(e) = module{
+            if let Err(e) = module {
                 return AgalValue::Never.as_ref();
             }
             let module = module.unwrap();
@@ -453,7 +466,7 @@ pub fn interpreter(
                     let key = key.borrow().clone().to_agal_string(&stack, env.clone());
                     match key {
                         Ok(key) => key.get_string().to_string(),
-                        Err(err) => return AgalValue::Throw(err).as_ref(),
+                        Err(err) => return err.to_ref_value(),
                     }
                 };
                 object
@@ -470,7 +483,7 @@ pub fn interpreter(
                     let key = key.borrow().clone().to_agal_string(&stack, env.clone());
                     match key {
                         Ok(key) => key.get_string().to_string(),
-                        Err(err) => return AgalValue::Throw(err).as_ref(),
+                        Err(err) => return err.to_ref_value(),
                     }
                 };
                 object
@@ -480,7 +493,7 @@ pub fn interpreter(
                     .get_object_property(&stack, env, key)
             }
         }
-        Node::Name(name) => env.borrow().get(&name.name, node),
+        Node::Name(name) => env.borrow().get(&stack, &name.name, node),
         Node::Number(num) => {
             let n = if num.base == 10 {
                 str::parse::<f64>(&num.value).unwrap()
@@ -488,7 +501,7 @@ pub fn interpreter(
                 let i = i64::from_str_radix(&num.value, num.base as u32).unwrap();
                 i as f64
             };
-            AgalValue::Number(AgalNumber::new(n)).as_ref()
+            AgalNumber::new(n).to_ref_value()
         }
         Node::Object(obj) => {
             let mut hasmap = HashMap::new();
@@ -508,7 +521,7 @@ pub fn interpreter(
                                     interpreter(value, &stack, env.clone(), modules_manager);
                                 hasmap.insert(key.clone(), value);
                             }
-                            Err(err) => return AgalValue::Throw(err).as_ref(),
+                            Err(err) => return err.to_ref_value(),
                         }
                     }
                     NodeProperty::Iterable(iter) => {
@@ -540,12 +553,12 @@ pub fn interpreter(
                 if value.borrow().is_export() {
                     let value = value.borrow().clone().get_export();
                     if value.is_none() {
-                        return AgalValue::Throw(AgalThrow::Params {
+                        return AgalThrow::Params {
                             type_error: ErrorNames::SyntaxError,
                             message: "No se puede exportar un valor nulo".to_string(),
                             stack: Box::new(stack),
-                        })
-                        .as_ref();
+                        }
+                        .to_ref_value();
                     }
                     let export = value.unwrap();
                     module_instance.insert(
@@ -559,7 +572,7 @@ pub fn interpreter(
                 }
             }
             let prototype = AgalPrototype::new(Rc::new(RefCell::new(module_instance)), None);
-            AgalValue::Object(AgalObject::from_prototype(prototype.as_ref())).as_ref()
+            AgalObject::from_prototype(prototype.as_ref()).to_ref_value()
         }
         Node::Return(ret) => {
             if ret.value.is_none() {
@@ -574,23 +587,21 @@ pub fn interpreter(
             for s in str.value.iter() {
                 match s {
                     StringData::Id(id) => {
-                        let data = env.borrow_mut().get(id, node);
+                        let data = env.borrow_mut().get(&stack, id, node);
                         let data = data.borrow().clone().to_agal_string(&stack, env.clone());
                         match data {
                             Ok(data) => string.push_str(&data.get_string()),
-                            Err(err) => {
-                                return AgalValue::Throw(err).as_ref();
-                            }
+                            Err(err) => return err.to_ref_value(),
                         }
                     }
                     StringData::Str(str) => string.push_str(str),
                 }
             }
-            AgalValue::String(AgalString::from_string(string)).as_ref()
+            AgalString::from_string(string).to_ref_value()
         }
         Node::Throw(throw) => {
             let value = interpreter(&throw.value, &stack, env.clone(), modules_manager);
-            AgalValue::Throw(AgalThrow::from_ref_value(value, Box::new(stack), env)).as_ref()
+            AgalThrow::from_ref_manager(value, &stack, env).to_ref_value()
         }
         Node::Try(try_node) => {
             let try_env = env.borrow().clone().crate_child(false).as_ref();
@@ -602,7 +613,7 @@ pub fn interpreter(
             );
             if try_val.borrow().is_throw() {
                 if try_node.catch == None {
-                    return AgalValue::Never.to_ref_value()
+                    return AgalValue::Never.to_ref_value();
                 }
                 let env = env.borrow().clone().crate_child(false).as_ref();
                 let node_catch = try_node.catch.clone().unwrap();
@@ -640,12 +651,12 @@ pub fn interpreter(
             Some(value) => {
                 let value = interpreter(value, &stack, env.clone(), modules_manager);
                 if value.borrow().is_never() {
-                    return AgalValue::Throw(AgalThrow::Params {
+                    return AgalThrow::Params {
                         type_error: ErrorNames::TypeError,
                         message: "No se puede asignar \"nada\" a una variable".to_string(),
                         stack: Box::new(stack),
-                    })
-                    .as_ref();
+                    }
+                    .to_ref_value();
                 }
                 env.borrow_mut()
                     .define(&stack, &var.name, value, var.is_const, node)
@@ -674,7 +685,7 @@ pub fn interpreter(
                             break;
                         }
                     }
-                    Err(err) => return AgalValue::Throw(err).as_ref(),
+                    Err(err) => return err.to_ref_value(),
                 }
                 value = interpreter(body, &stack, env.clone(), modules_manager);
                 let vc = value.clone();

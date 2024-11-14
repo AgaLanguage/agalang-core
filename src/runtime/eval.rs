@@ -1,10 +1,12 @@
 use std::{path::Path, rc::Rc};
 
-use super::{env::RefEnvironment, AgalValue, RefAgalValue, Stack};
 use parser as frontend;
 use parser::internal;
 
-use crate::{runtime, Modules, ToResult};
+use crate::{
+    runtime::{self, env::RefEnvironment, AgalInternal, AgalValue, RefAgalValue, Stack},
+    Modules, ToResult,
+};
 
 type EvalResult = Result<RefAgalValue, ()>;
 
@@ -66,7 +68,7 @@ fn eval(
     let value = runtime::interpreter(&program, stack, Rc::clone(&env), &modules_manager.clone());
     let result = Ok(value.clone());
     let value: &AgalValue = &value.borrow();
-    if let AgalValue::Throw(err) = value {
+    if let AgalValue::Internal(AgalInternal::Throw(err)) = value {
         let error = err.get_error();
         let type_err = error.get_type_error();
         let err = error.to_error();

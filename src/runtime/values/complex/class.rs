@@ -1,9 +1,12 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
-use super::AgalObject;
-use crate::{runtime::{
-    env::RefEnvironment, AgalString, AgalThrow, AgalValuable, AgalValue, RefAgalValue, Stack,
-}, Modules};
+use crate::{
+    runtime::{
+        env::RefEnvironment, AgalComplex, AgalObject, AgalString, AgalThrow, AgalValuable,
+        AgalValuableManager, AgalValue, RefAgalValue, Stack,
+    },
+    Modules,
+};
 use parser::util::{OpRefValue, RefValue};
 pub type RefHasMap<Value> = Rc<RefCell<HashMap<String, Value>>>;
 
@@ -41,13 +44,15 @@ impl AgalPrototype {
 
 impl AgalValuable for AgalPrototype {
     fn to_value(self) -> AgalValue {
-        AgalValue::SuperInstance(self)
+        AgalComplex::SuperInstance(self).to_value()
     }
     fn to_agal_string(self, stack: &Stack, env: RefEnvironment) -> Result<AgalString, AgalThrow> {
         Ok(AgalString::from_string("<instancia super>".to_string()))
     }
     fn to_agal_console(self, stack: &Stack, env: RefEnvironment) -> Result<AgalString, AgalThrow> {
-        Ok(AgalString::from_string("\x1b[36m<instancia super>\x1b[39m".to_string()))
+        Ok(AgalString::from_string(
+            "\x1b[36m<instancia super>\x1b[39m".to_string(),
+        ))
     }
     fn get_instance_property(
         self,
@@ -131,11 +136,17 @@ impl AgalClass {
         env: RefEnvironment,
         this: RefValue<AgalObject>,
         args: Vec<RefAgalValue>,
-        modules_manager:&Modules
+        modules_manager: &Modules,
     ) -> RefAgalValue {
         if let Some(class) = &self.extend_of {
             let value = class.as_ref().borrow();
-            value.constructor(stack, env.clone(), this.clone(), args.clone(), modules_manager);
+            value.constructor(
+                stack,
+                env.clone(),
+                this.clone(),
+                args.clone(),
+                modules_manager,
+            );
         }
         let instance = self.instance.borrow();
         let instance_properties = instance.instance_properties.borrow();
@@ -143,9 +154,13 @@ impl AgalClass {
         if let Some(property) = constructor {
             let this_value = this.as_ref().borrow();
             let property_value = property.value.as_ref().borrow();
-            property_value
-                .clone()
-                .call(stack, env, this_value.clone().to_ref_value(), args, modules_manager);
+            property_value.clone().call(
+                stack,
+                env,
+                this_value.clone().to_ref_value(),
+                args,
+                modules_manager,
+            );
         }
         let object = this.borrow();
         object.clone().to_ref_value()
@@ -153,7 +168,7 @@ impl AgalClass {
 }
 impl AgalValuable for AgalClass {
     fn to_value(self) -> AgalValue {
-        AgalValue::Class(self)
+        AgalComplex::Class(self).to_value()
     }
     fn to_agal_console(self, _: &Stack, _: RefEnvironment) -> Result<AgalString, AgalThrow> {
         Ok(AgalString::from_string(format!(
@@ -192,7 +207,7 @@ impl AgalValuable for AgalClass {
         env: RefEnvironment,
         _: RefAgalValue,
         args: Vec<RefAgalValue>,
-        modules_manager:&Modules
+        modules_manager: &Modules,
     ) -> RefAgalValue {
         let o = AgalObject::from_prototype(self.clone().instance);
         let this = Rc::new(RefCell::new(o.clone()));

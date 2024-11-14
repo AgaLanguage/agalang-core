@@ -3,9 +3,14 @@ use parser::{
     util::List,
 };
 
-use crate::{runtime::{
-    env::{RefEnvironment, THIS_KEYWORD}, get_instance_property_error, interpreter, AgalString, AgalThrow, AgalValuable, AgalValue, RefAgalValue, Stack
-}, Modules};
+use crate::{
+    runtime::{
+        env::{RefEnvironment, THIS_KEYWORD},
+        get_instance_property_error, interpreter, AgalComplex, AgalString, AgalThrow, AgalValuable,
+        AgalValuableManager, AgalValue, RefAgalValue, Stack,
+    },
+    Modules,
+};
 
 #[derive(Clone, PartialEq)]
 pub struct AgalFunction {
@@ -20,21 +25,23 @@ impl AgalFunction {
     }
 }
 impl AgalValuable for AgalFunction {
-    fn to_value(self) -> crate::runtime::AgalValue {
-        crate::runtime::AgalValue::Function(self)
+    fn to_value(self) -> AgalValue {
+        AgalComplex::Function(self).to_value()
     }
     fn to_agal_string(self, _: &Stack, _: RefEnvironment) -> Result<AgalString, AgalThrow> {
         Ok(AgalString::from_string("<Funcion>".to_string()))
     }
     fn to_agal_console(self, _: &Stack, _: RefEnvironment) -> Result<AgalString, AgalThrow> {
-        Ok(AgalString::from_string("\x1b[36m<Funcion>\x1b[39m".to_string()))
+        Ok(AgalString::from_string(
+            "\x1b[36m<Funcion>\x1b[39m".to_string(),
+        ))
     }
     fn get_instance_property(
         self,
-        stack: &crate::runtime::Stack,
+        stack: &Stack,
         env: RefEnvironment,
         key: String,
-    ) -> crate::runtime::RefAgalValue {
+    ) -> RefAgalValue {
         get_instance_property_error(stack, env, key, self.to_value())
     }
     fn call(
@@ -43,7 +50,7 @@ impl AgalValuable for AgalFunction {
         _: RefEnvironment,
         this: RefAgalValue,
         arguments: Vec<RefAgalValue>,
-        modules_manager: &Modules
+        modules_manager: &Modules,
     ) -> RefAgalValue {
         let mut new_env = self.env.as_ref().borrow().clone().crate_child(false);
         new_env.set(THIS_KEYWORD, this);
@@ -61,7 +68,12 @@ impl AgalValuable for AgalFunction {
                 &Node::Identifier(arg.clone()),
             );
         }
-        let value = interpreter(&self.body.to_node(), stack, new_env.as_ref(), &modules_manager.clone());
+        let value = interpreter(
+            &self.body.to_node(),
+            stack,
+            new_env.as_ref(),
+            &modules_manager.clone(),
+        );
         if value.as_ref().borrow().is_throw() {
             return value;
         }

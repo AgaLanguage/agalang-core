@@ -1,10 +1,12 @@
-use crate::{runtime::{
-    delete_property_error, env::RefEnvironment, get_instance_property_error, get_property_error,
-    set_property_error, unary_operation_error, AgalArray, AgalThrow, AgalValuable, AgalValue,
-    RefAgalValue, Stack,
-}, Modules};
-
-use super::{AgalBoolean, AgalString};
+use crate::{
+    runtime::{
+        delete_property_error, env::RefEnvironment, get_instance_property_error,
+        get_property_error, set_property_error, unary_operation_error, AgalArray, AgalBoolean,
+        AgalPrimitive, AgalString, AgalThrow, AgalValuable, AgalValuableManager, AgalValue,
+        RefAgalValue, Stack,
+    },
+    Modules,
+};
 
 type BinNumber = f64;
 
@@ -33,7 +35,7 @@ impl AgalNumber {
 }
 impl AgalValuable for AgalNumber {
     fn to_value(self) -> AgalValue {
-        AgalValue::Number(self)
+        AgalPrimitive::Number(self).to_value()
     }
     fn binary_operation(
         &self,
@@ -44,10 +46,16 @@ impl AgalValuable for AgalNumber {
     ) -> RefAgalValue {
         let other: &AgalValue = &other.borrow();
         match (other, operator) {
-            (AgalValue::Number(other), "+") => AgalNumber::new(self.0 + other.0).to_ref_value(),
-            (AgalValue::Number(other), "-") => AgalNumber::new(self.0 - other.0).to_ref_value(),
-            (AgalValue::Number(other), "*") => AgalNumber::new(self.0 * other.0).to_ref_value(),
-            (AgalValue::Number(other), "/") => {
+            (AgalValue::Primitive(AgalPrimitive::Number(other)), "+") => {
+                AgalNumber::new(self.0 + other.0).to_ref_value()
+            }
+            (AgalValue::Primitive(AgalPrimitive::Number(other)), "-") => {
+                AgalNumber::new(self.0 - other.0).to_ref_value()
+            }
+            (AgalValue::Primitive(AgalPrimitive::Number(other)), "*") => {
+                AgalNumber::new(self.0 * other.0).to_ref_value()
+            }
+            (AgalValue::Primitive(AgalPrimitive::Number(other)), "/") => {
                 if other.0 == 0f64 {
                     return AgalThrow::Params {
                         type_error: parser::internal::ErrorNames::MathError,
@@ -58,7 +66,7 @@ impl AgalValuable for AgalNumber {
                 }
                 AgalNumber::new(self.0 / other.0).to_ref_value()
             }
-            (AgalValue::Number(other), "%") => {
+            (AgalValue::Primitive(AgalPrimitive::Number(other)), "%") => {
                 if other.0 == 0f64 {
                     return AgalThrow::Params {
                         type_error: parser::internal::ErrorNames::MathError,
@@ -69,16 +77,28 @@ impl AgalValuable for AgalNumber {
                 }
                 AgalNumber::new(self.0 % other.0).to_ref_value()
             }
-            (AgalValue::Number(other), "==") => AgalBoolean::new(self.0 == other.0).to_ref_value(),
-            (AgalValue::Number(other), "!=") => AgalBoolean::new(self.0 != other.0).to_ref_value(),
-            (AgalValue::Number(other), "<") => AgalBoolean::new(self.0 < other.0).to_ref_value(),
-            (AgalValue::Number(other), "<=") => AgalBoolean::new(self.0 <= other.0).to_ref_value(),
-            (AgalValue::Number(other), ">") => AgalBoolean::new(self.0 > other.0).to_ref_value(),
-            (AgalValue::Number(other), ">=") => AgalBoolean::new(self.0 >= other.0).to_ref_value(),
-            (AgalValue::Number(other), "&&") => {
+            (AgalValue::Primitive(AgalPrimitive::Number(other)), "==") => {
+                AgalBoolean::new(self.0 == other.0).to_ref_value()
+            }
+            (AgalValue::Primitive(AgalPrimitive::Number(other)), "!=") => {
+                AgalBoolean::new(self.0 != other.0).to_ref_value()
+            }
+            (AgalValue::Primitive(AgalPrimitive::Number(other)), "<") => {
+                AgalBoolean::new(self.0 < other.0).to_ref_value()
+            }
+            (AgalValue::Primitive(AgalPrimitive::Number(other)), "<=") => {
+                AgalBoolean::new(self.0 <= other.0).to_ref_value()
+            }
+            (AgalValue::Primitive(AgalPrimitive::Number(other)), ">") => {
+                AgalBoolean::new(self.0 > other.0).to_ref_value()
+            }
+            (AgalValue::Primitive(AgalPrimitive::Number(other)), ">=") => {
+                AgalBoolean::new(self.0 >= other.0).to_ref_value()
+            }
+            (AgalValue::Primitive(AgalPrimitive::Number(other)), "&&") => {
                 (if self.0 == 0f64 { self } else { other }).to_ref_value()
             }
-            (AgalValue::Number(other), "||") => {
+            (AgalValue::Primitive(AgalPrimitive::Number(other)), "||") => {
                 (if self.0 != 0f64 { self } else { other }).to_ref_value()
             }
 
@@ -110,13 +130,16 @@ impl AgalValuable for AgalNumber {
         Ok(self)
     }
     fn to_agal_boolean(self, _: &Stack, _: RefEnvironment) -> Result<AgalBoolean, AgalThrow> {
-        Ok(AgalBoolean(self.0 != 0f64))
+        Ok(AgalBoolean::new(self.0 != 0f64))
     }
     fn to_agal_string(self, _: &Stack, _: RefEnvironment) -> Result<AgalString, AgalThrow> {
         Ok(AgalString::from_string(self.0.to_string()))
     }
     fn to_agal_console(self, _: &Stack, _: RefEnvironment) -> Result<AgalString, AgalThrow> {
-        Ok(AgalString::from_string(format!("\x1b[33m{}\x1b[39m", self.0)))
+        Ok(AgalString::from_string(format!(
+            "\x1b[33m{}\x1b[39m",
+            self.0
+        )))
     }
     fn get_instance_property(
         self,
@@ -124,7 +147,7 @@ impl AgalValuable for AgalNumber {
         env: RefEnvironment,
         key: String,
     ) -> RefAgalValue {
-        let value = AgalValue::Number(self);
+        let value = self.to_value();
         get_instance_property_error(stack, env, key, value)
     }
     fn call(
@@ -133,11 +156,11 @@ impl AgalValuable for AgalNumber {
         env: RefEnvironment,
         _: RefAgalValue,
         list: Vec<RefAgalValue>,
-        _: &Modules
+        _: &Modules,
     ) -> RefAgalValue {
         let value = list.get(0);
         if value.is_none() {
-            return AgalValue::Number(self).as_ref();
+            return self.to_ref_value();
         }
         let value = value.unwrap();
         let other = value.borrow().clone().to_agal_number(stack, env);
@@ -146,7 +169,7 @@ impl AgalValuable for AgalNumber {
         }
         let other = other.ok().unwrap();
         let number = self.multiply(other);
-        AgalValue::Number(number).as_ref()
+        number.to_ref_value()
     }
 
     fn get_keys(self) -> Vec<String> {

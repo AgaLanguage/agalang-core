@@ -1,11 +1,7 @@
 use crate::runtime::{
     env::{RefEnvironment, FALSE_KEYWORD, TRUE_KEYWORD},
-    Stack,
-};
-
-use super::{
-    super::{AgalThrow, AgalValuable, AgalValue},
-    get_instance_property_error, unary_operation_error, RefAgalValue,
+    get_instance_property_error, unary_operation_error, AgalArray, AgalThrow, AgalValuable,
+    AgalValuableManager, AgalValue, RefAgalValue, Stack,
 };
 
 mod string;
@@ -14,92 +10,229 @@ mod byte;
 pub use byte::AgalByte;
 mod number;
 pub use number::*;
+mod boolean;
+pub use boolean::*;
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct AgalBoolean(bool);
-impl AgalBoolean {
-    pub fn new(value: bool) -> AgalBoolean {
-        AgalBoolean(value)
-    }
-    pub fn to_bool(&self) -> bool {
-        self.0
-    }
+#[derive(Clone, PartialEq)]
+pub enum AgalPrimitive {
+    String(AgalString),
+    Char(AgalChar),
+    Byte(AgalByte),
+    Number(AgalNumber),
+    Boolean(AgalBoolean),
 }
-fn bool_to_str(value: bool) -> String {
-    let data = if value { TRUE_KEYWORD } else { FALSE_KEYWORD };
-    data.to_string()
-}
-impl AgalValuable for AgalBoolean {
+
+impl AgalValuableManager for AgalPrimitive {
+    fn get_type(self) -> &'static str {
+        match self {
+            Self::String(_) => "Cadena",
+            Self::Char(_) => "Caracter",
+            Self::Byte(_) => "Byte",
+            Self::Number(_) => "Numero",
+            Self::Boolean(_) => "Buleano",
+        }
+    }
+
     fn to_value(self) -> AgalValue {
-        AgalValue::Boolean(self)
+        todo!()
     }
-    fn to_agal_boolean(self, _: &Stack, _: RefEnvironment) -> Result<AgalBoolean, AgalThrow> {
-        Ok(self)
+
+    fn get_keys(self) -> Vec<String> {
+        match self {
+            Self::String(s) => s.get_keys(),
+            Self::Char(c) => c.get_keys(),
+            Self::Byte(b) => b.get_keys(),
+            Self::Number(n) => n.get_keys(),
+            Self::Boolean(b) => b.get_keys(),
+        }
     }
-    fn to_agal_string(self, _: &Stack, _: RefEnvironment) -> Result<AgalString, AgalThrow> {
-        Ok(AgalString::from_string(bool_to_str(self.0)))
+
+    fn get_length(self) -> usize {
+        match self {
+            Self::String(s) => s.get_length(),
+            Self::Char(c) => c.get_length(),
+            Self::Byte(b) => b.get_length(),
+            Self::Number(n) => n.get_length(),
+            Self::Boolean(b) => b.get_length(),
+        }
     }
-    fn to_agal_number(self, _: &Stack, _: RefEnvironment) -> Result<AgalNumber, AgalThrow> {
-        Ok(AgalNumber::new(if self.0 { 1f64 } else { 0f64 }))
+
+    fn to_agal_number(self, stack: &Stack, env: RefEnvironment) -> Result<AgalNumber, AgalThrow> {
+        match self {
+            Self::String(s) => s.to_agal_number(stack, env),
+            Self::Char(c) => c.to_agal_number(stack, env),
+            Self::Byte(b) => b.to_agal_number(stack, env),
+            Self::Number(n) => Ok(n.clone()),
+            Self::Boolean(b) => b.to_agal_number(stack, env),
+        }
     }
+
+    fn to_agal_string(self, stack: &Stack, env: RefEnvironment) -> Result<AgalString, AgalThrow> {
+        match self {
+            Self::String(s) => Ok(s.clone()),
+            Self::Char(c) => c.to_agal_string(stack, env),
+            Self::Byte(b) => b.to_agal_string(stack, env),
+            Self::Number(n) => n.to_agal_string(stack, env),
+            Self::Boolean(b) => b.to_agal_string(stack, env),
+        }
+    }
+
+    fn to_agal_boolean(self, stack: &Stack, env: RefEnvironment) -> Result<AgalBoolean, AgalThrow> {
+        match self {
+            Self::String(s) => s.to_agal_boolean(stack, env),
+            Self::Char(c) => c.to_agal_boolean(stack, env),
+            Self::Byte(b) => b.to_agal_boolean(stack, env),
+            Self::Number(n) => n.to_agal_boolean(stack, env),
+            Self::Boolean(b) => Ok(b.clone()),
+        }
+    }
+
+    fn to_agal_array(self, stack: &Stack) -> Result<AgalArray, AgalThrow> {
+        match self {
+            Self::String(s) => s.to_agal_array(stack),
+            Self::Char(c) => c.to_agal_array(stack),
+            Self::Byte(b) => b.to_agal_array(stack),
+            Self::Number(n) => n.to_agal_array(stack),
+            Self::Boolean(b) => b.to_agal_array(stack),
+        }
+    }
+
+    fn to_agal_byte(self, stack: &Stack) -> Result<AgalByte, AgalThrow> {
+        match self {
+            Self::String(s) => s.to_agal_byte(stack),
+            Self::Char(c) => c.to_agal_byte(stack),
+            Self::Byte(b) => Ok(b.clone()),
+            Self::Number(n) => n.to_agal_byte(stack),
+            Self::Boolean(b) => b.to_agal_byte(stack),
+        }
+    }
+
+    fn to_agal_value(self, stack: &Stack, env: RefEnvironment) -> Result<AgalString, AgalThrow> {
+        match self {
+            Self::String(s) => s.to_agal_value(stack, env),
+            Self::Char(c) => c.to_agal_value(stack, env),
+            Self::Byte(b) => b.to_agal_value(stack, env),
+            Self::Number(n) => n.to_agal_value(stack, env),
+            Self::Boolean(b) => b.to_agal_value(stack, env),
+        }
+    }
+
+    fn to_agal_console(self, stack: &Stack, env: RefEnvironment) -> Result<AgalString, AgalThrow> {
+        match self {
+            Self::String(s) => s.to_agal_console(stack, env),
+            Self::Char(c) => c.to_agal_console(stack, env),
+            Self::Byte(b) => b.to_agal_console(stack, env),
+            Self::Number(n) => n.to_agal_console(stack, env),
+            Self::Boolean(b) => b.to_agal_console(stack, env),
+        }
+    }
+
     fn binary_operation(
         &self,
         stack: &Stack,
-        _env: RefEnvironment,
+        env: RefEnvironment,
         operator: &str,
         other: RefAgalValue,
     ) -> RefAgalValue {
-        let other: &AgalValue = &other.borrow();
-        match other {
-            AgalValue::Boolean(other) => {
-                let boolean = match operator {
-                    "&&" => AgalBoolean::new(self.0 && other.0),
-                    "||" => AgalBoolean::new(self.0 || other.0),
-                    "==" => AgalBoolean::new(self.0 == other.0),
-                    "!=" => AgalBoolean::new(self.0 != other.0),
-                    _ => {
-                        return AgalValue::Throw(AgalThrow::Params {
-                            type_error: parser::internal::ErrorNames::TypeError,
-                            message: format!("Operador {} no soportado", operator),
-                            stack: Box::new(stack.clone()),
-                        })
-                        .as_ref();
-                    }
-                };
-                AgalValue::Boolean(boolean).as_ref()
-            }
-            _ => AgalValue::Throw(AgalThrow::Params {
-                type_error: parser::internal::ErrorNames::TypeError,
-                message: "No se puede operar con un valor no booleano".to_string(),
-                stack: Box::new(stack.clone()),
-            })
-            .as_ref(),
+        match self {
+            Self::String(s) => s.binary_operation(stack, env, operator, other),
+            Self::Char(c) => c.binary_operation(stack, env, operator, other),
+            Self::Byte(b) => b.binary_operation(stack, env, operator, other),
+            Self::Number(n) => n.binary_operation(stack, env, operator, other),
+            Self::Boolean(b) => b.binary_operation(stack, env, operator, other),
         }
     }
+
     fn unary_operator(&self, stack: &Stack, env: RefEnvironment, operator: &str) -> RefAgalValue {
-        match operator {
-            "&" | "?" => self.to_ref_value(),
-            "!" => AgalBoolean::new(!self.to_bool()).to_ref_value(),
-            "+" => match self.to_agal_number(stack, env) {
-                Ok(num) => num.to_ref_value(),
-                Err(throw) => throw.to_ref_value(),
-            },
-            _ => unary_operation_error(stack, operator, self.to_ref_value()),
+        match self {
+            Self::String(s) => s.unary_operator(stack, env, operator),
+            Self::Char(c) => c.unary_operator(stack, env, operator),
+            Self::Byte(b) => b.unary_operator(stack, env, operator),
+            Self::Number(n) => n.unary_operator(stack, env, operator),
+            Self::Boolean(b) => b.unary_operator(stack, env, operator),
         }
     }
-    fn to_agal_console(self, _: &Stack, _: RefEnvironment) -> Result<AgalString, AgalThrow> {
-        Ok(AgalString::from_string(format!(
-            "\x1b[33m{}\x1b[39m",
-            bool_to_str(self.0)
-        )))
+
+    fn unary_back_operator(
+        &self,
+        stack: &Stack,
+        env: RefEnvironment,
+        operator: &str,
+    ) -> RefAgalValue {
+        match self {
+            Self::String(s) => s.unary_back_operator(stack, env, operator),
+            Self::Char(c) => c.unary_back_operator(stack, env, operator),
+            Self::Byte(b) => b.unary_back_operator(stack, env, operator),
+            Self::Number(n) => n.unary_back_operator(stack, env, operator),
+            Self::Boolean(b) => b.unary_back_operator(stack, env, operator),
+        }
     }
+
+    fn get_object_property(self, stack: &Stack, env: RefEnvironment, key: String) -> RefAgalValue {
+        match self {
+            Self::String(s) => s.get_object_property(stack, env, key),
+            Self::Char(c) => c.get_object_property(stack, env, key),
+            Self::Byte(b) => b.get_object_property(stack, env, key),
+            Self::Number(n) => n.get_object_property(stack, env, key),
+            Self::Boolean(b) => b.get_object_property(stack, env, key),
+        }
+    }
+
+    fn set_object_property(
+        self,
+        stack: &Stack,
+        env: RefEnvironment,
+        key: String,
+        value: RefAgalValue,
+    ) -> RefAgalValue {
+        match self {
+            Self::String(s) => s.set_object_property(stack, env, key, value),
+            Self::Char(c) => c.set_object_property(stack, env, key, value),
+            Self::Byte(b) => b.set_object_property(stack, env, key, value),
+            Self::Number(n) => n.set_object_property(stack, env, key, value),
+            Self::Boolean(b) => b.set_object_property(stack, env, key, value),
+        }
+    }
+
+    fn delete_object_property(self, stack: &Stack, env: RefEnvironment, key: String) {
+        match self {
+            Self::String(s) => s.delete_object_property(stack, env, key),
+            Self::Char(c) => c.delete_object_property(stack, env, key),
+            Self::Byte(b) => b.delete_object_property(stack, env, key),
+            Self::Number(n) => n.delete_object_property(stack, env, key),
+            Self::Boolean(b) => b.delete_object_property(stack, env, key),
+        }
+    }
+
     fn get_instance_property(
         self,
         stack: &Stack,
         env: RefEnvironment,
         key: String,
     ) -> RefAgalValue {
-        let value = AgalValue::Boolean(self);
-        get_instance_property_error(stack, env, key, value)
+        match self {
+            Self::String(s) => s.get_instance_property(stack, env, key),
+            Self::Char(c) => c.get_instance_property(stack, env, key),
+            Self::Byte(b) => b.get_instance_property(stack, env, key),
+            Self::Number(n) => n.get_instance_property(stack, env, key),
+            Self::Boolean(b) => b.get_instance_property(stack, env, key),
+        }
+    }
+
+    fn call(
+        self,
+        stack: &Stack,
+        env: RefEnvironment,
+        this: RefAgalValue,
+        args: Vec<RefAgalValue>,
+        modules: &crate::Modules,
+    ) -> RefAgalValue {
+        match self {
+            Self::String(s) => s.call(stack, env, this, args, modules),
+            Self::Char(c) => c.call(stack, env, this, args, modules),
+            Self::Byte(b) => b.call(stack, env, this, args, modules),
+            Self::Number(n) => n.call(stack, env, this, args, modules),
+            Self::Boolean(b) => b.call(stack, env, this, args, modules),
+        }
     }
 }
