@@ -1,12 +1,15 @@
 use std::rc::Rc;
 
-use crate::{runtime::{
-    binary_operation_error,
-    env::RefEnvironment,
-    get_instance_property_error, unary_operation_error,
-    values::{AgalNumber, AgalThrow, AgalValuable, AgalValue},
-    AgalArray, RefAgalValue, Stack,
-}, Modules};
+use crate::{
+    runtime::{
+        binary_operation_error,
+        env::RefEnvironment,
+        get_instance_property_error, unary_operation_error,
+        values::{AgalNumber, AgalThrow, AgalValuable, AgalValue},
+        AgalArray, RefAgalValue, Stack,
+    },
+    Modules,
+};
 
 use super::AgalBoolean;
 
@@ -53,17 +56,28 @@ impl AgalValuable for AgalString {
         key: String,
     ) -> RefAgalValue {
         match key.as_str() {
-            "caracteres" => {
-                let function = move |_: Vec<RefAgalValue>, _: &Stack, _: RefEnvironment, _:&Modules, _:RefAgalValue| {
-                    AgalValue::Array(get_chars(&self)).as_ref()
-                };
-                let func = Rc::new(function);
-                AgalValue::NativeFunction(crate::runtime::AgalNativeFunction {
-                    name: "caracteres".to_string(),
-                    func,
-                })
-                .as_ref()
-            }
+            "caracteres" => crate::runtime::AgalNativeFunction {
+                name: "caracteres".to_string(),
+                func: Rc::new(move |_, stack, env, _, this| {
+                    let str = this.borrow().clone().to_agal_string(stack, env.clone());
+                    if let Err(err) = str {
+                        return err.to_ref_value();
+                    }
+                    let str = str.ok().unwrap();
+                    get_chars(&str).to_ref_value()
+                }),
+            }.to_ref_value(),
+            "bytes" => crate::runtime::AgalNativeFunction {
+                name: "bytes".to_string(),
+                func: Rc::new(move |_, stack, env, _, this| {
+                    let str = this.borrow().clone().to_agal_string(stack, env.clone());
+                    if let Err(err) = str {
+                        return err.to_ref_value();
+                    }
+                    let str = str.ok().unwrap();
+                    AgalArray::from_buffer(str.get_string().as_bytes()).to_ref_value()
+                }),
+            }.to_ref_value(),
             "largo" => get_length(&self).as_ref(),
             _ => {
                 let value = AgalValue::String(self);
@@ -180,7 +194,20 @@ impl AgalValuable for AgalChar {
         key: String,
     ) -> RefAgalValue {
         let value = AgalValue::Char(self);
-        get_instance_property_error(stack, env, key, value)
+        match key.as_str() {
+            "bytes" => crate::runtime::AgalNativeFunction {
+                name: "bytes".to_string(),
+                func: Rc::new(move |_, stack, env, _, this| {
+                    let str = this.borrow().clone().to_agal_string(stack, env.clone());
+                    if let Err(err) = str {
+                        return err.to_ref_value();
+                    }
+                    let str = str.ok().unwrap();
+                    AgalArray::from_buffer(str.get_string().as_bytes()).to_ref_value()
+                }),
+            }.to_ref_value(),
+            _ =>get_instance_property_error(stack, env, key, value)
+        }
     }
     fn to_agal_string(self, _: &Stack, _: RefEnvironment) -> Result<AgalString, AgalThrow> {
         Ok(AgalString::from_string(self.0.to_string()))

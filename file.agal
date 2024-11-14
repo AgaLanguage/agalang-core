@@ -1,12 +1,11 @@
 importar ':consola' como consola;
 importar ':sa' como sa;
 
-
 fn abrir_archivo(path, buf){
   intentar sa::crear_archivo(path);
   def bufA = sa::leer_archivo(path);
   sa::escribir_archivo(path, [..bufA, ..buf]);
 }
 
-def buf = [0by01001000, 0by01101111, 0by01101100, 0by01100001, 0by00100000, 0by01001101, 0by01110101, 0by01101110, 0by01100100, 0by01101111];
-consola::pintar(abrir_archivo('./test.txt', buf));
+def buf = "Hola Mundo"::bytes();
+consola::pintar(abrir_archivo('./test.txt', buf), buf);
