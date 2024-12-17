@@ -18,17 +18,17 @@ fn bool_to_str(value: bool) -> String {
     let data = if value { TRUE_KEYWORD } else { FALSE_KEYWORD };
     data.to_string()
 }
-impl AgalValuable for AgalBoolean {
-    fn to_value(self) -> AgalValue {
-        AgalPrimitive::Boolean(self).to_value()
+impl<'a> AgalValuable<'a> for AgalBoolean {
+    fn to_value(&self) -> &'a AgalValue {
+        AgalPrimitive::Boolean(*self).to_value()
     }
-    fn to_agal_boolean(self, _: &Stack, _: RefEnvironment) -> Result<AgalBoolean, AgalThrow> {
-        Ok(self)
+    fn to_agal_boolean(&self, _: &Stack, _: RefEnvironment) -> Result<AgalBoolean, AgalThrow> {
+        Ok(*self)
     }
-    fn to_agal_string(self, _: &Stack, _: RefEnvironment) -> Result<AgalString, AgalThrow> {
+    fn to_agal_string(&self, _: &Stack, _: RefEnvironment) -> Result<AgalString, AgalThrow> {
         Ok(AgalString::from_string(bool_to_str(self.0)))
     }
-    fn to_agal_number(self, _: &Stack, _: RefEnvironment) -> Result<AgalNumber, AgalThrow> {
+    fn to_agal_number(&self, _: &Stack, _: RefEnvironment) -> Result<AgalNumber, AgalThrow> {
         Ok(AgalNumber::new(if self.0 { 1f64 } else { 0f64 }))
     }
     fn binary_operation(
@@ -76,14 +76,14 @@ impl AgalValuable for AgalBoolean {
             _ => unary_operation_error(stack, operator, self.to_ref_value()),
         }
     }
-    fn to_agal_console(self, _: &Stack, _: RefEnvironment) -> Result<AgalString, AgalThrow> {
+    fn to_agal_console(&self, _: &Stack, _: RefEnvironment) -> Result<AgalString, AgalThrow> {
         Ok(AgalString::from_string(format!(
             "\x1b[33m{}\x1b[39m",
             bool_to_str(self.0)
         )))
     }
     fn get_instance_property(
-        self,
+        &self,
         stack: &Stack,
         env: RefEnvironment,
         key: String,

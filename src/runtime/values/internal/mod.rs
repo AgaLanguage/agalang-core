@@ -11,24 +11,24 @@ use crate::runtime::{
 };
 
 #[derive(Clone)]
-pub enum AgalInternal {
-    NativeFunction(AgalNativeFunction),
+pub enum AgalInternal<'a> {
+    NativeFunction(AgalNativeFunction<'a>),
     Throw(AgalThrow),
-    Lazy(AgalLazy),
+    Lazy(AgalLazy<'a>),
 }
 
-impl AgalValuableManager for AgalInternal {
-    fn get_type(self) -> &'static str {
+impl<'a> AgalValuableManager<'a> for AgalInternal<'a> {
+    fn get_type(&self) -> &'static str {
         match self {
             Self::NativeFunction(_) => "Funcion nativa",
             Self::Throw(_) => "Lanzado",
             Self::Lazy(_) => "Vago",
         }
     }
-    fn to_value(self) -> AgalValue {
-        AgalValue::Internal(self)
+    fn to_value(self) -> AgalValue<'a> {
+        AgalValue::Internal(self.clone())
     }
-    fn to_agal_console(self, stack: &Stack, env: RefEnvironment) -> Result<AgalString, AgalThrow> {
+    fn to_agal_console(&'a self, stack: &Stack, env: RefEnvironment<'a>) -> Result<AgalString<'a>, AgalThrow> {
         match self {
             Self::NativeFunction(n) => n.to_agal_console(stack, env),
             Self::Throw(t) => t.to_agal_console(stack, env),
@@ -36,9 +36,9 @@ impl AgalValuableManager for AgalInternal {
         }
     }
     fn get_instance_property(
-        self,
+        &'a self,
         stack: &Stack,
-        env: RefEnvironment,
+        env: RefEnvironment<'a>,
         key: String,
     ) -> RefAgalValue {
         match self {
@@ -47,24 +47,24 @@ impl AgalValuableManager for AgalInternal {
             Self::Lazy(l) => l.get_instance_property(stack, env, key),
         }
     }
-    fn call(
-        self,
+    async fn call(
+        &self,
         stack: &Stack,
-        env: RefEnvironment,
-        this: RefAgalValue,
-        args: Vec<RefAgalValue>,
-        modules: &crate::Modules,
-    ) -> RefAgalValue {
+        env: RefEnvironment<'a>,
+        this: RefAgalValue<'a>,
+        args: Vec<RefAgalValue<'a>>,
+        modules: &crate::Modules<'a>,
+    ) -> RefAgalValue<'a> {
         match self {
-            Self::NativeFunction(n) => n.call(stack, env, this, args, modules),
-            Self::Throw(t) => t.call(stack, env, this, args, modules),
-            Self::Lazy(l) => l.call(stack, env, this, args, modules),
+            Self::NativeFunction(n) => n.call(stack, env, this, args, modules).await,
+            Self::Throw(t) => t.call(stack, env, this, args, modules).await,
+            Self::Lazy(l) => l.call(stack, env, this, args, modules).await,
         }
     }
     fn to_agal_boolean(
-        self,
+        &self,
         stack: &Stack,
-        env: RefEnvironment,
+        env: RefEnvironment<'a>,
     ) -> Result<super::AgalBoolean, AgalThrow> {
         match self {
             Self::NativeFunction(n) => n.to_agal_boolean(stack, env),
@@ -73,7 +73,7 @@ impl AgalValuableManager for AgalInternal {
         }
     }
     fn to_agal_number(
-        self,
+        &self,
         stack: &Stack,
         env: RefEnvironment,
     ) -> Result<super::AgalNumber, AgalThrow> {
@@ -83,7 +83,7 @@ impl AgalValuableManager for AgalInternal {
             Self::Lazy(l) => l.to_agal_number(stack, env),
         }
     }
-    fn to_agal_string(self, stack: &Stack, env: RefEnvironment) -> Result<AgalString, AgalThrow> {
+    fn to_agal_string(&'a self, stack: &Stack, env: RefEnvironment<'a>) -> Result<AgalString<'a>, AgalThrow> {
         match self {
             Self::NativeFunction(n) => n.to_agal_string(stack, env),
             Self::Throw(t) => t.to_agal_string(stack, env),
@@ -91,7 +91,7 @@ impl AgalValuableManager for AgalInternal {
         }
     }
 
-    fn to_agal_array(self, stack: &Stack) -> Result<super::AgalArray, AgalThrow> {
+    fn to_agal_array(&self, stack: &Stack) -> Result<&super::AgalArray<'a>, AgalThrow> {
         match self {
             Self::NativeFunction(n) => n.to_agal_array(stack),
             Self::Throw(t) => t.to_agal_array(stack),
@@ -99,7 +99,7 @@ impl AgalValuableManager for AgalInternal {
         }
     }
 
-    fn to_agal_byte(self, stack: &Stack) -> Result<super::AgalByte, AgalThrow> {
+    fn to_agal_byte(&self, stack: &Stack) -> Result<super::AgalByte, AgalThrow> {
         match self {
             Self::NativeFunction(n) => n.to_agal_byte(stack),
             Self::Throw(t) => t.to_agal_byte(stack),
@@ -107,7 +107,7 @@ impl AgalValuableManager for AgalInternal {
         }
     }
 
-    fn to_agal_value(self, stack: &Stack, env: RefEnvironment) -> Result<AgalString, AgalThrow> {
+    fn to_agal_value(&'a self, stack: &Stack, env: RefEnvironment<'a>) -> Result<AgalString<'a>, AgalThrow> {
         match self {
             Self::NativeFunction(n) => n.to_agal_value(stack, env),
             Self::Throw(t) => t.to_agal_value(stack, env),
@@ -120,7 +120,7 @@ impl AgalValuableManager for AgalInternal {
         stack: &Stack,
         env: RefEnvironment,
         operator: &str,
-        other: RefAgalValue,
+        other: RefAgalValue<'a>,
     ) -> RefAgalValue {
         match self {
             Self::NativeFunction(n) => n.binary_operation(stack, env, operator, other),
@@ -150,7 +150,7 @@ impl AgalValuableManager for AgalInternal {
         }
     }
 
-    fn get_object_property(self, stack: &Stack, env: RefEnvironment, key: String) -> RefAgalValue {
+    fn get_object_property(&'a self, stack: &Stack, env: RefEnvironment<'a>, key: String) -> RefAgalValue {
         match self {
             Self::NativeFunction(n) => n.get_object_property(stack, env, key),
             Self::Throw(t) => t.get_object_property(stack, env, key),
@@ -159,7 +159,7 @@ impl AgalValuableManager for AgalInternal {
     }
 
     fn set_object_property(
-        self,
+        &'a self,
         stack: &Stack,
         env: RefEnvironment,
         key: String,
@@ -172,7 +172,7 @@ impl AgalValuableManager for AgalInternal {
         }
     }
 
-    fn delete_object_property(self, stack: &Stack, env: RefEnvironment, key: String) {
+    fn delete_object_property(&'a self, stack: &Stack, env: RefEnvironment, key: String) {
         match self {
             Self::NativeFunction(n) => n.delete_object_property(stack, env, key),
             Self::Throw(t) => t.delete_object_property(stack, env, key),
@@ -180,7 +180,7 @@ impl AgalValuableManager for AgalInternal {
         }
     }
 
-    fn get_keys(self) -> Vec<String> {
+    fn get_keys(&self) -> Vec<String> {
         match self {
             Self::NativeFunction(n) => n.get_keys(),
             Self::Throw(t) => t.get_keys(),
@@ -188,7 +188,7 @@ impl AgalValuableManager for AgalInternal {
         }
     }
 
-    fn get_length(self) -> usize {
+    fn get_length(&self) -> usize {
         match self {
             Self::NativeFunction(n) => n.get_length(),
             Self::Throw(t) => t.get_length(),
@@ -197,7 +197,7 @@ impl AgalValuableManager for AgalInternal {
     }
 }
 
-impl PartialEq for AgalInternal {
+impl<'a> PartialEq for AgalInternal<'a> {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::NativeFunction(a), Self::NativeFunction(b)) => a as *const _ == b as *const _,

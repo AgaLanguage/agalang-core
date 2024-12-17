@@ -1,10 +1,13 @@
 #![allow(warnings)]
-mod runtime;
 mod libraries;
 mod path;
-use std::{cell::RefCell, collections::HashMap, process::ExitCode, rc::Rc};
+mod runtime;
 
-use runtime::RefAgalValue;
+use std::{
+    cell::RefCell, collections::HashMap, process::ExitCode, rc::Rc, thread::sleep, time::Duration,
+};
+
+use parser::util::RefValue;
 
 trait ToResult<T> {
     fn to_result(self) -> Result<T, ()>;
@@ -12,39 +15,45 @@ trait ToResult<T> {
 
 impl<T> ToResult<T> for Option<T> {
     fn to_result(self) -> Result<T, ()> {
-        if let Some(v)=self{
+        if let Some(v) = self {
             Ok(v)
-        }else {Err(())}
+        } else {
+            Err(())
+        }
     }
 }
 
 #[derive(Clone)]
-struct Modules {
-    map: Rc<RefCell<HashMap<String, RefAgalValue>>>
+struct Modules<'a> {
+    map: Rc<RefCell<HashMap<String, runtime::RefAgalValue<'a>>>>,
 }
-impl Modules {
+impl<'a> Modules<'a> {
     fn new() -> Self {
         Modules {
-            map: Rc::new(RefCell::new(HashMap::new()))
+            map: Rc::new(RefCell::new(HashMap::new())),
         }
     }
     fn has(&self, key: &str) -> bool {
         self.map.borrow().contains_key(key)
     }
-    fn get(&self, key: &str) -> RefAgalValue {
+    fn get(&self, key: &str) -> runtime::RefAgalValue<'a> {
         let v = self.map.borrow();
         v.get(key).unwrap().clone()
     }
-    fn add(&self, key: &str, value: RefAgalValue) {
-        if self.has(key){
+    fn add(&self, key: &str, value: runtime::RefAgalValue<'a>) {
+        if self.has(key) {
             return;
         }
         let mut v = self.map.borrow_mut();
         v.insert(key.to_string(), value);
     }
+    fn to_ref(self) -> RefValue<Self> {
+        Rc::new(RefCell::new(self))
+    }
 }
 
-fn main() -> ExitCode {
+#[tokio::main]
+async fn main() -> ExitCode {
     let modules_manager = Modules::new();
     let filename = file();
     if filename.is_none() {
@@ -54,14 +63,14 @@ fn main() -> ExitCode {
     let ref stack = runtime::Stack::get_default();
     let global_env = runtime::env::get_default().as_ref();
 
-    let program = runtime::full_eval(&filename, stack, global_env, &modules_manager);
+    let program = runtime::full_eval(&filename, stack, global_env, &modules_manager).await;
     if program.is_err() {
         return ExitCode::FAILURE;
     }
     return ExitCode::SUCCESS;
 }
 fn file() -> Option<String> {
-    let mut args: Vec<_> = std::env::args().collect();
+    let mut args: Vec<String> = std::env::args().collect();
     args.push("./file.agal".to_string());
     let args = args;
     if args.len() < 2 {

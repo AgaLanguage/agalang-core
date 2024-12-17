@@ -7,13 +7,13 @@ use std::{
 use super::{AgalBoolean, AgalThrow, AgalValuable, AgalValue, RefAgalValue, Stack};
 use parser::{ast::Node, internal::ErrorNames};
 
-pub type RefEnvironment = Rc<RefCell<Environment>>;
+pub type RefEnvironment<'a> = Rc<RefCell<Environment<'a>>>;
 
 #[derive(Clone, PartialEq)]
-pub struct Environment {
+pub struct Environment<'a> {
     in_class: bool,
-    parent: Option<RefEnvironment>,
-    variables: Rc<RefCell<HashMap<String, RefAgalValue>>>,
+    parent: Option<RefEnvironment<'a>>,
+    variables: Rc<RefCell<HashMap<String, RefAgalValue<'a>>>>,
     constants: Rc<RefCell<HashSet<String>>>,
 }
 pub const TRUE_KEYWORD: &str = "cierto";
@@ -31,18 +31,18 @@ const KEYWORDS: [&str; 6] = [
     SUPER_KEYWORD,
 ];
 
-impl Environment {
-    pub fn get_global(&self) -> RefEnvironment {
+impl<'a> Environment<'a> {
+    pub fn get_global(&self) -> RefEnvironment<'a> {
         let mut env = self.clone().as_ref();
         while env.borrow().parent.is_some() {
             env = env.clone().borrow().parent.clone().unwrap();
         }
         env
     }
-    pub fn as_ref(self) -> RefEnvironment {
+    pub fn as_ref(self) -> RefEnvironment<'a> {
         Rc::new(RefCell::new(self))
     }
-    pub fn get_this(self, stack: &Stack, node: &Node) -> RefAgalValue {
+    pub fn get_this(&'a self, stack: &Stack, node: &Node) -> RefAgalValue<'a> {
         self.get(stack, THIS_KEYWORD, node)
     }
     pub fn use_private(self) -> bool {
@@ -54,8 +54,8 @@ impl Environment {
             false
         }
     }
-    pub fn crate_child(self, in_class: bool) -> Environment {
-        Environment {
+    pub fn crate_child(self, in_class: bool) -> Self {
+        Self {
             in_class,
             parent: Some(self.as_ref()),
             variables: Rc::new(RefCell::new(HashMap::new())),
@@ -66,10 +66,10 @@ impl Environment {
         KEYWORDS.contains(name)
     }
     pub fn define(
-        &mut self,
+        &'a mut self,
         stack: &Stack,
         name: &String,
-        value: RefAgalValue,
+        value: RefAgalValue<'a>,
         is_constant: bool,
         node: &Node,
     ) -> RefAgalValue {
@@ -98,7 +98,7 @@ impl Environment {
             .insert(name.to_string(), value.clone());
         value
     }
-    pub fn assign(&mut self, stack: &Stack, name: &str, value: RefAgalValue, node: &Node) -> RefAgalValue {
+    pub fn assign(&'a mut self, stack: &Stack, name: &str, value: RefAgalValue<'a>, node: &Node) -> RefAgalValue<'a> {
         if self.is_keyword(name) {
             return AgalThrow::Params {
                 type_error: ErrorNames::EnviromentError,
@@ -128,13 +128,13 @@ impl Environment {
             .insert(name.to_string(), value.clone());
         value
     }
-    pub fn set(&mut self, name: &str, value: RefAgalValue) -> RefAgalValue {
+    pub fn set(&'a mut self, name: &str, value: RefAgalValue<'a>) -> RefAgalValue<'a> {
         self.variables
             .borrow_mut()
             .insert(name.to_string(), value.clone());
         value
     }
-    pub fn get(&self, stack: &Stack, name: &str, node: &Node) -> RefAgalValue {
+    pub fn get(&self, stack: &Stack, name: &str, node: &Node) -> RefAgalValue<'a> {
         let _env = self.resolve(name, node);
         let env = _env.borrow_mut();
         if !env.has(name, node) {
@@ -158,14 +158,15 @@ impl Environment {
             .borrow_mut()
             .contains_key(name)
     }
-    fn resolve(&self, name: &str, node: &Node) -> RefEnvironment {
+    fn resolve(&self, name: &str, node: &Node) -> RefEnvironment<'a> {
         if !self._has(name) && self.parent.is_some() {
-            return self.parent.clone().unwrap().borrow().resolve(name, node);
+            let a = self.parent.clone().unwrap();
+            return a.borrow().resolve(name, node);
         }
         return self.clone().as_ref();
     }
 }
-pub fn get_default() -> Environment {
+pub fn get_default<'a>() -> Environment<'a> {
     let mut env = Environment {
         in_class: false,
         parent: None,

@@ -1,3 +1,5 @@
+use std::{cell::RefCell, rc::Rc};
+
 use parser::ast::Node;
 
 #[derive(Clone, PartialEq)]
@@ -7,6 +9,9 @@ pub struct Stack {
 }
 
 impl Stack {
+  pub fn to_ref(self) -> Rc<RefCell<Self>> {
+    Rc::new(RefCell::new(self))
+  }
   pub fn next(&self, value: &Node) -> Stack {
     Stack {
       value: Box::new(value.clone()),

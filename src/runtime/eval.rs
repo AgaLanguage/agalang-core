@@ -8,7 +8,7 @@ use crate::{
     Modules, ToResult,
 };
 
-type EvalResult = Result<RefAgalValue, ()>;
+type EvalResult<'a> = Result<RefAgalValue<'a>, ()>;
 
 fn code(path: &str) -> Option<String> {
     let contents = std::fs::read_to_string(path);
@@ -23,12 +23,12 @@ fn code(path: &str) -> Option<String> {
     }
 }
 
-pub fn full_eval(
+pub async fn full_eval<'a>(
     path: &str,
     stack: &Stack,
-    env: RefEnvironment,
-    modules_manager: &Modules,
-) -> EvalResult {
+    env: RefEnvironment<'a>,
+    modules_manager: &Modules<'a>,
+) -> EvalResult<'a> {
     if modules_manager.has(path) {
         return Ok(modules_manager.get(path));
     }
@@ -38,20 +38,18 @@ pub fn full_eval(
     }
 
     let contents = contents.unwrap();
-    let value = eval(contents, path, stack, env, &modules_manager.clone());
-    if let Ok(value) = &value {
-        modules_manager.add(path, value.clone());
-    }
-    value
+    let value = eval(contents, path, stack, env, &modules_manager.clone()).await?;
+    modules_manager.add(path, value.clone());
+    Ok(value)
 }
 
-fn eval(
+async fn eval<'a>(
     code: String,
     path: &str,
     stack: &Stack,
-    env: RefEnvironment,
-    modules_manager: &Modules,
-) -> EvalResult {
+    env: RefEnvironment<'a>,
+    modules_manager: &Modules<'a>,
+) -> EvalResult<'a> {
     let program: frontend::ast::Node = {
         let mut parser = frontend::Parser::new(code, &path);
         parser.produce_ast()
@@ -65,7 +63,7 @@ fn eval(
         return Err(());
     }
     let env = env.borrow().clone().crate_child(false).as_ref();
-    let value = runtime::interpreter(&program, stack, Rc::clone(&env), &modules_manager.clone());
+    let value = runtime::interpreter(program.to_box(), stack.clone().to_ref(), env.clone(), modules_manager.clone().to_ref()).await.await;
     let result = Ok(value.clone());
     let value: &AgalValue = &value.borrow();
     if let AgalValue::Internal(AgalInternal::Throw(err)) = value {

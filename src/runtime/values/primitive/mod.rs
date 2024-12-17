@@ -14,16 +14,16 @@ mod boolean;
 pub use boolean::*;
 
 #[derive(Clone, PartialEq)]
-pub enum AgalPrimitive {
-    String(AgalString),
+pub enum AgalPrimitive<'a> {
+    String(AgalString<'a>),
     Char(AgalChar),
     Byte(AgalByte),
     Number(AgalNumber),
     Boolean(AgalBoolean),
 }
 
-impl AgalValuableManager for AgalPrimitive {
-    fn get_type(self) -> &'static str {
+impl<'a> AgalValuableManager<'a> for AgalPrimitive<'a> {
+    fn get_type(&self) -> &'static str {
         match self {
             Self::String(_) => "Cadena",
             Self::Char(_) => "Caracter",
@@ -33,11 +33,11 @@ impl AgalValuableManager for AgalPrimitive {
         }
     }
 
-    fn to_value(self) -> AgalValue {
-        todo!()
+    fn to_value(self) -> AgalValue<'a> {
+        AgalValue::Primitive(self)
     }
 
-    fn get_keys(self) -> Vec<String> {
+    fn get_keys(&self) -> Vec<String> {
         match self {
             Self::String(s) => s.get_keys(),
             Self::Char(c) => c.get_keys(),
@@ -47,7 +47,7 @@ impl AgalValuableManager for AgalPrimitive {
         }
     }
 
-    fn get_length(self) -> usize {
+    fn get_length(&self) -> usize {
         match self {
             Self::String(s) => s.get_length(),
             Self::Char(c) => c.get_length(),
@@ -57,7 +57,7 @@ impl AgalValuableManager for AgalPrimitive {
         }
     }
 
-    fn to_agal_number(self, stack: &Stack, env: RefEnvironment) -> Result<AgalNumber, AgalThrow> {
+    fn to_agal_number(&self, stack: &Stack, env: RefEnvironment) -> Result<AgalNumber, AgalThrow> {
         match self {
             Self::String(s) => s.to_agal_number(stack, env),
             Self::Char(c) => c.to_agal_number(stack, env),
@@ -67,7 +67,7 @@ impl AgalValuableManager for AgalPrimitive {
         }
     }
 
-    fn to_agal_string(self, stack: &Stack, env: RefEnvironment) -> Result<AgalString, AgalThrow> {
+    fn to_agal_string(&'a self, stack: &Stack, env: RefEnvironment<'a>) -> Result<AgalString, AgalThrow> {
         match self {
             Self::String(s) => Ok(s.clone()),
             Self::Char(c) => c.to_agal_string(stack, env),
@@ -77,7 +77,7 @@ impl AgalValuableManager for AgalPrimitive {
         }
     }
 
-    fn to_agal_boolean(self, stack: &Stack, env: RefEnvironment) -> Result<AgalBoolean, AgalThrow> {
+    fn to_agal_boolean(&self, stack: &Stack, env: RefEnvironment<'a>) -> Result<AgalBoolean, AgalThrow> {
         match self {
             Self::String(s) => s.to_agal_boolean(stack, env),
             Self::Char(c) => c.to_agal_boolean(stack, env),
@@ -87,7 +87,7 @@ impl AgalValuableManager for AgalPrimitive {
         }
     }
 
-    fn to_agal_array(self, stack: &Stack) -> Result<AgalArray, AgalThrow> {
+    fn to_agal_array(&self, stack: &Stack) -> Result<&AgalArray<'a>, AgalThrow> {
         match self {
             Self::String(s) => s.to_agal_array(stack),
             Self::Char(c) => c.to_agal_array(stack),
@@ -97,7 +97,7 @@ impl AgalValuableManager for AgalPrimitive {
         }
     }
 
-    fn to_agal_byte(self, stack: &Stack) -> Result<AgalByte, AgalThrow> {
+    fn to_agal_byte(&self, stack: &Stack) -> Result<AgalByte, AgalThrow> {
         match self {
             Self::String(s) => s.to_agal_byte(stack),
             Self::Char(c) => c.to_agal_byte(stack),
@@ -107,7 +107,7 @@ impl AgalValuableManager for AgalPrimitive {
         }
     }
 
-    fn to_agal_value(self, stack: &Stack, env: RefEnvironment) -> Result<AgalString, AgalThrow> {
+    fn to_agal_value(&'a self, stack: &Stack, env: RefEnvironment<'a>) -> Result<AgalString, AgalThrow> {
         match self {
             Self::String(s) => s.to_agal_value(stack, env),
             Self::Char(c) => c.to_agal_value(stack, env),
@@ -117,7 +117,7 @@ impl AgalValuableManager for AgalPrimitive {
         }
     }
 
-    fn to_agal_console(self, stack: &Stack, env: RefEnvironment) -> Result<AgalString, AgalThrow> {
+    fn to_agal_console(&'a self, stack: &Stack, env: RefEnvironment<'a>) -> Result<AgalString, AgalThrow> {
         match self {
             Self::String(s) => s.to_agal_console(stack, env),
             Self::Char(c) => c.to_agal_console(stack, env),
@@ -128,11 +128,11 @@ impl AgalValuableManager for AgalPrimitive {
     }
 
     fn binary_operation(
-        &self,
+        &'a self,
         stack: &Stack,
         env: RefEnvironment,
         operator: &str,
-        other: RefAgalValue,
+        other: RefAgalValue<'a>,
     ) -> RefAgalValue {
         match self {
             Self::String(s) => s.binary_operation(stack, env, operator, other),
@@ -168,7 +168,7 @@ impl AgalValuableManager for AgalPrimitive {
         }
     }
 
-    fn get_object_property(self, stack: &Stack, env: RefEnvironment, key: String) -> RefAgalValue {
+    fn get_object_property(&'a self, stack: &Stack, env: RefEnvironment<'a>, key: String) -> RefAgalValue {
         match self {
             Self::String(s) => s.get_object_property(stack, env, key),
             Self::Char(c) => c.get_object_property(stack, env, key),
@@ -179,7 +179,7 @@ impl AgalValuableManager for AgalPrimitive {
     }
 
     fn set_object_property(
-        self,
+        &self,
         stack: &Stack,
         env: RefEnvironment,
         key: String,
@@ -194,7 +194,7 @@ impl AgalValuableManager for AgalPrimitive {
         }
     }
 
-    fn delete_object_property(self, stack: &Stack, env: RefEnvironment, key: String) {
+    fn delete_object_property(&self, stack: &Stack, env: RefEnvironment, key: String) {
         match self {
             Self::String(s) => s.delete_object_property(stack, env, key),
             Self::Char(c) => c.delete_object_property(stack, env, key),
@@ -205,9 +205,9 @@ impl AgalValuableManager for AgalPrimitive {
     }
 
     fn get_instance_property(
-        self,
+        &'a self,
         stack: &Stack,
-        env: RefEnvironment,
+        env: RefEnvironment<'a>,
         key: String,
     ) -> RefAgalValue {
         match self {
@@ -219,20 +219,20 @@ impl AgalValuableManager for AgalPrimitive {
         }
     }
 
-    fn call(
-        self,
+    async fn call(
+        &self,
         stack: &Stack,
-        env: RefEnvironment,
-        this: RefAgalValue,
-        args: Vec<RefAgalValue>,
-        modules: &crate::Modules,
-    ) -> RefAgalValue {
+        env: RefEnvironment<'a>,
+        this: RefAgalValue<'a>,
+        args: Vec<RefAgalValue<'a>>,
+        modules: &crate::Modules<'a>,
+    ) -> RefAgalValue<'a> {
         match self {
-            Self::String(s) => s.call(stack, env, this, args, modules),
-            Self::Char(c) => c.call(stack, env, this, args, modules),
-            Self::Byte(b) => b.call(stack, env, this, args, modules),
-            Self::Number(n) => n.call(stack, env, this, args, modules),
-            Self::Boolean(b) => b.call(stack, env, this, args, modules),
+            Self::String(s) => s.call(stack, env, this, args, modules).await,
+            Self::Char(c) => c.call(stack, env, this, args, modules).await,
+            Self::Byte(b) => b.call(stack, env, this, args, modules).await,
+            Self::Number(n) => n.call(stack, env, this, args, modules).await,
+            Self::Boolean(b) => b.call(stack, env, this, args, modules).await,
         }
     }
 }

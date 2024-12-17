@@ -11,31 +11,31 @@ use crate::{
     Modules,
 };
 
-pub type AgalVec = Vec<Rc<RefCell<AgalValue>>>;
+pub type AgalVec<'a> = Vec<RefAgalValue<'a>>;
 #[derive(Clone, PartialEq)]
-pub struct AgalArray(RefValue<AgalVec>);
-impl AgalArray {
-    fn new(vec: AgalVec) -> AgalArray {
-        AgalArray(Rc::new(RefCell::new(vec)))
+pub struct AgalArray<'a>(RefValue<AgalVec<'a>>);
+impl<'a> AgalArray<'a> {
+    fn new(vec: AgalVec<'a>) -> Self {
+        Self(Rc::new(RefCell::new(vec)))
     }
-    pub fn from_buffer(buffer: &[u8]) -> AgalArray {
+    pub fn from_buffer(buffer: &[u8]) -> Self {
         let mut vec = Vec::new();
         for byte in buffer {
             vec.push(AgalByte::new(*byte).to_ref_value());
         }
-        AgalArray::new(vec)
+        Self::new(vec)
     }
-    pub fn from_vec(vec: AgalVec) -> AgalArray {
-        AgalArray::new(vec)
+    pub fn from_vec(vec: AgalVec<'a>) -> Self {
+        Self::new(vec)
     }
-    pub fn get_vec(&self) -> RefValue<AgalVec> {
+    pub fn get_vec(&self) -> RefValue<AgalVec<'a>> {
         self.0.clone()
     }
     pub fn get_buffer(&self, stack: &Stack) -> Result<Vec<u8>, AgalThrow> {
         let mut buffer = vec![];
         let vec: &AgalVec = &self.0.borrow();
         for value in vec {
-            let byte = value.as_ref().borrow().clone().to_agal_byte(stack);
+            let byte = value.as_ref().borrow().to_agal_byte(stack);
             if let Err(value) = byte {
                 return Err(value);
             }
@@ -44,17 +44,16 @@ impl AgalArray {
         Ok(buffer)
     }
 }
-impl AgalValuable for AgalArray {
-    fn get_length(self) -> usize {
+impl<'a> AgalValuable<'a> for AgalArray<'a> {
+    fn get_length(&self) -> usize {
         self.get_vec().borrow().len()
     }
-    fn to_agal_console(self, stack: &Stack, env: RefEnvironment) -> Result<AgalString, AgalThrow> {
+    fn to_agal_console(&self, stack: &Stack, env: RefEnvironment) -> Result<AgalString, AgalThrow> {
         let mut result = String::new();
         for (i, value) in self.get_vec().borrow().iter().enumerate() {
             let str = value
                 .as_ref()
                 .borrow()
-                .clone()
                 .to_agal_value(stack, env.clone());
             if str.is_err() {
                 return str;
@@ -64,18 +63,18 @@ impl AgalValuable for AgalArray {
             let str = if i == 0 { str } else { &format!(", {str}") };
             result.push_str(str);
         }
-        Ok(AgalString::from_string(format!("[ {result} ]")))
+        Ok(AgalString::from_string(format!("[ {result} ]").as_str()))
     }
-    fn to_agal_array(self, _: &Stack) -> Result<AgalArray, AgalThrow> {
+    fn to_agal_array(&self, _: &Stack) -> Result<&AgalArray<'a>, AgalThrow> {
         Ok(self)
     }
-    fn to_value(self) -> AgalValue {
+    fn to_value(self) -> AgalValue<'a> {
         AgalComplex::Array(self).to_value()
     }
-    fn to_agal_string(self, stack: &Stack, env: RefEnvironment) -> Result<AgalString, AgalThrow> {
+    fn to_agal_string(&self, stack: &Stack, env: RefEnvironment) -> Result<AgalString, AgalThrow> {
         let mut result = String::new();
         for value in self.get_vec().borrow().iter() {
-            let str = value.as_ref().borrow().clone().to_agal_string(
+            let str = value.as_ref().borrow().to_agal_string(
                 stack,
                 env.as_ref().borrow().clone().crate_child(false).as_ref(),
             );
@@ -86,10 +85,10 @@ impl AgalValuable for AgalArray {
             let str = str.get_string();
             result.push_str(&str);
         }
-        Ok(AgalString::from_string(result))
+        Ok(AgalString::from_string(&result))
     }
     fn get_instance_property(
-        self,
+        &self,
         stack: &Stack,
         env: RefEnvironment,
         key: String,
@@ -102,7 +101,8 @@ impl AgalValuable for AgalArray {
                     let sep = if let Some(s) = sep {
                         s.borrow().clone()
                     } else {
-                        AgalValue::Never
+                        let ref value = AgalValue::Never;
+                        return value.to_ref_value();
                     };
                     let sep = sep.to_agal_string(stack, env.clone());
                     let sep = if let Ok(s) = &sep {
@@ -114,7 +114,7 @@ impl AgalValuable for AgalArray {
                     };
                     let mut result = String::new();
                     for (i, value) in (&self).0.borrow().iter().enumerate() {
-                        let data = value.borrow().clone().to_agal_string(stack, env.clone());
+                        let data = value.borrow().to_agal_string(stack, env.clone());
                         let str = if let Ok(s) = &data {
                             s.get_string()
                         } else if let Err(e) = data {
@@ -127,7 +127,7 @@ impl AgalValuable for AgalArray {
                         }
                         result.push_str(str);
                     }
-                    AgalString::from_string(result).to_ref_value()
+                    AgalString::from_string(&result).to_ref_value()
                 }),
             }
             .to_ref_value(),
@@ -143,10 +143,10 @@ impl AgalValuable for AgalArray {
             }
             .to_ref_value(),
             "largo" => AgalNumber::new(self.get_length() as f64).to_ref_value(),
-            _ => get_instance_property_error(stack, env, key, self.to_value()),
+            _ => get_instance_property_error(stack, env, key, &self.to_value()),
         }
     }
-    fn get_object_property(self, stack: &Stack, env: RefEnvironment, key: String) -> RefAgalValue {
+    fn get_object_property(&'a self, stack: &Stack, env: RefEnvironment<'a>, key: String) -> RefAgalValue<'a> {
         let int = key.parse::<usize>();
         if int.is_err() {
             return get_property_error(stack, env, key);

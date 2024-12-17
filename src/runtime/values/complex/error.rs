@@ -45,7 +45,7 @@ impl AgalError {
         node_error(&error)
     }
 }
-impl AgalValuable for AgalError {
+impl<'a> AgalValuable<'a> for AgalError {
     fn to_agal_string(self, _: &Stack, _: RefEnvironment) -> Result<AgalString, AgalThrow> {
         Ok(AgalString::from_string(format!(
             "{}: {}",
@@ -75,7 +75,7 @@ impl AgalValuable for AgalError {
         let stack = format!("\x1b[90m{}\x1b[39m", stack);
         Ok(AgalString::from_string(format!("{} {}", error, stack)))
     }
-    fn to_value(self) -> AgalValue {
+    fn to_value(self) -> AgalValue<'a> {
         AgalComplex::Error(self).to_value()
     }
     fn get_instance_property(
@@ -85,7 +85,7 @@ impl AgalValuable for AgalError {
         key: String,
     ) -> RefAgalValue {
         let value = self.to_value();
-        get_instance_property_error(stack, env, key, value)
+        get_instance_property_error(stack, env, key, &value)
     }
 
     fn get_keys(self) -> Vec<String> {
@@ -96,7 +96,7 @@ impl AgalValuable for AgalError {
         0
     }
 
-    fn to_agal_number(self, stack: &Stack, env: RefEnvironment) -> Result<AgalNumber, AgalThrow> {
+    fn to_agal_number(&self, stack: &Stack, env: RefEnvironment) -> Result<AgalNumber, AgalThrow> {
         Err(AgalThrow::Params {
             type_error: ErrorNames::CustomError("Error Parseo"),
             message: "No se pudo convertir en numero".to_string(),
@@ -104,11 +104,13 @@ impl AgalValuable for AgalError {
         })
     }
 
-    fn to_agal_boolean(self, stack: &Stack, env: RefEnvironment) -> Result<AgalBoolean, AgalThrow> {
-        let value = env
-            .as_ref()
-            .borrow()
-            .get(stack, TRUE_KEYWORD, stack.get_value());
+    fn to_agal_boolean(
+        &self,
+        stack: &Stack,
+        env: RefEnvironment,
+    ) -> Result<AgalBoolean, AgalThrow> {
+        let value = env.as_ref().borrow();
+        let value = value.get(stack, TRUE_KEYWORD, stack.get_value());
         let value: &AgalValue = &value.as_ref().borrow();
         match value {
             AgalValue::Primitive(AgalPrimitive::Boolean(b)) => Ok(b.clone()),
@@ -120,7 +122,7 @@ impl AgalValuable for AgalError {
         }
     }
 
-    fn to_agal_array(self, stack: &Stack) -> Result<AgalArray, AgalThrow> {
+    fn to_agal_array(&self, stack: &Stack) -> Result<AgalArray, AgalThrow> {
         Err(AgalThrow::Params {
             type_error: ErrorNames::CustomError("Error Iterable"),
             message: "El valor no es iterable".to_string(),
@@ -128,7 +130,7 @@ impl AgalValuable for AgalError {
         })
     }
 
-    fn to_agal_byte(self, stack: &Stack) -> Result<AgalByte, AgalThrow> {
+    fn to_agal_byte(&self, stack: &Stack) -> Result<AgalByte, AgalThrow> {
         Err(AgalThrow::Params {
             type_error: ErrorNames::TypeError,
             message: "El valor no es un byte".to_string(),
@@ -159,12 +161,12 @@ impl AgalValuable for AgalError {
         unary_back_operation_error(stack, operator, self.clone().to_ref_value())
     }
 
-    fn get_object_property(self, stack: &Stack, env: RefEnvironment, key: String) -> RefAgalValue {
+    fn get_object_property(&self, stack: &Stack, env: RefEnvironment, key: String) -> RefAgalValue {
         get_property_error(stack, env, key)
     }
 
     fn set_object_property(
-        self,
+        &self,
         stack: &Stack,
         env: RefEnvironment,
         key: String,
@@ -173,16 +175,16 @@ impl AgalValuable for AgalError {
         set_property_error(stack, env, key, "No se puede asignar".to_string())
     }
 
-    fn delete_object_property(self, stack: &Stack, env: RefEnvironment, key: String) {
+    fn delete_object_property(&self, stack: &Stack, env: RefEnvironment, key: String) {
         delete_property_error(stack, env, key);
     }
 
-    fn call(
-        self,
+    async fn call(
+        &self,
         _: &Stack,
         _: RefEnvironment,
-        _: RefAgalValue,
-        _: Vec<RefAgalValue>,
+        _: RefAgalValue<'a>,
+        _: Vec<RefAgalValue<'a>>,
         _: &Modules,
     ) -> RefAgalValue {
         AgalValue::Never.as_ref()

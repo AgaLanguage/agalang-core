@@ -11,9 +11,7 @@ use parser::internal::ErrorNames;
 
 use crate::{
     runtime::{
-        env::RefEnvironment, AgalArray, AgalBoolean, AgalClass, AgalClassProperty, AgalError,
-        AgalNativeFunction, AgalObject, AgalPrototype, AgalString, AgalThrow, AgalValuable,
-        AgalValuableManager, AgalValue, RefAgalValue, Stack,
+        env::RefEnvironment, AgalArray, AgalBoolean, AgalClass, AgalClassProperty, AgalError, AgalNativeFunction, AgalObject, AgalPromise, AgalPrototype, AgalString, AgalThrow, AgalValuable, AgalValuableManager, AgalValue, RefAgalValue, Stack
     },
     Modules,
 };
@@ -260,26 +258,28 @@ pub fn get_module(prefix: &str) -> RefAgalValue {
                             .clone()
                             .to_agal_string(stack, env.clone());
                         if let Ok(value) = p {
-                            let path = &path;
-                            let path = path.clone().call(
-                                stack,
-                                env.clone(),
-                                this,
-                                vec![],
-                                modules_manager,
-                            );
-                            let v = path.clone();
-                            let v = v.borrow();
-                            let p = value.get_string();
-                            let p = crate::path::absolute_path(p);
-                            let value = AgalString::from_string(p);
-                            v.clone().set_object_property(
-                                stack,
-                                env,
-                                "@ruta".to_string(),
-                                value.to_ref_value(),
-                            );
-                            path
+                            AgalPromise::new(async move {
+                                let path = &path;
+                                let path = path.clone().call(
+                                    stack,
+                                    env.clone(),
+                                    this,
+                                    vec![],
+                                    modules_manager,
+                                ).await;
+                                let v = path.clone();
+                                let v = v.borrow();
+                                let p = value.get_string();
+                                let p = crate::path::absolute_path(p);
+                                let value = AgalString::from_string(p);
+                                v.clone().set_object_property(
+                                    stack,
+                                    env,
+                                    "@ruta".to_string(),
+                                    value.to_ref_value(),
+                                );
+                                path
+                            })
                         } else if let Err(error) = p {
                             error.to_ref_value()
                         } else {

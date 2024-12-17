@@ -14,18 +14,18 @@ impl AgalByte {
         self.0
     }
 }
-impl AgalValuable for AgalByte {
-    fn to_value(self) -> AgalValue {
-        AgalPrimitive::Byte(self).to_value()
+impl<'a> AgalValuable<'a> for AgalByte {
+    fn to_value(&self) -> &AgalValue {
+        AgalPrimitive::Byte(*self).to_value()
     }
-    fn to_agal_console(self, _: &Stack, _: RefEnvironment) -> Result<AgalString, AgalThrow> {
+    fn to_agal_console(&self, _: &Stack, _: RefEnvironment) -> Result<AgalString, AgalThrow> {
         Ok(AgalString::from_string(format!(
             "\x1b[94m0by{:08b}\x1b[39m",
             self.0
         )))
     }
-    fn to_agal_byte(self, _: &Stack) -> Result<AgalByte, AgalThrow> {
-        Ok(self)
+    fn to_agal_byte(&self, _: &Stack) -> Result<AgalByte, AgalThrow> {
+        Ok(*self)
     }
     fn binary_operation(
         &self,
@@ -152,7 +152,7 @@ impl AgalValuable for AgalByte {
         }
     }
     fn get_instance_property(
-        self,
+        &self,
         stack: &Stack,
         env: RefEnvironment,
         key: String,
@@ -161,14 +161,14 @@ impl AgalValuable for AgalByte {
         get_instance_property_error(stack, env, key, value)
     }
     fn to_agal_string(
-        self,
+        &self,
         _: &Stack,
         _: RefEnvironment,
     ) -> Result<super::AgalString, crate::runtime::AgalThrow> {
         Ok(super::AgalString::from_string(format!("{:08b}", self.0)))
     }
     fn to_agal_number(
-        self,
+        &self,
         _: &Stack,
         _: RefEnvironment,
     ) -> Result<super::AgalNumber, crate::runtime::AgalThrow> {

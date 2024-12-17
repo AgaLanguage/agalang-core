@@ -15,35 +15,35 @@ fn ref_hash_map<T: Clone>() -> RefHasMap<T> {
 }
 
 #[derive(Clone, PartialEq)]
-pub struct AgalClassProperty {
+pub struct AgalClassProperty<'a> {
     pub is_public: bool,
     pub is_static: bool,
-    pub value: RefAgalValue,
+    pub value: RefAgalValue<'a>,
 }
 
 #[derive(Clone, PartialEq)]
-pub struct AgalPrototype {
-    instance_properties: RefHasMap<AgalClassProperty>,
-    super_instance: OpRefValue<AgalPrototype>,
+pub struct AgalPrototype<'a> {
+    instance_properties: RefHasMap<AgalClassProperty<'a>>,
+    super_instance: OpRefValue<AgalPrototype<'a>>,
 }
 
-impl AgalPrototype {
+impl<'a> AgalPrototype<'a> {
     pub fn new(
-        instance_properties: RefHasMap<AgalClassProperty>,
-        super_instance: OpRefValue<AgalPrototype>,
-    ) -> AgalPrototype {
-        AgalPrototype {
+        instance_properties: RefHasMap<AgalClassProperty<'a>>,
+        super_instance: OpRefValue<AgalPrototype<'a>>,
+    ) -> Self {
+        Self {
             instance_properties,
             super_instance,
         }
     }
-    pub fn as_ref(self) -> RefValue<AgalPrototype> {
+    pub fn as_ref(self) -> RefValue<Self> {
         Rc::new(RefCell::new(self))
     }
 }
 
-impl AgalValuable for AgalPrototype {
-    fn to_value(self) -> AgalValue {
+impl<'a> AgalValuable<'a> for AgalPrototype<'a> {
+    fn to_value(self) -> AgalValue<'a> {
         AgalComplex::SuperInstance(self).to_value()
     }
     fn to_agal_string(self, stack: &Stack, env: RefEnvironment) -> Result<AgalString, AgalThrow> {
@@ -87,19 +87,19 @@ impl AgalValuable for AgalPrototype {
 }
 
 #[derive(Clone, PartialEq)]
-pub struct AgalClass {
+pub struct AgalClass<'a> {
     name: String,
-    extend_of: OpRefValue<AgalClass>,
-    static_properties: RefHasMap<AgalClassProperty>,
-    instance: RefValue<AgalPrototype>,
+    extend_of: OpRefValue<AgalClass<'a>>,
+    static_properties: RefHasMap<AgalClassProperty<'a>>,
+    instance: RefValue<AgalPrototype<'a>>,
 }
 
-impl AgalClass {
+impl<'a> AgalClass<'a> {
     pub fn new(
         name: String,
-        properties: Vec<(String, AgalClassProperty)>,
-        extend_of: OpRefValue<AgalClass>,
-    ) -> AgalClass {
+        properties: Vec<(String, AgalClassProperty<'a>)>,
+        extend_of: OpRefValue<AgalClass<'a>>,
+    ) -> Self {
         let static_properties = ref_hash_map();
         let instance_properties = ref_hash_map();
         for property in properties.iter() {
@@ -123,7 +123,7 @@ impl AgalClass {
 
         let instance = AgalPrototype::new(instance_properties, super_instance).as_ref();
 
-        AgalClass {
+        Self {
             name,
             static_properties,
             instance,
@@ -166,8 +166,8 @@ impl AgalClass {
         object.clone().to_ref_value()
     }
 }
-impl AgalValuable for AgalClass {
-    fn to_value(self) -> AgalValue {
+impl<'a> AgalValuable<'a> for AgalClass<'a> {
+    fn to_value(self) -> AgalValue<'a> {
         AgalComplex::Class(self).to_value()
     }
     fn to_agal_console(self, _: &Stack, _: RefEnvironment) -> Result<AgalString, AgalThrow> {
@@ -177,7 +177,7 @@ impl AgalValuable for AgalClass {
         )))
     }
     fn get_instance_property(
-        self,
+        &'a self,
         _: &crate::runtime::Stack,
         env: crate::runtime::env::RefEnvironment,
         key: String,
@@ -201,12 +201,12 @@ impl AgalValuable for AgalClass {
         }
     }
 
-    fn call(
-        self,
+    async fn call(
+        &self,
         stack: &Stack,
         env: RefEnvironment,
-        _: RefAgalValue,
-        args: Vec<RefAgalValue>,
+        _: RefAgalValue<'a>,
+        args: Vec<RefAgalValue<'a>>,
         modules_manager: &Modules,
     ) -> RefAgalValue {
         let o = AgalObject::from_prototype(self.clone().instance);

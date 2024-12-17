@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{cell::Ref, rc::Rc};
 
 use crate::{
     runtime::{
@@ -12,29 +12,31 @@ use crate::{
 };
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct AgalString(String);
-impl AgalString {
-    pub fn from_string(value: String) -> AgalString {
-        AgalString(value)
+pub struct AgalString<'a>(&'a str);
+impl<'a> AgalString<'a> {
+    pub fn from_string(value: &'a str) -> Self {
+        Self(value)
     }
-    pub fn get_string(&self) -> &String {
+    pub fn get_string(&self) -> &str {
         &self.0
     }
-    pub fn string_to_array(value: &AgalString) -> AgalArray {
+    pub fn string_to_array(value: &AgalString<'a>) -> AgalArray<'a> {
         get_chars(value)
     }
 }
-impl AgalValuable for AgalString {
-    fn to_agal_string(self, _: &Stack, _: RefEnvironment) -> Result<AgalString, AgalThrow> {
-        Ok(self)
+impl<'a> AgalValuable<'a> for AgalString<'a> {
+    fn to_agal_string(&self, _: &Stack, _: RefEnvironment) -> Result<AgalString<'a>, AgalThrow> {
+        Ok(self.clone())
     }
-    fn to_agal_console(self, _: &Stack, _: RefEnvironment) -> Result<AgalString, AgalThrow> {
-        Ok(AgalString::from_string(format!("{}", self.0)))
+    fn to_agal_console(&self, _: &Stack, _: RefEnvironment) -> Result<AgalString<'a>, AgalThrow> {
+        Ok(self.clone())
     }
-    fn to_agal_array(self, _: &Stack) -> Result<AgalArray, AgalThrow> {
-        Ok(AgalString::string_to_array(&self))
+    fn to_agal_array(&self, _: &Stack) -> Result<&AgalArray<'a>, AgalThrow> {
+        let array = AgalString::string_to_array(&self);
+        let r_array: &AgalArray<'a> = &array.to_ref_value().borrow();
+        Ok(r_array)
     }
-    fn to_agal_value(self, _: &Stack, _: RefEnvironment) -> Result<AgalString, AgalThrow> {
+    fn to_agal_value(&self, _: &Stack, _: RefEnvironment) -> Result<AgalString, AgalThrow> {
         Ok(AgalString::from_string(format!(
             "\x1b[32m'{}'\x1b[39m",
             self.0
@@ -42,13 +44,13 @@ impl AgalValuable for AgalString {
                 .replace("\n", "\\n")
                 .replace("\r", "\\r")
                 .replace("\t", "\\t")
-        )))
+        ).as_str()))
     }
-    fn to_value(self) -> AgalValue {
+    fn to_value(self) -> AgalValue<'a> {
         AgalPrimitive::String(self).to_value()
     }
     fn get_instance_property(
-        self,
+        &self,
         stack: &Stack,
         env: RefEnvironment,
         key: String,
@@ -57,7 +59,7 @@ impl AgalValuable for AgalString {
             "caracteres" => crate::runtime::AgalNativeFunction {
                 name: "caracteres".to_string(),
                 func: Rc::new(move |_, stack, env, _, this| {
-                    let str = this.borrow().clone().to_agal_string(stack, env.clone());
+                    let str = this.borrow().to_agal_string(stack, env.clone());
                     if let Err(err) = str {
                         return err.to_ref_value();
                     }
@@ -69,7 +71,7 @@ impl AgalValuable for AgalString {
             "bytes" => crate::runtime::AgalNativeFunction {
                 name: "bytes".to_string(),
                 func: Rc::new(move |_, stack, env, _, this| {
-                    let str = this.borrow().clone().to_agal_string(stack, env.clone());
+                    let str = this.borrow().to_agal_string(stack, env.clone());
                     if let Err(err) = str {
                         return err.to_ref_value();
                     }
@@ -80,7 +82,7 @@ impl AgalValuable for AgalString {
             .to_ref_value(),
             "largo" => get_length(&self).as_ref(),
             _ => {
-                let value = self.to_value();
+                let ref value = self.clone().to_value();
                 get_instance_property_error(stack, env, key, value)
             }
         }
@@ -143,9 +145,9 @@ impl AgalValuable for AgalString {
 
 // instance methods
 
-fn get_chars(value: &AgalString) -> AgalArray {
+fn get_chars<'a>(value: &AgalString<'a>) -> AgalArray<'a> {
     let vec = value.get_string();
-    let mut new_vec: Vec<RefAgalValue> = vec![];
+    let mut new_vec: Vec<RefAgalValue<'a>> = vec![];
 
     for c in vec.chars() {
         let i = AgalChar::new(c).to_ref_value();
@@ -153,8 +155,8 @@ fn get_chars(value: &AgalString) -> AgalArray {
     }
     AgalArray::from_vec(new_vec)
 }
-fn get_length(value: &AgalString) -> AgalValue {
-    AgalNumber::new(value.get_string().len() as f64).to_value()
+fn get_length<'a>(value: &AgalString) -> &AgalValue<'a> {
+    &AgalNumber::new(value.get_string().len() as f64).to_value()
 }
 
 /**
@@ -171,11 +173,11 @@ impl AgalChar {
         self.0
     }
 }
-impl AgalValuable for AgalChar {
-    fn to_value(self) -> AgalValue {
+impl<'a> AgalValuable<'a> for AgalChar {
+    fn to_value(self) -> AgalValue<'a> {
         AgalPrimitive::Char(self).to_value()
     }
-    fn to_agal_console(self, _: &Stack, _: RefEnvironment) -> Result<AgalString, AgalThrow> {
+    fn to_agal_console(&self, _: &Stack, _: RefEnvironment) -> Result<AgalString, AgalThrow> {
         Ok(AgalString::from_string(format!(
             "\x1b[34m'{}'\x1b[39m",
             match self.0 {
@@ -188,17 +190,17 @@ impl AgalValuable for AgalChar {
         )))
     }
     fn get_instance_property(
-        self,
+        &self,
         stack: &Stack,
         env: RefEnvironment,
         key: String,
     ) -> RefAgalValue {
-        let value = self.to_value();
+        let ref value = self.to_value();
         match key.as_str() {
             "bytes" => crate::runtime::AgalNativeFunction {
                 name: "bytes".to_string(),
                 func: Rc::new(move |_, stack, env, _, this| {
-                    let str = this.borrow().clone().to_agal_string(stack, env.clone());
+                    let str = this.borrow().to_agal_string(stack, env.clone());
                     if let Err(err) = str {
                         return err.to_ref_value();
                     }
@@ -210,7 +212,7 @@ impl AgalValuable for AgalChar {
             _ => get_instance_property_error(stack, env, key, value),
         }
     }
-    fn to_agal_string(self, _: &Stack, _: RefEnvironment) -> Result<AgalString, AgalThrow> {
+    fn to_agal_string(&self, _: &Stack, _: RefEnvironment) -> Result<AgalString, AgalThrow> {
         Ok(AgalString::from_string(self.0.to_string()))
     }
 }

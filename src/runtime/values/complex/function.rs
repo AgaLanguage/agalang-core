@@ -24,28 +24,29 @@ impl AgalFunction {
         AgalFunction { args, body, env }
     }
 }
-impl AgalValuable for AgalFunction {
-    fn to_value(self) -> AgalValue {
+impl<'a> AgalValuable<'a> for AgalFunction {
+    fn to_value(self) -> AgalValue<'a> {
         AgalComplex::Function(self).to_value()
     }
-    fn to_agal_string(self, _: &Stack, _: RefEnvironment) -> Result<AgalString, AgalThrow> {
+    fn to_agal_string(&self, _: &Stack, _: RefEnvironment) -> Result<AgalString, AgalThrow> {
         Ok(AgalString::from_string("<Funcion>".to_string()))
     }
-    fn to_agal_console(self, _: &Stack, _: RefEnvironment) -> Result<AgalString, AgalThrow> {
+    fn to_agal_console(&self, _: &Stack, _: RefEnvironment) -> Result<AgalString, AgalThrow> {
         Ok(AgalString::from_string(
             "\x1b[36m<Funcion>\x1b[39m".to_string(),
         ))
     }
     fn get_instance_property(
-        self,
+        &self,
         stack: &Stack,
         env: RefEnvironment,
         key: String,
     ) -> RefAgalValue {
-        get_instance_property_error(stack, env, key, self.to_value())
+        let value: AgalValue<'a> = self.clone().to_value();
+        get_instance_property_error(stack, env, key, &value)
     }
-    fn call(
-        self,
+    async fn call(
+        &self,
         stack: &Stack,
         _: RefEnvironment,
         this: RefAgalValue,
@@ -69,11 +70,11 @@ impl AgalValuable for AgalFunction {
             );
         }
         let value = interpreter(
-            &self.body.to_node(),
-            stack,
+            self.body.to_node().to_box(),
+            stack.clone().to_ref(),
             new_env.as_ref(),
-            &modules_manager.clone(),
-        );
+            modules_manager.clone().to_ref(),
+        ).await.await;
         if value.as_ref().borrow().is_throw() {
             return value;
         }

@@ -11,29 +11,29 @@ use crate::runtime::{
 };
 
 pub type AgalHashMap<Value> = std::collections::HashMap<String, Value>;
-pub type RefAgalHashMap = Rc<RefCell<AgalHashMap<RefAgalValue>>>;
-pub type RefAgalProto = Rc<RefCell<AgalPrototype>>;
+pub type RefAgalHashMap<'a> = Rc<RefCell<AgalHashMap<RefAgalValue<'a>>>>;
+pub type RefAgalProto<'a> = Rc<RefCell<AgalPrototype<'a>>>;
 
 #[derive(Clone, PartialEq)]
 #[allow(dead_code)]
-pub struct AgalObject(RefAgalHashMap, Option<RefAgalProto>);
-impl AgalObject {
-    pub fn from_hashmap(hashmap: RefAgalHashMap) -> AgalObject {
-        AgalObject(hashmap, None)
+pub struct AgalObject<'a>(RefAgalHashMap<'a>, Option<RefAgalProto<'a>>);
+impl<'a> AgalObject<'a> {
+    pub fn from_hashmap(hashmap: RefAgalHashMap<'a>) -> Self {
+        Self(hashmap, None)
     }
     pub fn from_hashmap_with_prototype(
-        hashmap: RefAgalHashMap,
-        prototype: RefAgalProto,
-    ) -> AgalObject {
-        AgalObject(hashmap, Some(prototype))
+        hashmap: RefAgalHashMap<'a>,
+        prototype: RefAgalProto<'a>,
+    ) -> Self {
+        Self(hashmap, Some(prototype))
     }
     pub fn from_prototype(hashmap: RefAgalProto) -> AgalObject {
         AgalObject(Rc::new(RefCell::new(HashMap::new())), Some(hashmap))
     }
-    pub fn get_hashmap(&self) -> Ref<AgalHashMap<RefAgalValue>> {
+    pub fn get_hashmap(&'a self) -> Ref<AgalHashMap<RefAgalValue>> {
         self.0.as_ref().borrow()
     }
-    pub fn get_prototype(&self) -> Option<Ref<AgalPrototype>> {
+    pub fn get_prototype(&'a self) -> Option<Ref<AgalPrototype>> {
         if let Some(a) = &self.1 {
             Some(a.as_ref().borrow())
         } else {
@@ -41,8 +41,8 @@ impl AgalObject {
         }
     }
 }
-impl AgalValuable for AgalObject {
-    fn get_keys(self) -> Vec<String> {
+impl<'a> AgalValuable<'a> for AgalObject<'a> {
+    fn get_keys(&'a self) -> Vec<String> {
         let hashmap = self.get_hashmap();
         hashmap.keys().cloned().collect()
     }
@@ -69,10 +69,10 @@ impl AgalValuable for AgalObject {
         }
         Ok(AgalString::from_string(format!("{{ {result} }}")))
     }
-    fn to_value(self) -> AgalValue {
+    fn to_value(self) -> AgalValue<'a> {
         AgalComplex::Object(self).to_value()
     }
-    fn get_object_property(self, _: &Stack, _: RefEnvironment, key: String) -> RefAgalValue {
+    fn get_object_property(&'a self, _: &Stack, _: RefEnvironment, key: String) -> RefAgalValue {
         let value = self.get_hashmap();
         let value = value.get(&key);
         if value.is_none() {
@@ -81,17 +81,17 @@ impl AgalValuable for AgalObject {
         value.unwrap().clone()
     }
     fn set_object_property(
-        self,
+        &self,
         _: &Stack,
         _: RefEnvironment,
         key: String,
-        value: RefAgalValue,
-    ) -> RefAgalValue {
+        value: RefAgalValue<'a>,
+    ) -> RefAgalValue<'a> {
         self.0.borrow_mut().insert(key, value.clone());
         value
     }
     fn get_instance_property(
-        self,
+        &self,
         stack: &Stack,
         env: RefEnvironment,
         key: String,
@@ -99,8 +99,8 @@ impl AgalValuable for AgalObject {
         let this = self.clone();
         let proto = this.get_prototype();
         if proto.is_none() {
-            let value = AgalComplex::Object(self).to_value();
-            return get_instance_property_error(stack, env.clone(), key, value);
+            let value = AgalComplex::Object(*self).to_value();
+            return get_instance_property_error(stack, env.clone(), key, &value);
         }
         let value = proto.unwrap();
         value.clone().get_instance_property(stack, env, key)
