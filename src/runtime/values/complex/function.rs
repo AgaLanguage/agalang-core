@@ -1,87 +1,117 @@
 use parser::{
-    ast::{Node, NodeBlock, NodeIdentifier},
-    util::List,
+  ast::{NodeBlock, NodeIdentifier},
+  util::{List, RefValue},
+  KeywordsType,
 };
 
-use crate::{
-    runtime::{
-        env::{RefEnvironment, THIS_KEYWORD},
-        get_instance_property_error, interpreter, AgalComplex, AgalString, AgalThrow, AgalValuable,
-        AgalValuableManager, AgalValue, RefAgalValue, Stack,
-    },
-    Modules,
+use crate::runtime::{
+  self,
+  values::{
+    internal, primitive,
+    traits::{self, AgalValuable, ToAgalValue},
+  },
 };
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone)]
 pub struct AgalFunction {
-    args: List<NodeIdentifier>,
-    body: NodeBlock,
-    env: RefEnvironment,
+  name: String,
+  is_async: bool,
+  args: List<NodeIdentifier>,
+  body: NodeBlock,
+  env: runtime::RefEnvironment,
 }
 
 impl AgalFunction {
-    pub fn new(args: List<NodeIdentifier>, body: NodeBlock, env: RefEnvironment) -> AgalFunction {
-        AgalFunction { args, body, env }
+  pub fn new(
+    name: String,
+    is_async: bool,
+    args: List<NodeIdentifier>,
+    body: NodeBlock,
+    env: runtime::RefEnvironment,
+  ) -> Self {
+    Self {
+      name,
+      is_async,
+      args,
+      body,
+      env,
     }
+  }
 }
-impl<'a> AgalValuable<'a> for AgalFunction {
-    fn to_value(self) -> AgalValue<'a> {
-        AgalComplex::Function(self).to_value()
+
+impl traits::ToAgalValue for AgalFunction {
+  fn to_value(self) -> crate::runtime::values::AgalValue {
+    super::AgalComplex::Function(self.as_ref()).to_value()
+  }
+}
+
+impl traits::AgalValuable for AgalFunction {
+  fn to_agal_string(&self) -> Result<primitive::AgalString, internal::AgalThrow> {
+    Ok(primitive::AgalString::from_string(format!(
+      "[{} {}]",
+      if self.is_async {
+        format!(
+          "{} {}",
+          KeywordsType::Async.as_str(),
+          KeywordsType::Function.as_str()
+        )
+      } else {
+        KeywordsType::Function.to_string()
+      },
+      self.name
+    )))
+  }
+  fn to_agal_console(
+    &self,
+    stack: parser::util::RefValue<runtime::Stack>,
+    env: runtime::RefEnvironment,
+  ) -> Result<primitive::AgalString, internal::AgalThrow> {
+    Ok(
+      self
+        .to_agal_string()?
+        .add_prev(&format!("\x1b[36m"))
+        .add_post(&format!("\x1b[0m")),
+    )
+  }
+  async fn call(
+    &self,
+    stack: parser::util::RefValue<runtime::Stack>,
+    env: runtime::RefEnvironment,
+    this: crate::runtime::values::DefaultRefAgalValue,
+    args: Vec<crate::runtime::values::DefaultRefAgalValue>,
+    modules: RefValue<crate::Modules>,
+  ) -> Result<crate::runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
+    let mut new_env = self.env.crate_child(false);
+    new_env.set(crate::runtime::env::THIS_KEYWORD, this);
+    for (i, arg) in self.args.iter().enumerate() {
+      let value = if i < args.len() {
+        args[i].clone()
+      } else {
+        crate::runtime::values::AgalValue::Never.as_ref()
+      };
+      new_env.define(
+        stack.clone(),
+        &arg.name,
+        value,
+        false,
+        &parser::ast::Node::Identifier(arg.clone()),
+      );
     }
-    fn to_agal_string(&self, _: &Stack, _: RefEnvironment) -> Result<AgalString, AgalThrow> {
-        Ok(AgalString::from_string("<Funcion>".to_string()))
+    if self.is_async {
+      let inner = super::promise::Promise::new(crate::runtime::interpreter::interpreter(
+        parser::ast::Node::Block(self.body.clone()).to_box(),
+        stack,
+        new_env,
+        modules,
+      ));
+      return Ok(super::promise::AgalPromise::new(inner).to_ref_value());
     }
-    fn to_agal_console(&self, _: &Stack, _: RefEnvironment) -> Result<AgalString, AgalThrow> {
-        Ok(AgalString::from_string(
-            "\x1b[36m<Funcion>\x1b[39m".to_string(),
-        ))
-    }
-    fn get_instance_property(
-        &self,
-        stack: &Stack,
-        env: RefEnvironment,
-        key: String,
-    ) -> RefAgalValue {
-        let value: AgalValue<'a> = self.clone().to_value();
-        get_instance_property_error(stack, env, key, &value)
-    }
-    async fn call(
-        &self,
-        stack: &Stack,
-        _: RefEnvironment,
-        this: RefAgalValue,
-        arguments: Vec<RefAgalValue>,
-        modules_manager: &Modules,
-    ) -> RefAgalValue {
-        let mut new_env = self.env.as_ref().borrow().clone().crate_child(false);
-        new_env.set(THIS_KEYWORD, this);
-        for (i, arg) in self.args.iter().enumerate() {
-            let value = if i < arguments.len() {
-                arguments[i].clone()
-            } else {
-                AgalValue::Never.as_ref()
-            };
-            new_env.define(
-                stack,
-                &arg.name,
-                value,
-                true,
-                &Node::Identifier(arg.clone()),
-            );
-        }
-        let value = interpreter(
-            self.body.to_node().to_box(),
-            stack.clone().to_ref(),
-            new_env.as_ref(),
-            modules_manager.clone().to_ref(),
-        ).await.await;
-        if value.as_ref().borrow().is_throw() {
-            return value;
-        }
-        let value: &AgalValue = &value.as_ref().borrow();
-        if let AgalValue::Return(returned) = value {
-            return returned.clone();
-        }
-        AgalValue::Never.as_ref()
-    }
+    crate::runtime::interpreter::interpreter(
+      parser::ast::Node::Block(self.body.clone()).to_box(),
+      stack,
+      new_env,
+      modules,
+    )
+    .await
+  }
 }

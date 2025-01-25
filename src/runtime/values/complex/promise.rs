@@ -1,96 +1,76 @@
 use std::{
-    borrow::BorrowMut,
-    cell::RefCell,
-    future::{self, Future, IntoFuture},
-    ops::{Deref, DerefMut},
-    pin::Pin,
-    rc::Rc,
-    sync::{Arc, Mutex},
-    task::{Context, Poll},
+  borrow::BorrowMut,
+  cell::RefCell,
+  future::{self, Future, IntoFuture},
+  ops::{Deref, DerefMut},
+  pin::Pin,
+  rc::Rc,
+  sync::{Arc, Mutex},
+  task::{Context, Poll},
 };
 
 use parser::util::RefValue;
-use tokio::{task::JoinHandle};
+use tokio::task::JoinHandle;
 
-use crate::runtime::{AgalValuable, AgalValuableManager, AgalValue, RefAgalValue};
+use crate::runtime::values::{
+  self, internal, primitive,
+  traits::{self, AgalValuable as _, ToAgalValue as _},
+  AgalValue,
+};
 
 use super::AgalComplex;
 
-type Resolver = dyn FnOnce(RefAgalValue);
+type Resolver = dyn FnOnce(values::DefaultRefAgalValue);
 type Callback = Box<dyn FnOnce(Resolver, Resolver)>;
 
 //#[derive(Clone)]
-pub struct Promise<'a>(Pin<Box<dyn Future<Output = Result<RefAgalValue<'a>,RefAgalValue<'a>>>>>);
-impl<'a> Future for Promise<'a> {
-    type Output = Result<RefAgalValue<'a>, RefAgalValue<'a>>;
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        match self.as_mut().poll(cx) {
-            Poll::Ready(value) => Poll::Ready(value),
-            Poll::Pending => Poll::Pending,
-        }
+pub struct Promise(
+  Pin<Box<dyn Future<Output = Result<values::DefaultRefAgalValue, internal::AgalThrow>>>>,
+);
+impl Promise {
+  pub fn new(
+    future: Pin<Box<dyn Future<Output = Result<values::DefaultRefAgalValue, internal::AgalThrow>>>>,
+  ) -> Self {
+    Self(future)
+  }
+}
+impl Future for Promise {
+  type Output = Result<values::DefaultRefAgalValue, internal::AgalThrow>;
+  fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+    match self.as_mut().poll(cx) {
+      Poll::Ready(value) => Poll::Ready(value),
+      Poll::Pending => Poll::Pending,
     }
+  }
 }
 
-pub struct AgalPromise<'a> {
-    inner: Promise<'a>
+pub enum AgalPromise {
+  Unresolved(Promise),
+  Resolved(Result<values::DefaultRefAgalValue, internal::AgalThrow>),
 }
-
-impl<'a> AgalPromise<'a> {
-    pub fn new(inner: Promise<'a>) -> Self
-    {
-        Self { inner }
-    }
+impl AgalPromise {
+  pub fn new(inner: Promise) -> Self {
+    Self::Unresolved(inner)
+  }
 }
-impl<'a> IntoFuture for AgalPromise<'a> {
-    type Output = Result<RefAgalValue<'a>,RefAgalValue<'a>>;
-    type IntoFuture = Promise<'a>;
+impl IntoFuture for AgalPromise {
+  type Output = Result<values::DefaultRefAgalValue, internal::AgalThrow>;
+  type IntoFuture = Promise;
 
-    fn into_future(self) -> Self::IntoFuture {
-        self.inner
+  fn into_future(self) -> Self::IntoFuture {
+    match self {
+      AgalPromise::Unresolved(inner) => inner,
+      AgalPromise::Resolved(value) => Promise::new(Box::pin(async move { value })),
     }
+  }
 }
-impl<'a> AgalValuable<'a> for AgalPromise<'a> {
-    fn to_value(self) -> AgalValue<'a> {
-        AgalComplex::Promise(self).to_value()
-    }
-
-    fn to_agal_console(
-        &self,
-        stack: &crate::runtime::Stack,
-        env: crate::runtime::env::RefEnvironment,
-    ) -> Result<crate::runtime::AgalString, crate::runtime::AgalThrow> {
-        todo!()
-    }
-
-    fn get_instance_property(
-        &self,
-        stack: &crate::runtime::Stack,
-        env: crate::runtime::env::RefEnvironment,
-        key: String,
-    ) -> RefAgalValue {
-        todo!()
-    }
-    
-    fn binary_operation(
-      &self,
-        stack: &crate::runtime::Stack,
-        env: crate::runtime::env::RefEnvironment,
-        operator: &str,
-        other: RefAgalValue<'a>,
-    ) -> RefAgalValue {
-        todo!()
-    }
-    
-    fn unary_operator(&self, stack: &crate::runtime::Stack, env: crate::runtime::env::RefEnvironment, operator: &str) -> RefAgalValue {
-        todo!()
-    }
-    
-    fn unary_back_operator(
-        &self,
-        stack: &crate::runtime::Stack,
-        env: crate::runtime::env::RefEnvironment,
-        operator: &str,
-    ) -> RefAgalValue {
-        todo!()
-    }
+impl traits::ToAgalValue for AgalPromise {
+  fn to_value(self) -> AgalValue {
+    AgalComplex::Promise(self.as_ref()).to_value()
+  }
+}
+impl traits::AgalValuable for AgalPromise {
+  fn to_agal_string(&self) -> Result<primitive::AgalString, internal::AgalThrow> {
+    Ok(primitive::AgalString::from_string("Promise".to_string()))
+  }
 }

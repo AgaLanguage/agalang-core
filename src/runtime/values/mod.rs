@@ -1,604 +1,340 @@
-use std::{borrow::Borrow, cell::RefCell, rc::Rc};
+use std::{cell::RefCell, future::Future, pin::Pin, rc::Rc};
 
-use crate::{
-    runtime::{
-        env::{RefEnvironment, FALSE_KEYWORD, NOTHING_KEYWORD, NULL_KEYWORD, TRUE_KEYWORD},
-        Stack,
-    },
-    Modules,
-};
-use parser::{ast::Node, internal::ErrorNames};
+use parser::util::{self, RefValue};
 
-pub mod primitive;
-pub use primitive::*;
 pub mod complex;
-pub use complex::*;
 pub mod internal;
-pub use internal::*;
+pub mod primitive;
 pub mod traits;
-pub use traits::*;
+use traits::{AgalValuable as _, ToAgalValue as _};
 
-pub type RefAgalValue<'a> = Rc<RefCell<AgalValue<'a>>>;
-
-pub enum AgalValue<'a> {
-    Internal(AgalInternal<'a>),
-    Primitive(AgalPrimitive<'a>),
-    Complex(AgalComplex<'a>),
-    Export(String, RefAgalValue<'a>),
-    Return(RefAgalValue<'a>),
-    Continue,
-    Never,
-    Break,
-    Null,
+pub struct RefAgalValue<T: traits::AgalValuable + traits::ToAgalValue>(Rc<RefCell<T>>);
+impl<T: traits::AgalValuable + traits::ToAgalValue> RefAgalValue<T> {
+  pub fn new(value: T) -> Self {
+    Self(Rc::new(RefCell::new(value)))
+  }
+  pub fn borrow(&self) -> std::cell::Ref<T> {
+    self.0.as_ref().borrow()
+  }
+  pub fn borrow_mut(&self) -> std::cell::RefMut<T> {
+    self.0.borrow_mut()
+  }
+  pub fn replace(&self, value: T) {
+    *self.borrow_mut() = value;
+  }
+  pub fn ptr(&self) -> *const T {
+    let b = &*self.borrow();
+    b as *const T
+  }
 }
-impl<'a> PartialEq for AgalValue<'a> {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Self::Internal(a), Self::Internal(b)) => a == b,
-            (Self::Primitive(a), Self::Primitive(b)) => a == b,
-            (Self::Complex(a), Self::Complex(b)) => a == b,
-            (Self::Export(name, value), Self::Export(on, ov)) => {
-                name == on && value == ov
-            }
-            (Self::Never, Self::Never) => true,
-            (Self::Null, Self::Null) => true,
-            (_, _) => false,
-        }
-    }
+impl<T: traits::AgalValuable + traits::ToAgalValue + Clone> traits::ToAgalValue
+  for RefAgalValue<T>
+{
+  fn to_value(self) -> AgalValue {
+    self.un_ref().to_value()
+  }
+  fn to_result(self) -> Result<DefaultRefAgalValue, internal::AgalThrow>
+  where
+    Self: Sized,
+  {
+    self.un_ref().to_result()
+  }
 }
-impl<'a> AgalValue<'a> {
-    pub fn as_ref(self) -> RefAgalValue<'a> {
-        Rc::new(RefCell::new(self))
-    }
-    pub fn is_never(&self) -> bool {
-        match self {
-            Self::Never => true,
-            _ => false,
-        }
-    }
-    pub fn is_stop(&self) -> bool {
-        match self {
-            Self::Break
-            | Self::Continue
-            | Self::Return(_)
-            | Self::Internal(AgalInternal::Throw(_)) => true,
-            _ => false,
-        }
-    }
-    pub fn is_break(&self) -> bool {
-        match self {
-            Self::Break => true,
-            _ => false,
-        }
-    }
-    pub fn is_return(&self) -> bool {
-        match self {
-            Self::Return(_) => true,
-            _ => false,
-        }
-    }
-    pub fn is_throw(&self) -> bool {
-        match self {
-            Self::Internal(AgalInternal::Throw(_)) => true,
-            _ => false,
-        }
-    }
-    pub fn get_throw(&self) -> Option<AgalThrow> {
-        match self {
-            Self::Internal(AgalInternal::Throw(t)) => Some(t.clone()),
-            _ => None,
-        }
-    }
-    pub fn is_export(&self) -> bool {
-        match self {
-            Self::Export(_, _) => true,
-            _ => false,
-        }
-    }
-    pub fn get_export(&self) -> Option<(&String, &RefAgalValue<'a>)> {
-        match self {
-            Self::Export(name, value) => Some((name, value)),
-            _ => None,
-        }
-    }
+impl<T: traits::AgalValuable + traits::ToAgalValue + Clone> RefAgalValue<T> {
+  pub fn un_ref(&self) -> T {
+    self.borrow().clone()
+  }
 }
-impl<'a> AgalValuableManager<'a> for AgalValue<'a> {
-    fn to_value(self) -> Self {
-        self
-    }
-    fn to_agal_number(&self, stack: &Stack, env: RefEnvironment<'a>) -> Result<AgalNumber, AgalThrow> {
-        match self {
-            Self::Internal(i) => i.to_agal_number(stack, env),
-            Self::Primitive(p) => p.to_agal_number(stack, env),
-            Self::Complex(c) => c.to_agal_number(stack, env),
-            Self::Null => Ok(AgalNumber::new(0f64)),
-            _ => Err(AgalThrow::Params {
-                type_error: ErrorNames::CustomError("Error Parseo"),
-                message: "No se pudo convertir en numero".to_string(),
-                stack: Box::new(stack.clone()),
-            }),
-        }
-    }
-    fn to_agal_string(&'a self, stack: &Stack, env: RefEnvironment<'a>) -> Result<AgalString<'a>, AgalThrow> {
-        match self {
-            Self::Null => Ok(AgalString::from_string(NULL_KEYWORD)),
-            Self::Never => Ok(AgalString::from_string(NOTHING_KEYWORD)),
-            Self::Internal(i) => i.to_agal_string(stack, env),
-            Self::Complex(c) => c.to_agal_string(stack, env),
-            Self::Primitive(p) => p.to_agal_string(stack, env),
-            _ => Err(AgalThrow::Params {
-                type_error: ErrorNames::CustomError("Error Parseo"),
-                message: "No se pudo convertir en cadena".to_string(),
-                stack: Box::new(stack.clone()),
-            }),
-        }
-    }
-    fn to_agal_boolean(
-        &self,
-        stack: &Stack,
-        env: RefEnvironment<'a>,
-    ) -> Result<AgalBoolean, AgalThrow> {
-        match self {
-            Self::Null => env
-                .as_ref()
-                .borrow()
-                .get(stack, FALSE_KEYWORD, &Node::None)
-                .as_ref()
-                .borrow()
-                .to_agal_boolean(stack, env.clone()),
-            Self::Never => Err(AgalThrow::Params {
-                type_error: ErrorNames::CustomError("Error Parseo"),
-                message: "No se pudo convertir en booleano".to_string(),
-                stack: Box::new(stack.clone()),
-            }),
-            Self::Internal(i) => i.to_agal_boolean(stack, env),
-            Self::Complex(c) => c.to_agal_boolean(stack, env),
-            Self::Primitive(p) => p.to_agal_boolean(stack, env),
-            _ => Err(AgalThrow::Params {
-                type_error: ErrorNames::CustomError("Error Parseo"),
-                message: "No se pudo convertir en booleano".to_string(),
-                stack: Box::new(stack.clone()),
-            }),
-        }
-    }
-    fn to_agal_array(&self, stack: &Stack) -> Result<&AgalArray<'a>, AgalThrow> {
-        match self {
-            Self::Internal(i) => i.to_agal_array(stack),
-            Self::Complex(c) => c.to_agal_array(stack),
-            Self::Primitive(p) => p.to_agal_array(stack),
-            _ => Err(AgalThrow::Params {
-                type_error: ErrorNames::CustomError("Error Iterable"),
-                message: "El valor no es iterable".to_string(),
-                stack: Box::new(stack.clone()),
-            }),
-        }
-    }
-    fn to_agal_byte(&self, stack: &Stack) -> Result<AgalByte, AgalThrow> {
-        match self {
-            Self::Internal(i) => i.to_agal_byte(stack),
-            Self::Complex(c) => c.to_agal_byte(stack),
-            Self::Primitive(p) => p.to_agal_byte(stack),
-            _ => Err(AgalThrow::Params {
-                type_error: ErrorNames::CustomError("Error Iterable"),
-                message: "El valor no es iterable".to_string(),
-                stack: Box::new(stack.clone()),
-            }),
-        }
-    }
-    fn to_agal_console(&'a self, stack: &Stack, env: RefEnvironment<'a>) -> Result<AgalString<'a>, AgalThrow> {
-        match self {
-            Self::Internal(i) => i.to_agal_console(stack, env),
-            Self::Complex(c) => c.to_agal_console(stack, env),
-            Self::Primitive(p) => p.to_agal_console(stack, env),
-            Self::Null => Ok(AgalString::from_string("\x1b[97mnulo\x1b[39m")),
-            _ => Ok(AgalString::from_string("\x1b[90mnada\x1b[39m")),
-        }
-    }
-    fn to_agal_value(&'a self, stack: &Stack, env: RefEnvironment<'a>) -> Result<AgalString<'a>, AgalThrow> {
-        match self {
-            Self::Internal(i) => i.to_agal_value(stack, env),
-            Self::Complex(c) => c.to_agal_value(stack, env),
-            Self::Primitive(p) => p.to_agal_value(stack, env),
-            _ => self.to_agal_console(stack, env),
-        }
-    }
-    fn get_instance_property(
-        &'a self,
-        stack: &Stack,
-        env: RefEnvironment<'a>,
-        key: String,
-    ) -> RefAgalValue {
-        match self {
-            Self::Internal(i) => i.get_instance_property(stack, env, key),
-            Self::Complex(c) => c.get_instance_property(stack, env, key),
-            Self::Primitive(p) => p.get_instance_property(stack, env, key),
-            _ => AgalError::new(
-                ErrorNames::CustomError("Error Propiedad"),
-                format!("No se puede obtener la propiedad {}", key),
-                Box::new(stack.clone()),
-            )
-            .to_ref_value(),
-        }
-    }
-    fn get_object_property(&'a self, stack: &Stack, env: RefEnvironment<'a>, key: String) -> RefAgalValue {
-        match self {
-            Self::Internal(i) => i.get_object_property(stack, env, key),
-            Self::Complex(c) => c.get_object_property(stack, env, key),
-            Self::Primitive(p) => p.get_object_property(stack, env, key),
-            _ => get_property_error(stack, env, key),
-        }
-    }
-    fn set_object_property(
-        &'a self,
-        stack: &Stack,
-        env: RefEnvironment<'a>,
-        key: String,
-        value: RefAgalValue,
-    ) -> RefAgalValue {
-        let data = self;
-        match data {
-            Self::Internal(i) => i.set_object_property(stack, env, key, value),
-            Self::Complex(c) => c.set_object_property(stack, env, key, value),
-            Self::Primitive(p) => p.set_object_property(stack, env, key, value),
-            _ => Self::Never.as_ref(),
-        }
-    }
-    fn binary_operation(
-        &'a self,
-        stack: &Stack,
-        env: RefEnvironment<'a>,
-        operator: &str,
-        other: RefAgalValue<'a>,
-    ) -> RefAgalValue {
-        match self {
-            Self::Internal(i) => i.binary_operation(stack, env, operator, other),
-            Self::Complex(c) => c.binary_operation(stack, env, operator, other),
-            Self::Primitive(p) => p.binary_operation(stack, env, operator, other),
-            _ => {
-                let a = self;
-                let b = &*other.as_ref().borrow();
-                AgalBoolean::new(a == b).to_ref_value()
-            }
-        }
-    }
-    fn unary_operator(&'a self, stack: &Stack, env: RefEnvironment<'a>, operator: &str) -> RefAgalValue {
-        match self {
-            Self::Internal(i) => i.unary_operator(stack, env, operator),
-            Self::Complex(c) => c.unary_operator(stack, env, operator),
-            Self::Primitive(p) => p.unary_operator(stack, env, operator),
-            _ => Self::Never.as_ref(),
-        }
-    }
-    fn unary_back_operator(
-        &'a self,
-        stack: &Stack,
-        env: RefEnvironment<'a>,
-        operator: &str,
-    ) -> RefAgalValue {
-        match self {
-            Self::Internal(i) => i.unary_back_operator(stack, env, operator),
-            Self::Complex(c) => c.unary_back_operator(stack, env, operator),
-            Self::Primitive(p) => p.unary_back_operator(stack, env, operator),
-            _ => Self::Never.as_ref(),
-        }
-    }
-    async fn call(
-        &self,
-        stack: &Stack,
-        env: RefEnvironment<'a>,
-        this: RefAgalValue<'a>,
-        args: Vec<RefAgalValue<'a>>,
-        modules_manager: &Modules<'a>,
-    ) -> RefAgalValue<'a> {
-        match self {
-            Self::Internal(n) => n.call(stack, env, this, args, modules_manager).await,
-            Self::Complex(c) => c.call(stack, env, this, args, modules_manager).await,
-            Self::Primitive(p) => p.call(stack, env, this, args, modules_manager).await,
-            _ => {
-                let message = format!("No se puede llamar a {}", self.get_type());
-                AgalThrow::Params {
-                    type_error: ErrorNames::CustomError("Error Llamada"),
-                    message,
-                    stack: Box::new(stack.clone()),
-                }
-                .to_ref_value()
-            }
-        }
-    }
-
-    fn get_type(&self) -> &'static str {
-        match self {
-            Self::Internal(i) => i.get_type(),
-            Self::Complex(c) => c.get_type(),
-            Self::Primitive(p) => p.get_type(),
-            Self::Null => "Nulo",
-            _ => "Nada",
-        }
-    }
-
-    fn get_keys(&self) -> Vec<String> {
-        match self {
-            Self::Internal(i) => i.get_keys(),
-            Self::Complex(c) => c.get_keys(),
-            Self::Primitive(p) => p.get_keys(),
-            _ => vec![],
-        }
-    }
-
-    fn get_length(&self) -> usize {
-        match self {
-            Self::Internal(i) => i.get_length(),
-            Self::Complex(c) => c.get_length(),
-            Self::Primitive(p) => p.get_length(),
-            _ => 0,
-        }
-    }
-
-    fn delete_object_property(&'a self, stack: &Stack, env: RefEnvironment<'a>, key: String) {
-        match self {
-            Self::Internal(i) => i.delete_object_property(stack, env, key),
-            Self::Complex(c) => c.delete_object_property(stack, env, key),
-            Self::Primitive(p) => p.delete_object_property(stack, env, key),
-            _ => (),
-        }
-    }
+impl RefAgalValue<AgalValue> {
+  pub fn is_return(&self) -> bool {
+    self.un_ref().is_return()
+  }
+  pub fn is_break(&self) -> bool {
+    self.un_ref().is_break()
+  }
+  pub fn is_continue(&self) -> bool {
+    self.un_ref().is_continue()
+  }
+  pub fn is_stop(&self) -> bool {
+    self.un_ref().is_stop()
+  }
+  pub fn is_never(&self) -> bool {
+    self.un_ref().is_never()
+  }
+  pub fn to_result(&self) -> Result<RefAgalValue<AgalValue>, internal::AgalThrow> {
+    self.un_ref().to_result()
+  }
+  pub fn into_return(&self) -> Option<DefaultRefAgalValue> {
+    self.un_ref().into_return()
+  }
 }
 
-pub fn set_property_error<'a>(
-    stack: &Stack,
-    env: RefEnvironment,
-    key: String,
-    message: String,
-) -> RefAgalValue<'a> {
-    AgalThrow::Params {
-        type_error: ErrorNames::CustomError("Error Propiedad"),
-        message: format!("No se puede obtener la propiedad {}: {}", key, message),
-        stack: Box::new(stack.clone()),
-    }
-    .to_ref_value()
+impl<T: traits::AgalValuable + traits::ToAgalValue> Clone for RefAgalValue<T> {
+  fn clone(&self) -> Self {
+    Self(self.0.clone())
+  }
 }
-pub fn get_property_error<'a>(stack: &Stack, env: RefEnvironment, key: String) -> RefAgalValue<'a> {
-    AgalThrow::Params {
-        type_error: ErrorNames::CustomError("Error Propiedad"),
-        message: format!("No se puede obtener la propiedad {}", key),
-        stack: Box::new(stack.clone()),
-    }
-    .to_ref_value()
-}
-pub fn delete_property_error<'a>(stack: &Stack, env: RefEnvironment<'a>, key: String) -> AgalValue<'a> {
-    AgalThrow::Params {
-        type_error: ErrorNames::CustomError("Error Propiedad"),
-        message: format!("No se puede eliminar la propiedad {}", key),
-        stack: Box::new(stack.clone()),
-    }
-    .to_value()
-}
-
-pub fn get_instance_property_error<'a>(
-    stack: &Stack,
-    env: RefEnvironment<'a>,
-    key: String,
-    value: &'static AgalValue<'a>,
-) -> RefAgalValue<'a> {
-    let rc_stack: Rc<RefCell<Stack>> = Rc::new(RefCell::new(stack.clone()));
-    match key.as_str() {
-        "aCadena" => {
-            crate::runtime::AgalNativeFunction {
-                name: "aCadena".to_string(),
-                func: Rc::new({
-                    let e_stack = Rc::clone(&rc_stack);
-                    let e_env = Rc::clone(&env);
-                    move |_, _, _, _, _| -> RefAgalValue<'a> {
-                        let data = get_instance_property_value(
-                            e_stack.clone(),
-                            e_env.clone(),
-                            &key,
-                            value,
-                        );
-                        data
-                    }
-                }),
-            }
-            .to_ref_value()
-        }
-        "__aConsola__" => {
-            let key_clone = key.clone();
-            crate::runtime::AgalNativeFunction {
-                name: "__aConsola__".to_string(),
-                func: Rc::new({
-                    let e_stack = Rc::clone(&rc_stack);
-                    let e_env = Rc::clone(&env);
-                    move |_, _, _, _, _| -> RefAgalValue {
-                        let data = get_instance_property_value(
-                            e_stack.clone(),
-                            e_env.clone(),
-                            &key_clone,
-                            &value,
-                        );
-                        data
-                    }
-                }),
-            }
-            .to_ref_value()
-        }
-        "aNumero" => {
-            let key_clone = key.clone();
-            crate::runtime::AgalNativeFunction {
-                name: "aNumero".to_string(),
-                func: Rc::new({
-                    let e_stack = Rc::clone(&rc_stack);
-                    let e_env = Rc::clone(&env);
-                    move |_, _, _, _, _| -> RefAgalValue {
-                        let data = get_instance_property_value(
-                            e_stack.clone(),
-                            e_env.clone(),
-                            &key_clone,
-                            &value,
-                        );
-                        data
-                    }
-                }),
-            }
-            .to_ref_value()
-        }
-        "aBuleano" => {
-            let key_clone = key.clone();
-            crate::runtime::AgalNativeFunction {
-                name: "aBuleano".to_string(),
-                func: Rc::new({
-                    let e_stack = Rc::clone(&rc_stack);
-                    let e_env = Rc::clone(&env);
-                    move |_, _, _, _, _| -> RefAgalValue {
-                        let data = get_instance_property_value(
-                            e_stack.clone(),
-                            e_env.clone(),
-                            &key_clone,
-                            &value,
-                        );
-                        data
-                    }
-                }),
-            }
-            .to_ref_value()
-        }
-        "__aIterable__" => {
-            let key_clone = key.clone();
-            crate::runtime::AgalNativeFunction {
-                name: "__aIterable__".to_string(),
-                func: Rc::new({
-                    let e_stack = Rc::clone(&rc_stack);
-                    let e_env = Rc::clone(&env);
-                    move |_, _, _, _, _| -> RefAgalValue {
-                        let data = get_instance_property_value(
-                            e_stack.clone(),
-                            e_env.clone(),
-                            &key_clone,
-                            &value,
-                        );
-                        data
-                    }
-                }),
-            }
-            .to_ref_value()
-        }
-        _ => get_property_error(stack, env, key),
-    }
-}
-
-fn get_instance_property_value<'a>(
-    stack: Rc<RefCell<Stack>>,
-    env: RefEnvironment<'a>,
+impl<T: traits::AgalValuable + traits::ToAgalValue> traits::AgalValuable for RefAgalValue<T> {
+  fn to_agal_string(&self) -> Result<primitive::AgalString, internal::AgalThrow> {
+    self.borrow().to_agal_string()
+  }
+  fn to_agal_byte(&self, stack: RefValue<super::Stack>) -> Result<primitive::AgalByte, internal::AgalThrow> {
+    self.borrow().to_agal_byte(stack)
+  }
+  fn to_agal_boolean(&self, stack: RefValue<super::Stack>) -> Result<primitive::AgalBoolean, internal::AgalThrow> {
+    self.borrow().to_agal_boolean(stack)
+  }
+  fn to_agal_console(
+    &self,
+    stack: RefValue<super::Stack>,
+    env: super::RefEnvironment,
+  ) -> Result<primitive::AgalString, internal::AgalThrow> {
+    self.borrow().to_agal_console(stack, env)
+  }
+  fn to_agal_value(
+    &self,
+    stack: RefValue<super::Stack>,
+    env: super::RefEnvironment,
+  ) -> Result<primitive::AgalString, internal::AgalThrow> {
+    self.borrow().to_agal_value(stack, env)
+  }
+  fn get_instance_property(
+    &self,
+    stack: util::RefValue<super::Stack>,
+    env: super::RefEnvironment,
     key: &str,
-    value: &'a AgalValue<'a>,
-) -> RefAgalValue<'a> {
-    let stack = &stack.as_ref().borrow();
-    match key {
-        "aCadena" => {
-            let data =
-                value.to_agal_string(stack, env.as_ref().borrow().clone().crate_child(false).as_ref());
-            match data {
-                Ok(s) => s.to_ref_value(),
-                Err(e) => e.to_ref_value(),
-            }
-        }
-        "__aConsola__" => {
-            let data = value.clone().to_agal_console(
-                stack,
-                env.as_ref().borrow().clone().crate_child(false).as_ref(),
-            );
-            match data {
-                Ok(s) => s.to_ref_value(),
-                Err(e) => e.to_ref_value(),
-            }
-        }
-        "aNumero" => {
-            let data = value.clone().to_agal_number(
-                stack,
-                env.as_ref().borrow().clone().crate_child(false).as_ref(),
-            );
-            match data {
-                Ok(s) => s.to_ref_value(),
-                Err(e) => e.to_ref_value(),
-            }
-        }
-        "aBuleano" => {
-            let data = value.to_agal_boolean(
-                stack,
-                env.as_ref().borrow().clone().crate_child(false).as_ref(),
-            );
-            match data {
-                Ok(s) => s.to_ref_value(),
-                Err(e) => e.to_ref_value(),
-            }
-        }
-        "__aIterable__" => {
-            let data = value.to_agal_array(stack);
-            match data {
-                Ok(s) => s.clone().to_ref_value(),
-                Err(e) => e.to_ref_value(),
-            }
-        }
-        _ => get_property_error(stack, env, key.to_string()),
-    }
+  ) -> Result<DefaultRefAgalValue, internal::AgalThrow> {
+    self.borrow().get_instance_property(stack, env, key)
+  }
+  fn get_object_property(
+    &self,
+    stack: util::RefValue<super::Stack>,
+    env: super::RefEnvironment,
+    key: &str,
+  ) -> Result<DefaultRefAgalValue, internal::AgalThrow> {
+    self.borrow().get_object_property(stack, env, key)
+  }fn set_object_property(
+    &mut self,
+    stack: util::RefValue<super::Stack>,
+    env: super::env::RefEnvironment,
+    key: &str,
+    value: DefaultRefAgalValue,
+  ) -> Result<DefaultRefAgalValue, internal::AgalThrow> {
+    self.borrow_mut().set_object_property(stack, env, key, value)
+  }
+  
+  async fn call(
+    &self,
+    stack: util::RefValue<super::Stack>,
+    env: super::env::RefEnvironment,
+    this: DefaultRefAgalValue,
+    args: Vec<DefaultRefAgalValue>,
+    modules: util::RefValue<crate::Modules>,
+  ) -> Result<
+    crate::runtime::values::DefaultRefAgalValue,
+    internal::AgalThrow,
+  > {
+    self.borrow().call(stack, env, this, args, modules).await
+  }
 }
-pub fn binary_operation_error<'a>(
-    stack: &Stack,
-    operator: &str,
-    left: RefAgalValue<'a>,
-    right: RefAgalValue<'a>,
-) -> RefAgalValue<'a> {
-    let left = left.as_ref().borrow();
-    let right = right.as_ref().borrow();
-
-    AgalThrow::Params {
-        type_error: ErrorNames::CustomError("Error Operacion"),
-        message: format!(
-            "No se puede realizar la operacion {} {} {}",
-            left.get_type(),
-            operator,
-            right.get_type()
-        ),
-        stack: Box::new(stack.clone()),
-    }
-    .to_ref_value()
+#[derive(Clone)]
+pub enum AgalValue {
+  Complex(RefAgalValue<complex::AgalComplex>),
+  Primitive(RefAgalValue<primitive::AgalPrimitive>),
+  Internal(RefAgalValue<internal::AgalInternal>),
+  Export(String, DefaultRefAgalValue),
+  Continue,
+  Never,
+  Break,
+  Null,
 }
-pub fn unary_operation_error<'a>(
-    stack: &Stack,
-    operator: &str,
-    value: RefAgalValue<'a>,
-) -> RefAgalValue<'a> {
-    let value = value.as_ref().borrow();
-
-    AgalThrow::Params {
-        type_error: ErrorNames::CustomError("Error Operacion"),
-        message: format!(
-            "No se puede realizar la operacion {} {}",
-            operator,
-            value.get_type(),
-        ),
-        stack: Box::new(stack.clone()),
+impl AgalValue {
+  pub fn is_return(&self) -> bool {
+    match self {
+      AgalValue::Internal(i) => i.un_ref().is_return(),
+      _ => false,
     }
-    .to_ref_value()
+  }
+  pub fn is_never(&self) -> bool {
+    match self {
+      AgalValue::Never => true,
+      _ => false,
+    }
+  }
+  pub fn is_break(&self) -> bool {
+    match self {
+      AgalValue::Break => true,
+      _ => false,
+    }
+  }
+  pub fn is_continue(&self) -> bool {
+    match self {
+      AgalValue::Continue => true,
+      _ => false,
+    }
+  }
+  pub fn is_stop(&self) -> bool {
+    self.is_return() || self.is_break() || self.is_continue()
+  }
+  pub fn to_result(&self) -> ResultAgalValue {
+    match self {
+      AgalValue::Internal(i) => i.un_ref().to_result(),
+      AgalValue::Continue | AgalValue::Break | AgalValue::Never => Ok(AgalValue::Never.as_ref()),
+      _ => Ok(self.clone().as_ref()),
+    }
+  }
+  pub fn into_return(&self) -> Option<DefaultRefAgalValue> {
+    match self {
+      AgalValue::Internal(i) => i.un_ref().into_return(),
+      _ => None,
+    }
+  }
 }
-pub fn unary_back_operation_error<'a>(
-    stack: &Stack,
-    operator: &str,
-    value: RefAgalValue<'a>,
-) -> RefAgalValue<'a> {
-    let value = value.as_ref().borrow();
 
-    if value.is_throw() && operator == "?" {
-        return AgalValue::Null.as_ref();
+impl traits::ToAgalValue for AgalValue {
+  fn to_value(self) -> AgalValue {
+    self
+  }
+  fn to_result(self) -> Result<DefaultRefAgalValue, internal::AgalThrow>
+  where
+    Self: Sized,
+  {
+    match self {
+      Self::Internal(i) => i.to_result(),
+      _ => Ok(self.as_ref()),
     }
-
-    AgalThrow::Params {
-        type_error: ErrorNames::CustomError("Error Operacion"),
-        message: format!(
-            "No se puede realizar la operacion {} {}",
-            value.get_type(),
-            operator,
-        ),
-        stack: Box::new(stack.clone()),
-    }
-    .to_ref_value()
+  }
 }
+impl traits::AgalValuable for AgalValue {
+  fn to_agal_string(&self) -> Result<primitive::AgalString, internal::AgalThrow> {
+    match self {
+      Self::Complex(c) => c.to_agal_string(),
+      Self::Primitive(p) => p.to_agal_string(),
+      Self::Internal(i) => i.to_agal_string(),
+      Self::Never | Self::Null => Ok(primitive::AgalString::from_string(super::NULL_KEYWORD.to_string())),
+      _ => Err(internal::AgalThrow::Params {
+        type_error: parser::internal::ErrorNames::TypeError,
+        message: "No soy una cadena".to_string(),
+        stack: super::Stack::get_default().to_ref(),
+      }),
+    }
+  }
+  fn to_agal_byte(
+    &self,
+    stack: util::RefValue<super::Stack>,
+  ) -> Result<primitive::AgalByte, internal::AgalThrow> {
+    match self {
+      Self::Complex(c) => c.to_agal_byte(stack),
+      Self::Primitive(p) => p.to_agal_byte(stack),
+      Self::Internal(i) => i.to_agal_byte(stack),
+      Self::Export(_, v) => v.to_agal_byte(stack),
+      Self::Never | Self::Null | Self::Break | Self::Continue => {
+        Err(internal::AgalThrow::Params {
+          type_error: parser::internal::ErrorNames::TypeError,
+          message: "No soy un byte".to_string(),
+          stack,
+        })
+      }
+    }
+  }
+  fn to_agal_boolean(
+    &self,
+    stack: util::RefValue<super::Stack>,
+  ) -> Result<primitive::AgalBoolean, internal::AgalThrow> {
+    match self {
+      Self::Complex(c) => c.to_agal_boolean(stack),
+      Self::Primitive(p) => p.to_agal_boolean(stack),
+      Self::Internal(i) => i.to_agal_boolean(stack),
+      Self::Export(_, v) => v.to_agal_boolean(stack),
+      Self::Never | Self::Null | Self::Break | Self::Continue => {
+        Ok(primitive::AgalBoolean::False)
+      }
+    }
+  }
+  fn to_agal_console(
+    &self,
+    stack: util::RefValue<super::Stack>,
+    env: super::env::RefEnvironment,
+  ) -> Result<primitive::AgalString, internal::AgalThrow> {
+    match self {
+      Self::Complex(c) => c.to_agal_console(stack, env),
+      Self::Primitive(p) => p.to_agal_console(stack, env),
+      Self::Internal(i) => i.to_agal_console(stack, env),
+      Self::Export(_, v) => v.to_agal_console(stack, env),
+      Self::Never | Self::Null => Ok(primitive::AgalString::from_string(super::NULL_KEYWORD.to_string())),
+      Self::Break | Self::Continue => Err(internal::AgalThrow::Params {
+        type_error: parser::internal::ErrorNames::TypeError,
+        message: "No se puede imprimir en consola".to_string(),
+        stack,
+      }),
+    }
+  }
+  fn to_agal_value(
+    &self,
+    stack: util::RefValue<super::Stack>,
+    env: super::env::RefEnvironment,
+  ) -> Result<primitive::AgalString, internal::AgalThrow> {
+    match self {
+      Self::Complex(c) => c.to_agal_value(stack, env),
+      Self::Primitive(p) => p.to_agal_value(stack, env),
+      Self::Internal(i) => i.to_agal_value(stack, env),
+      Self::Export(_, v) => v.to_agal_value(stack, env),
+      Self::Never | Self::Null => Ok(primitive::AgalString::from_string(super::NULL_KEYWORD.to_string())),
+      Self::Break | Self::Continue => Err(internal::AgalThrow::Params {
+        type_error: parser::internal::ErrorNames::TypeError,
+        message: "No se puede imprimir en consola".to_string(),
+        stack,
+      }),
+    }
+  }
+  fn get_instance_property(
+    &self,
+    stack: util::RefValue<super::Stack>,
+    env: super::env::RefEnvironment,
+    key: &str,
+  ) -> Result<DefaultRefAgalValue, internal::AgalThrow> {
+    match self {
+      Self::Complex(c) => c.get_instance_property(stack, env, key),
+      Self::Primitive(p) => p.get_instance_property(stack, env, key),
+      Self::Internal(i) => i.get_instance_property(stack, env, key),
+      Self::Export(_, v) => v.get_instance_property(stack, env, key),
+      Self::Never | Self::Null | Self::Break | Self::Continue => {
+        internal::AgalThrow::Params {
+          type_error: parser::internal::ErrorNames::TypeError,
+          message: format!(
+            "No se puede obtener la propiedad '{}' de {}",
+            key,
+            self.to_agal_string()?.to_string()
+          ),
+          stack,
+        }.to_result()
+      }
+    }
+  }
+  fn call(
+    &self,
+    stack: util::RefValue<super::Stack>,
+    env: super::env::RefEnvironment,
+    this: DefaultRefAgalValue,
+    args: Vec<DefaultRefAgalValue>,
+    modules: util::RefValue<crate::Modules>,
+  ) -> Pin<Box<dyn Future<Output = Result<DefaultRefAgalValue,internal:: AgalThrow>> + '_>> {
+    Box::pin(async move {
+      match self {
+        Self::Complex(c) => c.call(stack, env, this, args, modules).await,
+        Self::Primitive(p) => p.call(stack, env, this, args, modules).await,
+        Self::Internal(i) => i.call(stack, env, this, args, modules).await,
+        Self::Export(_, v) => v.call(stack, env, this, args, modules).await,
+        Self::Never | Self::Null | Self::Break | Self::Continue => {
+          internal::AgalThrow::Params {
+            type_error: parser::internal::ErrorNames::TypeError,
+            message: "No se puede invocar a este valor".to_string(),
+            stack,
+          }.to_result()
+        }
+      }
+    })
+  }
+}
+pub type DefaultRefAgalValue = RefAgalValue<AgalValue>;
+pub type ResultAgalValue = Result<DefaultRefAgalValue, internal::AgalThrow>;

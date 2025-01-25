@@ -1,15 +1,2 @@
 importar ':consola' como consola;
-importar ':sa' como sa;
-
-fn abrir_archivo(ruta, buf){
-  def carpeta = sa::obtener_ruta(ruta)::obtener_padre();
-  intentar sa::crear_carpeta(carpeta);
-  intentar sa::crear_archivo(ruta);
-  def bufA = sa::leer_archivo(ruta);
-  sa::escribir_archivo(ruta, [..bufA, ..buf]);
-}
-
-#[ 0by01001000, 0by01101111, 0by01101100, 0by01100001, 0by00100000, 0by01001101, 0by01110101, 0by01101110, 0by01100100, 0by01101111 ]
-#01001000 01101111 01101100 01100001 00100000 01001101 01110101 01101110 01100100 01101111
-def buf = vago "Hola Mundo"::bytes();
-consola::pintar(abrir_archivo('./mc/test.txt', buf), buf);
+consola::pintar('HaH');

@@ -1,19 +1,14 @@
-use std::{borrow::Borrow, path::Path, rc::Rc};
+use std::{path::Path, rc::Rc};
 
-use parser::{self as frontend, util::RefValue};
+use parser as frontend;
 use parser::internal;
 
 use crate::{
-  runtime::{self, env::RefEnvironment},
+  runtime::{self, env::RefEnvironment, AgalInternal, AgalValue, RefAgalValue, Stack},
   Modules, ToResult,
 };
 
-use super::{
-  stack::Stack,
-  values::{internal::AgalInternal, AgalValue, DefaultRefAgalValue},
-};
-
-type EvalResult = Result<DefaultRefAgalValue, ()>;
+type EvalResult<'a> = Result<RefAgalValue<'a>, ()>;
 
 fn code(path: &str) -> Option<String> {
   let contents = std::fs::read_to_string(path);
@@ -28,30 +23,33 @@ fn code(path: &str) -> Option<String> {
   }
 }
 
-pub async fn full_eval(
+pub async fn full_eval<'a>(
   path: &str,
   stack: &Stack,
-  env: RefEnvironment,
-  modules: RefValue<Modules>,
-) -> EvalResult {
-  let modules_manager = &*modules.as_ref().borrow();
+  env: RefEnvironment<'a>,
+  modules_manager: &Modules<'a>,
+) -> EvalResult<'a> {
   if modules_manager.has(path) {
     return Ok(modules_manager.get(path));
   }
-  let contents = code(&path).to_result()?;
+  let contents = code(&path);
+  if contents.is_none() {
+    return Err(());
+  }
 
+  let contents = contents.unwrap();
   let value = eval(contents, path, stack, env, &modules_manager.clone()).await?;
   modules_manager.add(path, value.clone());
   Ok(value)
 }
 
-async fn eval(
+async fn eval<'a>(
   code: String,
   path: &str,
   stack: &Stack,
-  env: RefEnvironment,
-  modules_manager: &Modules,
-) -> EvalResult {
+  env: RefEnvironment<'a>,
+  modules_manager: &Modules<'a>,
+) -> EvalResult<'a> {
   let program: frontend::ast::Node = {
     let mut parser = frontend::Parser::new(code, &path);
     parser.produce_ast()
@@ -64,24 +62,24 @@ async fn eval(
     internal::print_error(data);
     return Err(());
   }
-  let env = env.crate_child(false);
-  let value = runtime::interpreter::interpreter(
+  let env = env.borrow().clone().crate_child(false).as_ref();
+  let value = runtime::interpreter(
     program.to_box(),
     stack.clone().to_ref(),
     env.clone(),
     modules_manager.clone().to_ref(),
   )
+  .await
   .await;
-  let value = &*value.borrow();
-  match value {
-    Err(throw) =>{
-      let (type_err, err) = throw.get_data();
-      let data = internal::errors::error_to_string(&type_err, err);
-      internal::print_error(data);
-      Err(())
-    }
-    Ok(value) => {
-      Ok(value.clone())
-    }
+  let result = Ok(value.clone());
+  let value: &AgalValue = &value.borrow();
+  if let AgalValue::Internal(AgalInternal::Throw(err)) = value {
+    let error = err.get_error();
+    let type_err = error.get_type_error();
+    let err = error.to_error();
+    let data = internal::errors::error_to_string(&type_err, err);
+    internal::print_error(data);
+    return Err(());
   }
+  result
 }

@@ -7,14 +7,16 @@ pub fn absolute_path(path: &str) -> String {
     canonicalized
   } else if let Err(e) = canonicalize {
     path_buf
-  }else{
+  } else {
     path_buf
-  }.to_string_lossy().to_string();
+  }
+  .to_string_lossy()
+  .to_string();
   if path_str.starts_with(r"\\?\") {
     path_str[4..].to_string()
-} else {
+  } else {
     path_str
-}
+  }
 }
 pub fn relative_path<'a>(absolute_path: &'a Path, base_path: &'a Path) -> Option<&'a Path> {
   absolute_path.strip_prefix(base_path).ok()
