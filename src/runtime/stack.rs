@@ -1,3 +1,5 @@
+use std::{cell::RefCell, rc::Rc};
+
 use parser::ast::Node;
 
 #[derive(Clone, PartialEq)]
@@ -7,6 +9,9 @@ pub struct Stack {
 }
 
 impl Stack {
+  pub fn to_ref(self) -> Rc<RefCell<Self>> {
+    Rc::new(RefCell::new(self))
+  }
   pub fn next(&self, value: &Node) -> Stack {
     Stack {
       value: Box::new(value.clone()),
@@ -38,9 +43,14 @@ impl Stack {
 
 impl<'a> std::fmt::Display for Stack {
   fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-    write!(f, "{} -> {}", self.value.get_type(), match &self.previous {
-      Some(previous) => previous.to_string(),
-      None => "None".to_string(),
-    })
+    write!(
+      f,
+      "{} -> {}",
+      self.value.get_type(),
+      match &self.previous {
+        Some(previous) => previous.to_string(),
+        None => "None".to_string(),
+      }
+    )
   }
 }

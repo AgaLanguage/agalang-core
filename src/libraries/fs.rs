@@ -1,464 +1,365 @@
 use std::{
-    cell::RefCell,
-    fs::{self, exists, File, OpenOptions},
-    io::{Read, Write},
-    os::windows::fs::FileExt,
-    path::Path,
-    rc::Rc,
+  cell::RefCell,
+  fs,
+  io::{self, Read as _, Write as _},
+  path::Path,
+  rc::Rc,
 };
 
-use parser::internal::ErrorNames;
+use parser::{internal::ErrorNames, util};
 
 use crate::{
-    runtime::{
-        env::RefEnvironment, AgalArray, AgalBoolean, AgalClass, AgalClassProperty, AgalError,
-        AgalNativeFunction, AgalObject, AgalPrototype, AgalString, AgalThrow, AgalValuable,
-        AgalValuableManager, AgalValue, RefAgalValue, Stack,
+  runtime::{
+    self,
+    values::{
+      self, complex, internal, primitive,
+      traits::{self, AgalValuable as _, ToAgalValue as _},
+      AgalValue,
     },
-    Modules,
+  },
+  Modules,
 };
 fn get_path(
-    stack: &Stack,
-    env: RefEnvironment,
-    this: RefAgalValue,
-) -> Result<AgalString, AgalThrow> {
-    let string = this
-        .borrow()
-        .clone()
-        .get_object_property(stack, env.clone(), "@ruta".to_string());
-    let s = string.borrow().clone().to_agal_string(stack, env);
-    s
+  stack: util::RefValue<runtime::Stack>,
+  env: runtime::RefEnvironment,
+  this: values::DefaultRefAgalValue,
+) -> Result<primitive::AgalString, internal::AgalThrow> {
+  let string = this.get_object_property(stack, env.clone(), "@ruta");
+  string?.borrow().to_agal_string()
 }
 
-pub fn get_module(prefix: &str) -> RefAgalValue {
-    let mut module_name = get_name(prefix);
+pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
+  let mut module_name = get_name(prefix);
 
-    let path_name = format!("{module_name}::Ruta");
+  let path_name = format!("{module_name}::Ruta");
 
-    let path = AgalClass::new(
-        path_name.clone(),
-        vec![
-            (
-                "es_archivo".to_string(),
-                AgalClassProperty {
-                    is_public: true,
-                    is_static: false,
-                    value: AgalNativeFunction {
-                        name: format!("{path_name}::es_archivo"),
-                        func: Rc::new(|_, stack, env, _, this| {
-                            let string = get_path(stack, env, this);
-                            if let Ok(string) = string {
-                                let path = std::path::Path::new(string.get_string());
-                                AgalBoolean::new(path.is_file()).to_ref_value()
-                            } else if let Err(e) = string {
-                                e.to_ref_value()
-                            } else {
-                                AgalThrow::Params {
-                                    type_error: ErrorNames::PathError,
-                                    stack: Box::new(stack.clone()),
-                                    message: "La ruta no es valida".to_string(),
-                                }
-                                .to_ref_value()
-                            }
-                        }),
-                    }
-                    .to_ref_value(),
-                },
-            ),
-            (
-                "es_carpeta".to_string(),
-                AgalClassProperty {
-                    is_public: true,
-                    is_static: false,
-                    value: AgalNativeFunction {
-                        name: format!("{path_name}::es_carpeta"),
-                        func: Rc::new(|_, stack, env, _, this| {
-                            let string = get_path(stack, env, this);
-                            if let Ok(string) = string {
-                                let path = std::path::Path::new(string.get_string());
-                                AgalBoolean::new(path.is_dir()).to_ref_value()
-                            } else if let Err(e) = string {
-                                e.to_ref_value()
-                            } else {
-                                AgalThrow::Params {
-                                    type_error: ErrorNames::PathError,
-                                    stack: Box::new(stack.clone()),
-                                    message: "La ruta no es valida".to_string(),
-                                }
-                                .to_ref_value()
-                            }
-                        }),
-                    }
-                    .to_ref_value(),
-                },
-            ),
-            (
-                "nombre".to_string(),
-                AgalClassProperty {
-                    is_public: true,
-                    is_static: false,
-                    value: AgalNativeFunction {
-                        name: format!("{path_name}::nombre"),
-                        func: Rc::new(|_, stack, env, _, this| {
-                            let string = get_path(stack, env, this);
-                            if let Ok(string) = string {
-                                string.to_ref_value()
-                            } else if let Err(e) = string {
-                                e.to_ref_value()
-                            } else {
-                                AgalThrow::Params {
-                                    type_error: ErrorNames::PathError,
-                                    stack: Box::new(stack.clone()),
-                                    message: "La ruta no es valida".to_string(),
-                                }
-                                .to_ref_value()
-                            }
-                        }),
-                    }
-                    .to_ref_value(),
-                },
-            ),
-            (
-                "obtener_padre".to_string(),
-                AgalClassProperty {
-                    is_public: true,
-                    is_static: false,
-                    value: AgalNativeFunction {
-                        name: format!("{path_name}::obtener_padre"),
-                        func: Rc::new(|_, stack, env, _, this| {
-                            let string = get_path(stack, env, this);
-                            if let Ok(string) = string {
-                                let path = std::path::Path::new(string.get_string());
-                                let parent = path.parent().unwrap();
-                                AgalString::from_string(parent.to_string_lossy().to_string())
-                                    .to_ref_value()
-                            } else if let Err(e) = string {
-                                e.to_ref_value()
-                            } else {
-                                AgalThrow::Params {
-                                    type_error: ErrorNames::PathError,
-                                    stack: Box::new(stack.clone()),
-                                    message: "La ruta no es valida".to_string(),
-                                }
-                                .to_ref_value()
-                            }
-                        }),
-                    }
-                    .to_ref_value(),
-                },
-            ),
-        ],
-        None,
-    )
-    .to_value();
+  let path = complex::AgalClass::new(
+    path_name.clone(),
+    vec![
+      (
+        "es_archivo".to_string(),
+        complex::AgalClassProperty {
+          is_public: true,
+          is_static: false,
+          value: internal::AgalNativeFunction {
+            name: format!("{path_name}::es_archivo"),
+            func: Rc::new(|_, stack, env, _, this| {
+              let string = get_path(stack.clone(), env, this)?;
+              let binding = string.to_string();
+              let path = std::path::Path::new(&binding);
+              primitive::AgalBoolean::new(path.is_file()).to_result()
+            }),
+          }
+          .to_ref_value(),
+        },
+      ),
+      (
+        "es_carpeta".to_string(),
+        complex::AgalClassProperty {
+          is_public: true,
+          is_static: false,
+          value: internal::AgalNativeFunction {
+            name: format!("{path_name}::es_carpeta"),
+            func: Rc::new(|_, stack, env, _, this| {
+              let string = get_path(stack, env, this)?;
+              let binding = string.to_string();
+              let path = std::path::Path::new(&binding);
+              primitive::AgalBoolean::new(path.is_dir()).to_result()
+            }),
+          }
+          .to_ref_value(),
+        },
+      ),
+      (
+        "nombre".to_string(),
+        complex::AgalClassProperty {
+          is_public: true,
+          is_static: false,
+          value: internal::AgalNativeFunction {
+            name: format!("{path_name}::nombre"),
+            func: Rc::new(|_, stack, env, _, this| get_path(stack, env, this)?.to_result()),
+          }
+          .to_ref_value(),
+        },
+      ),
+      (
+        "obtener_padre".to_string(),
+        complex::AgalClassProperty {
+          is_public: true,
+          is_static: false,
+          value: internal::AgalNativeFunction {
+            name: format!("{path_name}::obtener_padre"),
+            func: Rc::new(|_, stack, env, _, this| {
+              let string = get_path(stack, env, this)?;
+              let binding = string.to_string();
+              let path = std::path::Path::new(&binding);
+              let parent = path.parent().unwrap();
+              primitive::AgalString::from_string(parent.to_string_lossy().to_string()).to_result()
+            }),
+          }
+          .to_ref_value(),
+        },
+      ),
+    ],
+    None,
+  )
+  .to_value();
 
-    let mut hashmap = std::collections::HashMap::new();
-    hashmap.insert(
-        "leer_archivo".to_string(),
-        AgalClassProperty {
-            is_public: true,
-            is_static: true,
-            value: AgalNativeFunction {
-                name: format!("{module_name}::leer_archivo"),
-                func: Rc::new(|arguments, stack, env, modules_manager, this| {
-                    let path = arguments.get(0);
-                    if !path.is_some() {
-                        return AgalThrow::Params {
-                            type_error: ErrorNames::TypeError,
-                            message: "Falta el argumento path".to_string(),
-                            stack: Box::new(stack.clone()),
-                        }
-                        .to_ref_value();
-                    }
-                    let path = path.unwrap().borrow().clone().to_agal_string(stack, env);
-                    if let Err(error) = path {
-                        return error.to_ref_value();
-                    }
-                    let path = path.ok().unwrap();
-                    let path = path.get_string();
-                    let mut file = std::fs::File::open(path);
-                    if let Ok(file) = &mut file {
-                        let mut buffer = Vec::new();
-                        file.read_to_end(&mut buffer);
-                        return AgalArray::from_buffer(&buffer).to_ref_value();
-                    }
-                    AgalThrow::Params {
-                        type_error: parser::internal::ErrorNames::PathError,
-                        message: "No se pudo abrir el archivo".to_string(),
-                        stack: Box::new(stack.clone()),
-                    }
-                    .to_ref_value()
-                }),
+  let mut hashmap = std::collections::HashMap::new();
+  hashmap.insert(
+    "leer_archivo".to_string(),
+    complex::AgalClassProperty {
+      is_public: true,
+      is_static: true,
+      value: internal::AgalNativeFunction {
+        name: format!("{module_name}::leer_archivo"),
+        func: Rc::new(|arguments, stack, env, modules_manager, this| {
+          let path: Option<&values::DefaultRefAgalValue> = arguments.get(0);
+          if !path.is_some() {
+            return internal::AgalThrow::Params {
+              type_error: ErrorNames::TypeError,
+              message: "Falta el argumento path".to_string(),
+              stack,
             }
-            .to_ref_value(),
-        },
-    );
-    hashmap.insert(
-        "leer_carpeta".to_string(),
-        AgalClassProperty {
-            is_public: true,
-            is_static: true,
-            value: AgalNativeFunction {
-                name: format!("{module_name}::leer_carpeta"),
-                func: Rc::new(|arguments, stack, env, modules_manager, this| {
-                    let path = arguments.get(0);
-                    if !path.is_some() {
-                        return AgalValue::Never.to_ref_value();
-                    }
-                    let path = path.unwrap().borrow().clone().to_agal_string(stack, env);
-                    if let Err(error) = path {
-                        return error.to_ref_value();
-                    }
-                    let path = path.ok().unwrap();
-                    let path = path.get_string();
-                    let mut dir = std::fs::read_dir(path);
-                    if let Ok(dir) = &mut dir {
-                        let mut files = Vec::new();
-                        for i in dir {
-                            if let Ok(entry) = i {
-                                files.push(
-                                    AgalString::from_string(
-                                        entry.file_name().to_string_lossy().to_string(),
-                                    )
-                                    .to_ref_value(),
-                                );
-                            }
-                        }
-                        return AgalArray::from_vec(files).to_ref_value();
-                    }
-                    AgalThrow::Params {
-                        type_error: parser::internal::ErrorNames::PathError,
-                        message: "No se pudo abrir el archivo".to_string(),
-                        stack: Box::new(stack.clone()),
-                    }
-                    .to_ref_value()
-                }),
+            .to_result();
+          }
+          let path = path.unwrap().try_to_string()?;
+          let mut file = std::fs::File::open(path);
+          if let Ok(file) = &mut file {
+            let mut buffer_writer = Vec::new();
+            file.read_to_end(&mut buffer_writer);
+            let buffer: &[u8] = &buffer_writer;
+            return complex::AgalArray::from(buffer).to_result();
+          }
+          internal::AgalThrow::Params {
+            type_error: parser::internal::ErrorNames::PathError,
+            message: "No se pudo abrir el archivo".to_string(),
+            stack,
+          }
+          .to_result()
+        }),
+      }
+      .to_ref_value(),
+    },
+  );
+  hashmap.insert(
+    "leer_carpeta".to_string(),
+    complex::AgalClassProperty {
+      is_public: true,
+      is_static: true,
+      value: internal::AgalNativeFunction {
+        name: format!("{module_name}::leer_carpeta"),
+        func: Rc::new(|arguments, stack, env, modules_manager, this| {
+          let path: Option<&values::DefaultRefAgalValue> = arguments.get(0);
+          if !path.is_some() {
+            return AgalValue::Never.to_result();
+          }
+          let path = path.unwrap().try_to_string()?;
+          let mut dir = std::fs::read_dir(path);
+          if let Ok(dir) = &mut dir {
+            let mut files = Vec::new();
+            for i in dir {
+              if let Ok(entry) = i {
+                files.push(
+                  primitive::AgalString::from_string(
+                    entry.file_name().to_string_lossy().to_string(),
+                  )
+                  .to_ref_value(),
+                );
+              }
             }
-            .to_ref_value(),
-        },
-    );
-    hashmap.insert(
-        "obtener_ruta".to_string(),
-        AgalClassProperty {
-            is_public: true,
-            is_static: true,
-            value: AgalNativeFunction {
-                name: format!("{module_name}::obtener_ruta"),
-                func: {
-                    let function = move |arguments: Vec<RefAgalValue>,
-                                         stack: &Stack,
-                                         env: RefEnvironment,
-                                         modules_manager: &Modules,
-                                         this: RefAgalValue| {
-                        let p = arguments.get(0);
-                        if !p.is_some() {
-                            return AgalValue::Never.to_ref_value();
-                        }
-                        let p = p
-                            .unwrap()
-                            .borrow()
-                            .clone()
-                            .to_agal_string(stack, env.clone());
-                        if let Ok(value) = p {
-                            let path = &path;
-                            let path = path.clone().call(
-                                stack,
-                                env.clone(),
-                                this,
-                                vec![],
-                                modules_manager,
-                            );
-                            let v = path.clone();
-                            let v = v.borrow();
-                            let p = value.get_string();
-                            let p = crate::path::absolute_path(p);
-                            let value = AgalString::from_string(p);
-                            v.clone().set_object_property(
-                                stack,
-                                env,
-                                "@ruta".to_string(),
-                                value.to_ref_value(),
-                            );
-                            path
-                        } else if let Err(error) = p {
-                            error.to_ref_value()
-                        } else {
-                            AgalThrow::Params {
-                                type_error: ErrorNames::PathError,
-                                message: "La ruta no es valida".to_string(),
-                                stack: Box::new(stack.clone()),
-                            }
-                            .to_ref_value()
-                        }
-                    };
-                    Rc::new(function)
-                },
+            return complex::AgalArray::from(files).to_result();
+          }
+          internal::AgalThrow::Params {
+            type_error: parser::internal::ErrorNames::PathError,
+            message: "No se pudo abrir el archivo".to_string(),
+            stack,
+          }
+          .to_result()
+        }),
+      }
+      .to_ref_value(),
+    },
+  );
+  hashmap.insert(
+    "obtener_ruta".to_string(),
+    complex::AgalClassProperty {
+      is_public: true,
+      is_static: true,
+      value: internal::AgalNativeFunction {
+        name: format!("{module_name}::obtener_ruta"),
+        func: Rc::new(
+          move |arguments: Vec<values::DefaultRefAgalValue>,
+                stack: util::RefValue<runtime::Stack>,
+                env: runtime::RefEnvironment,
+                modules_manager: util::RefValue<Modules>,
+                this: values::DefaultRefAgalValue|
+                -> values::ResultAgalValue {
+            let p: Option<&values::DefaultRefAgalValue> = arguments.get(0);
+            if !p.is_some() {
+              return AgalValue::Never.to_result();
             }
-            .to_ref_value(),
-        },
-    );
-    hashmap.insert(
-        "escribir_archivo".to_string(),
-        AgalClassProperty {
-            is_public: true,
-            is_static: true,
-            value: AgalNativeFunction {
-                name: format!("{module_name}::escribir_archivo"),
-                func: Rc::new(|arguments, stack, env, modules_manager, this| {
-                    let path = arguments.get(0);
-                    if !path.is_some() {
-                        return AgalValue::Never.to_ref_value();
-                    }
-                    let path = path.unwrap().borrow().clone().to_agal_string(stack, env);
-                    if let Err(error) = path {
-                        return error.to_ref_value();
-                    }
-                    let path = path.ok().unwrap();
-                    let path = path.get_string();
-                    let exists = Path::new(path).exists();
-                    if !exists {
-                        return AgalThrow::Params {
-                            type_error: parser::internal::ErrorNames::PathError,
-                            message: "El archivo no existe".to_string(),
-                            stack: Box::new(stack.clone()),
-                        }
-                        .to_ref_value();
-                    }
-                    let file = OpenOptions::new().write(true).truncate(true).open(path);
-                    if let Err(error) = &file {
-                        return AgalThrow::Params {
-                            type_error: parser::internal::ErrorNames::PathError,
-                            message: error.to_string(),
-                            stack: Box::new(stack.clone()),
-                        }
-                        .to_ref_value();
-                    }
-                    let mut file = file.ok().unwrap();
-                    let content = arguments.get(1);
-                    if !content.is_some() {
-                        return AgalThrow::Params {
-                            type_error: parser::internal::ErrorNames::PathError,
-                            message: "Se nesesita contenido para escribir en el archivo"
-                                .to_string(),
-                            stack: Box::new(stack.clone()),
-                        }
-                        .to_ref_value();
-                    }
-                    let content = content.unwrap().borrow().clone().to_agal_array(stack);
-                    if let Err(error) = content {
-                        return error.to_ref_value();
-                    }
-                    let content = content.ok().unwrap();
-                    let content = content.get_buffer(stack);
-                    if let Err(error) = content {
-                        return error.to_ref_value();
-                    }
-                    let mut buf: &[u8] = &content.ok().unwrap();
-                    let f = file.write_all(buf);
-                    if let Err(error) = f {
-                        return AgalThrow::Params {
-                            type_error: parser::internal::ErrorNames::PathError,
-                            message: error.to_string(),
-                            stack: Box::new(stack.clone()),
-                        }
-                        .to_ref_value();
-                    }
-                    AgalValue::Never.to_ref_value()
-                }),
-            }
-            .to_ref_value(),
-        },
-    );
-    hashmap.insert(
-        "crear_archivo".to_string(),
-        AgalClassProperty {
-            is_public: true,
-            is_static: true,
-            value: AgalNativeFunction {
-                name: format!("{module_name}::crear_archivo"),
-                func: Rc::new(|arguments, stack, env, modules_manager, this| {
-                    let path = arguments.get(0);
-                    if !path.is_some() {
-                        return AgalValue::Never.to_ref_value();
-                    }
-                    let path = path.unwrap().borrow().clone().to_agal_string(stack, env);
-                    if let Err(error) = path {
-                        return error.to_ref_value();
-                    }
-                    let path = path.ok().unwrap();
-                    let path = path.get_string();
-                    let exists = Path::new(path).exists();
-                    if exists {
-                        return AgalThrow::Params {
-                            type_error: parser::internal::ErrorNames::PathError,
-                            message: "La ruta no esta disponible".to_string(),
-                            stack: Box::new(stack.clone()),
-                        }
-                        .to_ref_value();
-                    }
-                    let file = File::create(path);
-                    if let Err(error) = file {
-                        AgalThrow::Params {
-                            type_error: parser::internal::ErrorNames::PathError,
-                            message: error.to_string(),
-                            stack: Box::new(stack.clone()),
-                        }
-                        .to_ref_value()
-                    } else {
-                        AgalValue::Never.to_ref_value()
-                    }
-                }),
-            }
-            .to_ref_value(),
-        },
-    );
-    hashmap.insert(
-        "crear_carpeta".to_string(),
-        AgalClassProperty {
-            is_public: true,
-            is_static: true,
-            value: AgalNativeFunction {
-                name: format!("{module_name}::crear_carpeta"),
-                func: Rc::new(|arguments, stack, env, modules_manager, this| {
-                    let path = arguments.get(0);
-                    if !path.is_some() {
-                        return AgalValue::Never.to_ref_value();
-                    }
-                    let path = path.unwrap().borrow().clone().to_agal_string(stack, env);
-                    if let Err(error) = path {
-                        return error.to_ref_value();
-                    }
-                    let path = path.ok().unwrap();
-                    let path = path.get_string();
-                    let exists = Path::new(path).exists();
-                    if exists {
-                        return AgalThrow::Params {
-                            type_error: parser::internal::ErrorNames::PathError,
-                            message: "La ruta no esta disponible".to_string(),
-                            stack: Box::new(stack.clone()),
-                        }
-                        .to_ref_value();
-                    }
-                    let file = fs::create_dir_all(path);
-                    if let Err(error) = file {
-                        AgalThrow::Params {
-                            type_error: parser::internal::ErrorNames::PathError,
-                            message: error.to_string(),
-                            stack: Box::new(stack.clone()),
-                        }
-                        .to_ref_value()
-                    } else {
-                        AgalValue::Never.to_ref_value()
-                    }
-                }),
-            }
-            .to_ref_value(),
-        },
-    );
+            let value = p.unwrap().to_agal_string()?;
+            complex::AgalPromise::new(complex::Promise::new(Box::pin({
+              let path = path.clone();
+              async move {
+                let mut path = path
+                  .call(stack.clone(), env.clone(), this, vec![], modules_manager)
+                  .await?;
 
-    let prototype = AgalPrototype::new(Rc::new(RefCell::new(hashmap)), None);
-    AgalObject::from_prototype(prototype.as_ref()).to_ref_value()
+                let p = value.to_string();
+                let p = crate::path::absolute_path(&p);
+                let value = primitive::AgalString::from_string(p);
+                path.set_object_property(stack, env, "@ruta", value.to_ref_value());
+                path.to_result()
+              }
+            })))
+            .to_result()
+          },
+        ),
+      }
+      .to_ref_value(),
+    },
+  );
+  hashmap.insert(
+    "escribir_archivo".to_string(),
+    complex::AgalClassProperty {
+      is_public: true,
+      is_static: true,
+      value: internal::AgalNativeFunction {
+        name: format!("{module_name}::escribir_archivo"),
+        func: Rc::new(|arguments, stack, env, modules_manager, this| {
+          let path: Option<&values::DefaultRefAgalValue> = arguments.get(0);
+          if !path.is_some() {
+            return AgalValue::Never.to_result();
+          }
+          let path = path.unwrap().try_to_string()?;
+          let exists = Path::new(&path).exists();
+          if !exists {
+            return internal::AgalThrow::Params {
+              type_error: parser::internal::ErrorNames::PathError,
+              message: "El archivo no existe".to_string(),
+              stack,
+            }
+            .to_result();
+          }
+          let file = fs::OpenOptions::new().write(true).truncate(true).open(path);
+          if let Err(error) = &file {
+            return internal::AgalThrow::Params {
+              type_error: parser::internal::ErrorNames::PathError,
+              message: error.to_string(),
+              stack,
+            }
+            .to_result();
+          }
+          let mut file = file.ok().unwrap();
+          let content: Option<&values::DefaultRefAgalValue> = arguments.get(1);
+          if !content.is_some() {
+            return internal::AgalThrow::Params {
+              type_error: parser::internal::ErrorNames::PathError,
+              message: "Se nesesita contenido para escribir en el archivo".to_string(),
+              stack,
+            }
+            .to_result();
+          }
+          let binding = content.unwrap().to_agal_array(stack.clone())?;
+          let content = &*binding.borrow();
+          let mut buf: &[u8] = &content.to_buffer(stack.clone())?;
+          let f = file.write_all(buf);
+          if let Err(error) = f {
+            return internal::AgalThrow::Params {
+              type_error: parser::internal::ErrorNames::PathError,
+              message: error.to_string(),
+              stack,
+            }
+            .to_result();
+          }
+          AgalValue::Never.to_result()
+        }),
+      }
+      .to_ref_value(),
+    },
+  );
+  hashmap.insert(
+    "crear_archivo".to_string(),
+    complex::AgalClassProperty {
+      is_public: true,
+      is_static: true,
+      value: internal::AgalNativeFunction {
+        name: format!("{module_name}::crear_archivo"),
+        func: Rc::new(|arguments, stack, env, modules_manager, this| {
+          let path: Option<&values::DefaultRefAgalValue> = arguments.get(0);
+          if !path.is_some() {
+            return AgalValue::Never.to_result();
+          }
+          let path = path.unwrap().try_to_string()?;
+          let exists = Path::new(&path).exists();
+          if exists {
+            return internal::AgalThrow::Params {
+              type_error: parser::internal::ErrorNames::PathError,
+              message: "La ruta no esta disponible".to_string(),
+              stack,
+            }
+            .to_result();
+          }
+          let file = fs::File::create(path);
+          if let Err(error) = file {
+            internal::AgalThrow::Params {
+              type_error: parser::internal::ErrorNames::PathError,
+              message: error.to_string(),
+              stack,
+            }
+            .to_result()
+          } else {
+            AgalValue::Never.to_result()
+          }
+        }),
+      }
+      .to_ref_value(),
+    },
+  );
+  hashmap.insert(
+    "crear_carpeta".to_string(),
+    complex::AgalClassProperty {
+      is_public: true,
+      is_static: true,
+      value: internal::AgalNativeFunction {
+        name: format!("{module_name}::crear_carpeta"),
+        func: Rc::new(|arguments, stack, env, modules_manager, this| {
+          let path: Option<&values::DefaultRefAgalValue> = arguments.get(0);
+          if !path.is_some() {
+            return AgalValue::Never.to_result();
+          }
+          let path = path.unwrap().try_to_string()?;
+          let exists = Path::new(&path).exists();
+          if exists {
+            return internal::AgalThrow::Params {
+              type_error: parser::internal::ErrorNames::PathError,
+              message: "La ruta no esta disponible".to_string(),
+              stack,
+            }
+            .to_result();
+          }
+          let file = fs::create_dir_all(path);
+          if let Err(error) = file {
+            internal::AgalThrow::Params {
+              type_error: parser::internal::ErrorNames::PathError,
+              message: error.to_string(),
+              stack,
+            }
+            .to_result()
+          } else {
+            AgalValue::Never.to_result()
+          }
+        }),
+      }
+      .to_ref_value(),
+    },
+  );
+
+  let prototype = complex::AgalPrototype::new(Rc::new(RefCell::new(hashmap)), None);
+  complex::AgalObject::from_prototype(prototype.as_ref()).to_ref_value()
 }
 pub fn get_name(prefix: &str) -> String {
-    format!("{}{}", prefix, "sa")
+  format!("{}{}", prefix, "sa")
 }

@@ -1,11 +1,7 @@
 use std::{cell::RefCell, rc::Rc};
 
 use crate::runtime::values::{
-  complex,
-  internal,
-  traits::{self, AgalValuable as _, ToAgalValue as _},
-  AgalValue,
-  self
+  self, complex::{self, AgalPromise, Promise}, internal, traits::{self, AgalValuable as _, ToAgalValue as _}, AgalValue
 };
 
 pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
@@ -14,19 +10,24 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
   let mut hashmap = std::collections::HashMap::new();
 
   hashmap.insert(
-    "pintar".to_string(),
+    "esperar".to_string(),
     complex::AgalClassProperty {
       is_public: true,
       is_static: true,
       value: internal::AgalNativeFunction {
-        name: format!("{module_name}::pintar"),
+        name: format!("{module_name}::esperar"),
         func: Rc::new(|arguments, stack, env, modules_manager, this| {
-          for arg in arguments {
-            let data = arg.to_agal_console(stack.clone(), env.clone())?;
-            print!("{} ", data.to_string());
-          }
-          print!("\n");
-          Ok(AgalValue::Never.as_ref())
+          let arg_clone = arguments.clone();
+          AgalPromise::new(Promise::new(Box::pin(async move {
+            let secs = 
+            if let Some(value) = arg_clone.get(0) {
+              value.to_agal_number(stack)?.to_float()
+            }else {
+              0f32
+            };
+            tokio::time::sleep(std::time::Duration::from_secs_f32(secs)).await;
+            AgalValue::Never.to_result()
+          }))).to_result()
         }),
       }
       .to_ref_value(),
@@ -36,5 +37,5 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
   complex::AgalObject::from_prototype(prototype.as_ref()).to_ref_value()
 }
 pub fn get_name(prefix: &str) -> String {
-  format!("{}{}", prefix, "consola")
+  format!("{}{}", prefix, "tmp")
 }

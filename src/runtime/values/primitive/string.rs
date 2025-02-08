@@ -1,216 +1,351 @@
-use std::rc::Rc;
-
+use super::{
+  internal,
+  traits::{self, AgalValuable as _, ToAgalValue as _},
+  AgalPrimitive, AgalValue,
+};
 use crate::{
-    runtime::{
-        binary_operation_error,
-        env::RefEnvironment,
-        get_instance_property_error, unary_operation_error,
-        values::{AgalNumber, AgalThrow, AgalValuable, AgalValue},
-        AgalArray, AgalBoolean, AgalPrimitive, AgalValuableManager, RefAgalValue, Stack,
-    },
-    Modules,
+  colors,
+  runtime::{
+    self,
+    values::{complex::AgalArray, error_message, internal::AgalThrow, traits::ToAgalValue},
+  },
 };
 
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct AgalString(String);
-impl AgalString {
-    pub fn from_string(value: String) -> AgalString {
-        AgalString(value)
-    }
-    pub fn get_string(&self) -> &String {
-        &self.0
-    }
-    pub fn string_to_array(value: &AgalString) -> AgalArray {
-        get_chars(value)
-    }
-}
-impl AgalValuable for AgalString {
-    fn to_agal_string(self, _: &Stack, _: RefEnvironment) -> Result<AgalString, AgalThrow> {
-        Ok(self)
-    }
-    fn to_agal_console(self, _: &Stack, _: RefEnvironment) -> Result<AgalString, AgalThrow> {
-        Ok(AgalString::from_string(format!("{}", self.0)))
-    }
-    fn to_agal_array(self, _: &Stack) -> Result<AgalArray, AgalThrow> {
-        Ok(AgalString::string_to_array(&self))
-    }
-    fn to_agal_value(self, _: &Stack, _: RefEnvironment) -> Result<AgalString, AgalThrow> {
-        Ok(AgalString::from_string(format!(
-            "\x1b[32m'{}'\x1b[39m",
-            self.0
-                .replace("'", "\\'")
-                .replace("\n", "\\n")
-                .replace("\r", "\\r")
-                .replace("\t", "\\t")
-        )))
-    }
-    fn to_value(self) -> AgalValue {
-        AgalPrimitive::String(self).to_value()
-    }
-    fn get_instance_property(
-        self,
-        stack: &Stack,
-        env: RefEnvironment,
-        key: String,
-    ) -> RefAgalValue {
-        match key.as_str() {
-            "caracteres" => crate::runtime::AgalNativeFunction {
-                name: "caracteres".to_string(),
-                func: Rc::new(move |_, stack, env, _, this| {
-                    let str = this.borrow().clone().to_agal_string(stack, env.clone());
-                    if let Err(err) = str {
-                        return err.to_ref_value();
-                    }
-                    let str = str.ok().unwrap();
-                    get_chars(&str).to_ref_value()
-                }),
-            }
-            .to_ref_value(),
-            "bytes" => crate::runtime::AgalNativeFunction {
-                name: "bytes".to_string(),
-                func: Rc::new(move |_, stack, env, _, this| {
-                    let str = this.borrow().clone().to_agal_string(stack, env.clone());
-                    if let Err(err) = str {
-                        return err.to_ref_value();
-                    }
-                    let str = str.ok().unwrap();
-                    AgalArray::from_buffer(str.get_string().as_bytes()).to_ref_value()
-                }),
-            }
-            .to_ref_value(),
-            "largo" => get_length(&self).as_ref(),
-            _ => {
-                let value = self.to_value();
-                get_instance_property_error(stack, env, key, value)
-            }
-        }
-    }
-    fn binary_operation(
-        &self,
-        stack: &Stack,
-        _: RefEnvironment,
-        operator: &str,
-        other: RefAgalValue,
-    ) -> RefAgalValue {
-        let cself = self.clone();
-        let cother = other.clone();
-        let other: &AgalValue = &other.borrow();
-        match other {
-            AgalValue::Primitive(AgalPrimitive::String(other)) => match operator {
-                "+" => {
-                    let mut new_string = self.get_string().clone();
-                    new_string.push_str(other.get_string());
-                    AgalString::from_string(new_string).to_ref_value()
-                }
-                "==" => AgalBoolean::new(self.0 == other.0).to_ref_value(),
-                "!=" => AgalBoolean::new(self.0 != other.0).to_ref_value(),
-                "&&" => {
-                    return (if self.0 == "" { self } else { other })
-                        .clone()
-                        .to_value()
-                        .as_ref()
-                }
-                "||" => {
-                    return (if self.0 != "" { self } else { other })
-                        .clone()
-                        .to_value()
-                        .as_ref()
-                }
-                _ => binary_operation_error(stack, operator, cself.to_value().as_ref(), cother),
-            },
-            _ => binary_operation_error(stack, operator, cself.to_value().as_ref(), cother),
-        }
-    }
-    fn unary_operator(&self, stack: &Stack, env: RefEnvironment, operator: &str) -> RefAgalValue {
-        match operator {
-            "?" => match self.clone().to_agal_boolean(stack, env) {
-                Ok(bool) => bool.to_ref_value(),
-                Err(throw) => throw.to_ref_value(),
-            },
-            "!" => match self.clone().to_agal_boolean(stack, env) {
-                Ok(bool) => AgalBoolean::new(!bool.to_bool()).to_ref_value(),
-                Err(throw) => throw.to_ref_value(),
-            },
-            "+" => match self.clone().to_agal_number(stack, env) {
-                Ok(num) => num.to_ref_value(),
-                Err(throw) => throw.to_ref_value(),
-            },
-            "&" => self.clone().to_ref_value(),
-            _ => unary_operation_error(stack, operator, self.clone().to_ref_value()),
-        }
-    }
-}
-
-// instance methods
-
-fn get_chars(value: &AgalString) -> AgalArray {
-    let vec = value.get_string();
-    let mut new_vec: Vec<RefAgalValue> = vec![];
-
-    for c in vec.chars() {
-        let i = AgalChar::new(c).to_ref_value();
-        new_vec.push(i);
-    }
-    AgalArray::from_vec(new_vec)
-}
-fn get_length(value: &AgalString) -> AgalValue {
-    AgalNumber::new(value.get_string().len() as f64).to_value()
-}
-
-/**
- * Agal Character are a single character
- */
-
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct AgalChar(char);
+
 impl AgalChar {
-    pub fn new(value: char) -> AgalChar {
-        AgalChar(value)
-    }
-    pub fn to_char(&self) -> char {
-        self.0
-    }
+  pub fn new(value: char) -> Self {
+    Self(value)
+  }
+  pub fn as_char(&self) -> char {
+    self.0
+  }
 }
-impl AgalValuable for AgalChar {
-    fn to_value(self) -> AgalValue {
-        AgalPrimitive::Char(self).to_value()
+
+impl traits::ToAgalValue for AgalChar {
+  fn to_value(self) -> AgalValue {
+    AgalPrimitive::Char(self).to_value()
+  }
+}
+impl traits::AgalValuable for AgalChar {
+  fn get_name(&self) -> String {
+    "Caracter".to_string()
+  }
+  fn to_agal_string(&self) -> Result<AgalString, internal::AgalThrow> {
+    Ok(AgalString(vec![*self]))
+  }
+  fn to_agal_console(
+    &self,
+    stack: parser::util::RefValue<runtime::Stack>,
+    env: runtime::RefEnvironment,
+  ) -> Result<AgalString, internal::AgalThrow> {
+    let char = self.as_char();
+    Ok(AgalString::from_string(colors::Color::BLUE.apply(
+      &if char == '\'' {
+        "\\'".to_string()
+      } else {
+        char.to_string()
+      },
+    )))
+  }
+
+  fn get_keys(&self) -> Vec<String> {
+    vec![]
+  }
+
+  fn to_agal_number(
+    &self,
+    stack: parser::util::RefValue<runtime::Stack>,
+  ) -> Result<super::AgalNumber, internal::AgalThrow> {
+    todo!()
+  }
+
+  fn to_agal_byte(
+    &self,
+    stack: parser::util::RefValue<runtime::Stack>,
+  ) -> Result<super::AgalByte, internal::AgalThrow> {
+    todo!()
+  }
+
+  fn to_agal_boolean(
+    &self,
+    stack: parser::util::RefValue<runtime::Stack>,
+  ) -> Result<super::AgalBoolean, internal::AgalThrow> {
+    todo!()
+  }
+
+  fn to_agal_array(
+    &self,
+    stack: parser::util::RefValue<runtime::Stack>,
+  ) -> Result<runtime::values::RefAgalValue<AgalArray>, internal::AgalThrow> {
+    todo!()
+  }
+
+  fn binary_operation(
+    &self,
+    stack: parser::util::RefValue<runtime::Stack>,
+    env: runtime::RefEnvironment,
+    operator: &str,
+    right: runtime::values::DefaultRefAgalValue,
+  ) -> Result<runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
+    todo!()
+  }
+
+  fn unary_back_operator(
+    &self,
+    stack: parser::util::RefValue<runtime::Stack>,
+    env: runtime::RefEnvironment,
+    operator: &str,
+  ) -> runtime::values::ResultAgalValue {
+    todo!()
+  }
+
+  fn unary_operator(
+    &self,
+    stack: parser::util::RefValue<runtime::Stack>,
+    env: runtime::RefEnvironment,
+    operator: &str,
+  ) -> runtime::values::ResultAgalValue {
+    todo!()
+  }
+
+  fn get_object_property(
+    &self,
+    stack: parser::util::RefValue<runtime::Stack>,
+    env: runtime::RefEnvironment,
+    key: &str,
+  ) -> Result<runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
+    todo!()
+  }
+
+  fn set_object_property(
+    &mut self,
+    stack: parser::util::RefValue<runtime::Stack>,
+    env: runtime::RefEnvironment,
+    key: &str,
+    value: runtime::values::DefaultRefAgalValue,
+  ) -> Result<runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
+    todo!()
+  }
+
+  fn get_instance_property(
+    &self,
+    stack: parser::util::RefValue<runtime::Stack>,
+    env: runtime::RefEnvironment,
+    key: &str,
+  ) -> Result<runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
+    todo!()
+  }
+
+  async fn call(
+    &self,
+    stack: parser::util::RefValue<runtime::Stack>,
+    env: runtime::RefEnvironment,
+    this: runtime::values::DefaultRefAgalValue,
+    args: Vec<runtime::values::DefaultRefAgalValue>,
+    modules: parser::util::RefValue<crate::Modules>,
+  ) -> Result<crate::runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
+    todo!()
+  }
+}
+
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct AgalString(Vec<AgalChar>);
+impl AgalString {
+  pub fn from_string(value: String) -> Self {
+    Self(value.chars().map(|c| AgalChar::new(c)).collect())
+  }
+  pub fn to_string(&self) -> String {
+    self.0.iter().map(|c| c.0).collect()
+  }
+  pub fn to_agal_chars(&self) -> Vec<AgalChar> {
+    self.0.clone()
+  }
+  pub fn add_prev(&self, other: &str) -> Self {
+    let mut new = vec![];
+    new.extend(other.chars().map(|c| AgalChar::new(c)));
+    new.extend(self.0.iter().map(|c| *c));
+    Self(new)
+  }
+  pub fn add_post(&self, other: &str) -> Self {
+    let mut new = vec![];
+    new.extend(self.0.iter().map(|c| *c));
+    new.extend(other.chars().map(|c| AgalChar::new(c)));
+    Self(new)
+  }
+  pub fn add_sides(&self, pre: &str, post: &str) -> Self {
+    let mut new = vec![];
+    new.extend(pre.chars().map(|c| AgalChar::new(c)));
+    new.extend(self.0.iter().map(|c| *c));
+    new.extend(post.chars().map(|c| AgalChar::new(c)));
+    Self(new)
+  }
+  pub fn set_color(&self, color: colors::Color) -> Self {
+    self.add_sides(color.as_str(), colors::Color::RESET.as_str())
+  }
+}
+impl traits::ToAgalValue for AgalString {
+  fn to_value(self) -> AgalValue {
+    AgalPrimitive::String(self).to_value()
+  }
+}
+impl traits::AgalValuable for AgalString {
+  fn get_name(&self) -> String {
+    "Cadena".to_string()
+  }
+  fn try_to_string(&self) -> Result<String, internal::AgalThrow> {
+    Ok(self.to_string())
+  }
+  fn to_agal_string(&self) -> Result<AgalString, internal::AgalThrow> {
+    Ok(self.clone())
+  }
+  fn to_agal_console(
+    &self,
+    stack: parser::util::RefValue<runtime::Stack>,
+    env: runtime::RefEnvironment,
+  ) -> Result<AgalString, internal::AgalThrow> {
+    self.to_agal_string()
+  }
+  fn to_agal_value(
+    &self,
+    stack: parser::util::RefValue<runtime::Stack>,
+    env: runtime::RefEnvironment,
+  ) -> Result<AgalString, internal::AgalThrow> {
+    let string = self.try_to_string()?;
+    let string = if string.contains("'") && string.contains("\"") {
+      format!("'{}'", string.replace("\'", "\\\'"))
+    } else if string.contains("'") {
+      format!("\"{}\"", string)
+    } else {
+      format!("'{}'", string)
+    };
+    Ok(AgalString::from_string(colors::Color::BLUE.apply(&string)))
+  }
+  fn to_agal_boolean(
+    &self,
+    stack: parser::util::RefValue<runtime::Stack>,
+  ) -> Result<super::boolean::AgalBoolean, internal::AgalThrow> {
+    Ok(super::boolean::AgalBoolean::new(!self.0.is_empty()))
+  }
+  fn get_keys(&self) -> Vec<String> {
+    vec![]
+  }
+  fn to_agal_byte(
+    &self,
+    stack: parser::util::RefValue<runtime::Stack>,
+  ) -> Result<super::AgalByte, internal::AgalThrow> {
+    Err(AgalThrow::Params {
+      type_error: parser::internal::ErrorNames::TypeError,
+      message: error_message::TO_AGAL_BYTE.to_owned(),
+      stack,
+    })
+  }
+  fn to_agal_number(
+    &self,
+    stack: parser::util::RefValue<runtime::Stack>,
+  ) -> Result<super::AgalNumber, internal::AgalThrow> {
+    Err(AgalThrow::Params {
+      type_error: parser::internal::ErrorNames::TypeError,
+      message: error_message::TO_AGAL_NUMBER.to_owned(),
+      stack,
+    })
+  }
+  fn to_agal_array(
+    &self,
+    stack: parser::util::RefValue<runtime::Stack>,
+  ) -> Result<runtime::values::RefAgalValue<runtime::values::complex::AgalArray>, internal::AgalThrow>
+  {
+    Ok(AgalArray::from(self).as_ref())
+  }
+  fn binary_operation(
+    &self,
+    stack: parser::util::RefValue<runtime::Stack>,
+    env: runtime::RefEnvironment,
+    operator: &str,
+    right: runtime::values::DefaultRefAgalValue,
+  ) -> Result<runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
+    let other = if let AgalValue::Primitive(p) = right.un_ref() {
+      p.un_ref()
+    } else {
+      return Err(AgalThrow::Params {
+        type_error: parser::internal::ErrorNames::TypeError,
+        message: error_message::TO_AGAL_STRING.to_owned(),
+        stack,
+      });
+    };
+    match (operator, other) {
+      ("+", AgalPrimitive::String(other)) => self.add_post(&other.to_string()).to_result(),
+      ("*", AgalPrimitive::Number(other)) => {
+        AgalString::from_string(self.to_string().repeat(other.to_usize(stack)?)).to_result()
+      }
+      _ => Err(AgalThrow::Params {
+        type_error: parser::internal::ErrorNames::TypeError,
+        message: error_message::BINARY_OPERATION(self.clone().to_ref_value(), operator, right),
+        stack,
+      }),
     }
-    fn to_agal_console(self, _: &Stack, _: RefEnvironment) -> Result<AgalString, AgalThrow> {
-        Ok(AgalString::from_string(format!(
-            "\x1b[34m'{}'\x1b[39m",
-            match self.0 {
-                '\n' => "\\n".to_string(),
-                '\r' => "\\r".to_string(),
-                '\t' => "\\t".to_string(),
-                '\'' => "\\'".to_string(),
-                _ => format!("{}", self.0),
-            }
-        )))
+  }
+
+  fn unary_back_operator(
+    &self,
+    stack: parser::util::RefValue<runtime::Stack>,
+    env: runtime::RefEnvironment,
+    operator: &str,
+  ) -> runtime::values::ResultAgalValue {
+    todo!()
+  }
+
+  fn unary_operator(
+    &self,
+    stack: parser::util::RefValue<runtime::Stack>,
+    env: runtime::RefEnvironment,
+    operator: &str,
+  ) -> runtime::values::ResultAgalValue {
+    todo!()
+  }
+
+  fn get_object_property(
+    &self,
+    stack: parser::util::RefValue<runtime::Stack>,
+    env: runtime::RefEnvironment,
+    key: &str,
+  ) -> Result<runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
+    todo!()
+  }
+
+  fn set_object_property(
+    &mut self,
+    stack: parser::util::RefValue<runtime::Stack>,
+    env: runtime::RefEnvironment,
+    key: &str,
+    value: runtime::values::DefaultRefAgalValue,
+  ) -> Result<runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
+    todo!()
+  }
+
+  fn get_instance_property(
+    &self,
+    stack: parser::util::RefValue<runtime::Stack>,
+    env: runtime::RefEnvironment,
+    key: &str,
+  ) -> Result<runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
+    todo!()
+  }
+
+  async fn call(
+    &self,
+    stack: parser::util::RefValue<runtime::Stack>,
+    env: runtime::RefEnvironment,
+    this: runtime::values::DefaultRefAgalValue,
+    args: Vec<runtime::values::DefaultRefAgalValue>,
+    modules: parser::util::RefValue<crate::Modules>,
+  ) -> Result<crate::runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
+    AgalThrow::Params {
+      type_error: parser::internal::ErrorNames::TypeError,
+      message: error_message::CALL.to_string(),
+      stack,
     }
-    fn get_instance_property(
-        self,
-        stack: &Stack,
-        env: RefEnvironment,
-        key: String,
-    ) -> RefAgalValue {
-        let value = self.to_value();
-        match key.as_str() {
-            "bytes" => crate::runtime::AgalNativeFunction {
-                name: "bytes".to_string(),
-                func: Rc::new(move |_, stack, env, _, this| {
-                    let str = this.borrow().clone().to_agal_string(stack, env.clone());
-                    if let Err(err) = str {
-                        return err.to_ref_value();
-                    }
-                    let str = str.ok().unwrap();
-                    AgalArray::from_buffer(str.get_string().as_bytes()).to_ref_value()
-                }),
-            }
-            .to_ref_value(),
-            _ => get_instance_property_error(stack, env, key, value),
-        }
-    }
-    fn to_agal_string(self, _: &Stack, _: RefEnvironment) -> Result<AgalString, AgalThrow> {
-        Ok(AgalString::from_string(self.0.to_string()))
-    }
+    .to_result()
+  }
 }
