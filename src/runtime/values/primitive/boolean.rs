@@ -162,8 +162,11 @@ impl traits::AgalValuable for AgalBoolean {
   ) -> Result<crate::runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
     todo!()
   }
-  
-  fn to_agal_number(&self, stack: parser::util::RefValue<runtime::Stack>) -> Result<super::AgalNumber, internal::AgalThrow> {
-        todo!()
-    }
+
+  fn to_agal_number(
+    &self,
+    stack: parser::util::RefValue<runtime::Stack>,
+  ) -> Result<super::AgalNumber, internal::AgalThrow> {
+    todo!()
+  }
 }

@@ -139,10 +139,13 @@ impl traits::AgalValuable for AgalNativeFunction {
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
     todo!()
   }
-  
-  fn to_agal_number(&self, stack: RefValue<crate::runtime::Stack>) -> Result<primitive::AgalNumber, internal::AgalThrow> {
-        todo!()
-    }
+
+  fn to_agal_number(
+    &self,
+    stack: RefValue<crate::runtime::Stack>,
+  ) -> Result<primitive::AgalNumber, internal::AgalThrow> {
+    todo!()
+  }
 }
 impl traits::ToAgalValue for AgalNativeFunction {
   fn to_value(self) -> AgalValue {

@@ -196,8 +196,11 @@ impl traits::AgalValuable for AgalFunction {
   ) -> Result<runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
     todo!()
   }
-  
-  fn to_agal_number(&self, stack: RefValue<runtime::Stack>) -> Result<primitive::AgalNumber, internal::AgalThrow> {
-        todo!()
-    }
+
+  fn to_agal_number(
+    &self,
+    stack: RefValue<runtime::Stack>,
+  ) -> Result<primitive::AgalNumber, internal::AgalThrow> {
+    todo!()
+  }
 }

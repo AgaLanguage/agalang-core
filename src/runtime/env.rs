@@ -10,8 +10,7 @@ use super::values::{DefaultRefAgalValue, ResultAgalValue};
 use super::{
   stack::Stack,
   values::{
-    internal,
-    primitive,
+    internal, primitive,
     traits::{self, AgalValuable as _, ToAgalValue as _},
     AgalValue,
   },
@@ -47,14 +46,14 @@ impl Environment {
       variables: Rc::new(RefCell::new(HashMap::new())),
       constants: Rc::new(RefCell::new(HashSet::new())),
     };
-    env
-      .variables
-      .borrow_mut()
-      .insert(TRUE_KEYWORD.to_string(), primitive::AgalBoolean::True.to_ref_value());
-    env
-      .variables
-      .borrow_mut()
-      .insert(FALSE_KEYWORD.to_string(), primitive::AgalBoolean::False.to_ref_value());
+    env.variables.borrow_mut().insert(
+      TRUE_KEYWORD.to_string(),
+      primitive::AgalBoolean::True.to_ref_value(),
+    );
+    env.variables.borrow_mut().insert(
+      FALSE_KEYWORD.to_string(),
+      primitive::AgalBoolean::False.to_ref_value(),
+    );
     env
       .variables
       .borrow_mut()
@@ -221,8 +220,18 @@ impl RefEnvironment {
   pub fn set(&mut self, name: &str, value: DefaultRefAgalValue) -> DefaultRefAgalValue {
     self.0.borrow_mut().set(name, value)
   }
-  pub fn define(&mut self, stack:RefValue<Stack>, name: &str, value: DefaultRefAgalValue, is_constant: bool, node: &Node) -> ResultAgalValue {
-    self.0.borrow_mut().define(stack, name, value, is_constant, node)
+  pub fn define(
+    &mut self,
+    stack: RefValue<Stack>,
+    name: &str,
+    value: DefaultRefAgalValue,
+    is_constant: bool,
+    node: &Node,
+  ) -> ResultAgalValue {
+    self
+      .0
+      .borrow_mut()
+      .define(stack, name, value, is_constant, node)
   }
   pub fn get(&self, name: &str) -> DefaultRefAgalValue {
     self

@@ -1,7 +1,7 @@
 use std::{borrow::Borrow, path::Path, rc::Rc};
 
-use parser::{self as frontend, util::RefValue};
 use parser::internal;
+use parser::{self as frontend, util::RefValue};
 
 use crate::{
   runtime::{self, env::RefEnvironment},
@@ -76,14 +76,12 @@ async fn eval(
   .await;
   let value = &*value.borrow();
   match value {
-    Err(throw) =>{
+    Err(throw) => {
       let (type_err, err) = throw.get_data();
       let data = internal::errors::error_to_string(&type_err, err);
       internal::print_error(data);
       Err(())
     }
-    Ok(value) => {
-      Ok(value.clone())
-    }
+    Ok(value) => Ok(value.clone()),
   }
 }
