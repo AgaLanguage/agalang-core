@@ -2,6 +2,7 @@
 mod libraries;
 mod path;
 mod runtime;
+mod colors;
 
 use std::{
   cell::RefCell, collections::HashMap, process::ExitCode, rc::Rc, thread::sleep, time::Duration,
@@ -55,6 +56,10 @@ impl Modules {
 
 #[tokio::main]
 async fn main() -> ExitCode {
+  my_main().await
+}
+
+async fn my_main() -> ExitCode {
   let modules_manager = Modules::new();
   let filename = file();
   if filename.is_none() {
@@ -70,6 +75,7 @@ async fn main() -> ExitCode {
   }
   return ExitCode::SUCCESS;
 }
+
 fn file() -> Option<String> {
   let mut args: Vec<String> = std::env::args().collect();
   args.push("./file.agal".to_string());

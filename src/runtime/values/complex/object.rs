@@ -7,7 +7,7 @@ use std::{
 use crate::runtime::{
   self,
   values::{
-    self, internal, primitive,
+    self, error_message, internal, primitive,
     traits::{self, AgalValuable as _, ToAgalValue as _},
     AgalValue,
   },
@@ -48,6 +48,9 @@ impl traits::ToAgalValue for AgalObject {
   }
 }
 impl traits::AgalValuable for AgalObject {
+  fn get_name(&self) -> String {
+    "Objeto".to_string()
+  }
   fn to_agal_string(&self) -> Result<primitive::AgalString, internal::AgalThrow> {
     Ok(primitive::AgalString::from_string("<Objeto>".to_string()))
   }
@@ -62,7 +65,7 @@ impl traits::AgalValuable for AgalObject {
       Some(v) => Ok(v.clone()),
       None => internal::AgalThrow::Params {
         type_error: parser::internal::ErrorNames::LexerError,
-        message: "No tengo esa propiedad de instancia".to_string(),
+        message: error_message::INVALID_INSTANCE_PROPERTIES.to_string(),
         stack,
       }
       .to_result(),
@@ -96,9 +99,77 @@ impl traits::AgalValuable for AgalObject {
     }
     internal::AgalThrow::Params {
       type_error: parser::internal::ErrorNames::LexerError,
-      message: "No tengo esa propiedad de instancia".to_string(),
+      message: error_message::INVALID_INSTANCE_PROPERTIES.to_string(),
       stack,
     }
     .to_result()
   }
+
+  fn get_keys(&self) -> Vec<String> {
+    todo!()
+  }
+
+  fn to_agal_byte(
+    &self,
+    stack: parser::util::RefValue<runtime::Stack>,
+  ) -> Result<primitive::AgalByte, internal::AgalThrow> {
+    todo!()
+  }
+
+  fn to_agal_boolean(
+    &self,
+    stack: parser::util::RefValue<runtime::Stack>,
+  ) -> Result<primitive::AgalBoolean, internal::AgalThrow> {
+    todo!()
+  }
+
+  fn to_agal_array(
+    &self,
+    stack: parser::util::RefValue<runtime::Stack>,
+  ) -> Result<values::RefAgalValue<super::AgalArray>, internal::AgalThrow> {
+    todo!()
+  }
+
+  fn binary_operation(
+    &self,
+    stack: parser::util::RefValue<runtime::Stack>,
+    env: runtime::RefEnvironment,
+    operator: &str,
+    right: values::DefaultRefAgalValue,
+  ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
+    todo!()
+  }
+
+  fn unary_back_operator(
+    &self,
+    stack: parser::util::RefValue<runtime::Stack>,
+    env: runtime::RefEnvironment,
+    operator: &str,
+  ) -> values::ResultAgalValue {
+    todo!()
+  }
+
+  fn unary_operator(
+    &self,
+    stack: parser::util::RefValue<runtime::Stack>,
+    env: runtime::RefEnvironment,
+    operator: &str,
+  ) -> values::ResultAgalValue {
+    todo!()
+  }
+
+  async fn call(
+    &self,
+    stack: parser::util::RefValue<runtime::Stack>,
+    env: runtime::RefEnvironment,
+    this: values::DefaultRefAgalValue,
+    args: Vec<values::DefaultRefAgalValue>,
+    modules: parser::util::RefValue<crate::Modules>,
+  ) -> Result<crate::runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
+    todo!()
+  }
+  
+  fn to_agal_number(&self, stack: parser::util::RefValue<runtime::Stack>) -> Result<primitive::AgalNumber, internal::AgalThrow> {
+        todo!()
+    }
 }

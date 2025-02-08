@@ -126,9 +126,10 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
           let path = path.unwrap().try_to_string()?;
           let mut file = std::fs::File::open(path);
           if let Ok(file) = &mut file {
-            let mut buffer = Vec::new();
-            file.read_to_end(&mut buffer);
-            return complex::AgalArray::from_buffer(&buffer).to_result();
+            let mut buffer_writer = Vec::new();
+            file.read_to_end(&mut buffer_writer);
+            let buffer: &[u8] = &buffer_writer;
+            return complex::AgalArray::from(buffer).to_result();
           }
           internal::AgalThrow::Params {
             type_error: parser::internal::ErrorNames::PathError,
@@ -167,7 +168,7 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
                 );
               }
             }
-            return complex::AgalArray::from_vec(files).to_result();
+            return complex::AgalArray::from(files).to_result();
           }
           internal::AgalThrow::Params {
             type_error: parser::internal::ErrorNames::PathError,

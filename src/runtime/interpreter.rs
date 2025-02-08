@@ -21,10 +21,10 @@ use super::{
   stack::Stack,
   values::{
     complex::{
-      AgalArray, AgalClass, AgalClassProperty, AgalComplex, AgalFunction, AgalObject, AgalPromise,
+      AgalArray, AgalClass, AgalClassProperty, AgalComplex, AgalPromiseData, AgalFunction, AgalObject,
+      AgalPromise,
     },
-    internal,
-    primitive,
+    internal, primitive,
     traits::{self, AgalValuable as _, ToAgalValue as _},
     AgalValue, DefaultRefAgalValue,
   },
@@ -70,7 +70,7 @@ pub fn interpreter(
             _ => {}
           }
         }
-        Ok(AgalArray::from_vec(vec).to_value().as_ref())
+        Ok(AgalArray::from(vec).to_value().as_ref())
       }
       Node::Assignment(assignment) => {
         let value = interpreter(
@@ -140,14 +140,18 @@ pub fn interpreter(
             return Ok(value);
           }
         } {
-          if let AgalPromise::Resolved(r) = &*a.borrow() {
+          let mut value = a.borrow_mut();
+          if let AgalPromiseData::Resolved(r) = &value.data {
             return r.clone();
           }
-          let ptr = a.ptr();
-          let value = unsafe { std::ptr::read(ptr) };
-          let agal_value = value.into_future().await;
-          a.replace(AgalPromise::Resolved(agal_value.clone()));
-          return agal_value;
+          if let AgalPromiseData::Unresolved(future) = std::mem::replace(
+            &mut value.data,
+            AgalPromiseData::Resolved(AgalValue::Never.to_result()),
+          ) {
+            let agal_value = future.await;
+            value.data = AgalPromiseData::Resolved(agal_value.clone());
+            return agal_value;
+          }
         }
         Ok(value)
       }
@@ -295,7 +299,8 @@ pub fn interpreter(
       }
       Node::DoWhile(do_while) => {
         let mut value = AgalValue::Never.as_ref();
-        let mut condition: Result<primitive::AgalBoolean, internal::AgalThrow> = Ok(primitive::AgalBoolean::True);
+        let mut condition: Result<primitive::AgalBoolean, internal::AgalThrow> =
+          Ok(primitive::AgalBoolean::True);
         loop {
           if !condition.clone()?.as_bool() {
             break;
@@ -328,11 +333,6 @@ pub fn interpreter(
         }
         Ok(value)
       }
-      Node::Error(error) => Err(internal::AgalThrow::Params {
-        type_error: ErrorNames::SyntaxError,
-        message: error.message.clone(),
-        stack,
-      }),
       Node::Export(export) => match export.value.as_ref() {
         Node::VarDecl(var) => {
           let value = interpreter(
@@ -537,7 +537,7 @@ pub fn interpreter(
         }
         AgalValue::Never.to_result()
       }
-      Node::Lazy(node) => internal::AgalLazy::new(node.clone()).to_result(),
+      Node::Lazy(node) => internal::AgalLazy::new(node.clone(), stack, env, modules).to_result(),
       Node::LoopEdit(loop_edit) => match loop_edit.action {
         NodeLoopEditType::Break => AgalValue::Break,
         NodeLoopEditType::Continue => AgalValue::Continue,

@@ -3,6 +3,7 @@ use std::rc::Rc;
 use parser::util::RefValue;
 
 use crate::{
+  colors,
   runtime::{
     env::RefEnvironment,
     stack::Stack,
@@ -31,6 +32,9 @@ pub struct AgalNativeFunction {
   >,
 }
 impl traits::AgalValuable for AgalNativeFunction {
+  fn get_name(&self) -> String {
+    "<Función nativa>".to_string()
+  }
   fn to_agal_string(&self) -> Result<primitive::AgalString, super::AgalThrow> {
     Ok(primitive::AgalString::from_string(format!(
       "[nativo fn {}]",
@@ -42,12 +46,7 @@ impl traits::AgalValuable for AgalNativeFunction {
     stack: parser::util::RefValue<Stack>,
     env: RefEnvironment,
   ) -> Result<primitive::AgalString, super::AgalThrow> {
-    Ok(
-      self
-        .to_agal_string()?
-        .add_prev(&format!("\x1b[36m"))
-        .add_post(&format!("\x1b[0m")),
-    )
+    Ok(self.to_agal_string()?.set_color(colors::Color::CYAN))
   }
   async fn call(
     &self,
@@ -59,6 +58,91 @@ impl traits::AgalValuable for AgalNativeFunction {
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
     (self.func)(args, stack, env, modules, this)
   }
+
+  fn get_keys(&self) -> Vec<String> {
+    todo!()
+  }
+
+  fn to_agal_byte(
+    &self,
+    stack: RefValue<crate::runtime::Stack>,
+  ) -> Result<primitive::AgalByte, internal::AgalThrow> {
+    todo!()
+  }
+
+  fn to_agal_boolean(
+    &self,
+    stack: RefValue<crate::runtime::Stack>,
+  ) -> Result<primitive::AgalBoolean, internal::AgalThrow> {
+    todo!()
+  }
+
+  fn to_agal_array(
+    &self,
+    stack: RefValue<crate::runtime::Stack>,
+  ) -> Result<values::RefAgalValue<values::complex::AgalArray>, internal::AgalThrow> {
+    todo!()
+  }
+
+  fn binary_operation(
+    &self,
+    stack: RefValue<crate::runtime::Stack>,
+    env: crate::runtime::RefEnvironment,
+    operator: &str,
+    right: values::DefaultRefAgalValue,
+  ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
+    todo!()
+  }
+
+  fn unary_back_operator(
+    &self,
+    stack: RefValue<crate::runtime::Stack>,
+    env: crate::runtime::RefEnvironment,
+    operator: &str,
+  ) -> values::ResultAgalValue {
+    todo!()
+  }
+
+  fn unary_operator(
+    &self,
+    stack: RefValue<crate::runtime::Stack>,
+    env: crate::runtime::RefEnvironment,
+    operator: &str,
+  ) -> values::ResultAgalValue {
+    todo!()
+  }
+
+  fn get_object_property(
+    &self,
+    stack: RefValue<crate::runtime::Stack>,
+    env: crate::runtime::RefEnvironment,
+    key: &str,
+  ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
+    todo!()
+  }
+
+  fn set_object_property(
+    &mut self,
+    stack: RefValue<crate::runtime::Stack>,
+    env: crate::runtime::RefEnvironment,
+    key: &str,
+    value: values::DefaultRefAgalValue,
+  ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
+    todo!()
+  }
+
+  fn get_instance_property(
+    &self,
+    stack: RefValue<crate::runtime::Stack>,
+    env: crate::runtime::RefEnvironment,
+    key: &str,
+  ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
+    todo!()
+  }
+  
+  fn to_agal_number(&self, stack: RefValue<crate::runtime::Stack>) -> Result<primitive::AgalNumber, internal::AgalThrow> {
+        todo!()
+    }
 }
 impl traits::ToAgalValue for AgalNativeFunction {
   fn to_value(self) -> AgalValue {

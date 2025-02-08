@@ -57,6 +57,15 @@ impl traits::ToAgalValue for AgalInternal {
   }
 }
 impl traits::AgalValuable for AgalInternal {
+  fn get_name(&self) -> String {
+    match self {
+      Self::Lazy(lazy) => lazy.get_name(),
+      Self::Throw(throw) => throw.get_name(),
+      Self::Error(error) => error.get_name(),
+      Self::Return(value) => value.get_name(),
+      Self::NativeFunction(func) => func.get_name(),
+    }
+  }
   fn to_agal_string(&self) -> Result<primitive::AgalString, AgalThrow> {
     match self {
       Self::Lazy(lazy) => lazy.to_agal_string(),
@@ -95,4 +104,95 @@ impl traits::AgalValuable for AgalInternal {
       Self::NativeFunction(func) => func.call(stack, env, this, args, modules).await,
     }
   }
+
+  fn get_keys(&self) -> Vec<String> {
+    match self {
+      Self::Lazy(l) => l.get_keys(),
+      Self::Throw(t) => t.get_keys(),
+      Self::Error(e) => e.get_keys(),
+      Self::Return(r) => r.get_keys(),
+      Self::NativeFunction(f) => f.get_keys(),
+    }
+  }
+
+  fn to_agal_byte(
+    &self,
+    stack: parser::util::RefValue<runtime::Stack>,
+  ) -> Result<primitive::AgalByte, internal::AgalThrow> {
+    todo!()
+  }
+
+  fn to_agal_boolean(
+    &self,
+    stack: parser::util::RefValue<runtime::Stack>,
+  ) -> Result<primitive::AgalBoolean, internal::AgalThrow> {
+    todo!()
+  }
+
+  fn to_agal_array(
+    &self,
+    stack: parser::util::RefValue<runtime::Stack>,
+  ) -> Result<super::RefAgalValue<super::complex::AgalArray>, internal::AgalThrow> {
+    todo!()
+  }
+
+  fn binary_operation(
+    &self,
+    stack: parser::util::RefValue<runtime::Stack>,
+    env: runtime::RefEnvironment,
+    operator: &str,
+    right: super::DefaultRefAgalValue,
+  ) -> Result<super::DefaultRefAgalValue, internal::AgalThrow> {
+    todo!()
+  }
+
+  fn unary_back_operator(
+    &self,
+    stack: parser::util::RefValue<runtime::Stack>,
+    env: runtime::RefEnvironment,
+    operator: &str,
+  ) -> super::ResultAgalValue {
+    todo!()
+  }
+
+  fn unary_operator(
+    &self,
+    stack: parser::util::RefValue<runtime::Stack>,
+    env: runtime::RefEnvironment,
+    operator: &str,
+  ) -> super::ResultAgalValue {
+    todo!()
+  }
+
+  fn get_object_property(
+    &self,
+    stack: parser::util::RefValue<runtime::Stack>,
+    env: runtime::RefEnvironment,
+    key: &str,
+  ) -> Result<super::DefaultRefAgalValue, internal::AgalThrow> {
+    todo!()
+  }
+
+  fn set_object_property(
+    &mut self,
+    stack: parser::util::RefValue<runtime::Stack>,
+    env: runtime::RefEnvironment,
+    key: &str,
+    value: super::DefaultRefAgalValue,
+  ) -> Result<super::DefaultRefAgalValue, internal::AgalThrow> {
+    todo!()
+  }
+
+  fn get_instance_property(
+    &self,
+    stack: parser::util::RefValue<runtime::Stack>,
+    env: runtime::RefEnvironment,
+    key: &str,
+  ) -> Result<super::DefaultRefAgalValue, internal::AgalThrow> {
+    todo!()
+  }
+  
+  fn to_agal_number(&self, stack: parser::util::RefValue<runtime::Stack>) -> Result<primitive::AgalNumber, internal::AgalThrow> {
+        todo!()
+    }
 }

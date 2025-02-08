@@ -4,7 +4,7 @@ use crate::runtime;
 
 use super::{
   internal,
-  traits::{self, AgalValuable as _},
+  traits::{self, AgalValuable},
   AgalValue,
 };
 
@@ -16,7 +16,7 @@ mod number;
 pub use number::*;
 mod string;
 pub use string::*;
-
+#[derive(Clone)]
 pub enum AgalPrimitive {
   Boolean(boolean::AgalBoolean),
   Number(number::AgalNumber),
@@ -30,6 +30,23 @@ impl traits::ToAgalValue for AgalPrimitive {
   }
 }
 impl traits::AgalValuable for AgalPrimitive {
+  fn get_name(&self) -> String {
+    match self {
+      Self::Boolean(b) => b.get_name(),
+      Self::Number(n) => n.get_name(),
+      Self::String(s) => s.get_name(),
+      Self::Char(c) => c.get_name(),
+      Self::Byte(b) => b.get_name(),
+    }
+  }  fn to_agal_number(&self, stack: util::RefValue<runtime::Stack>) -> Result<AgalNumber, internal::AgalThrow> {
+    match self {
+      Self::Boolean(value) => value.to_agal_number(stack),
+      Self::Number(value) => value.to_agal_number(stack),
+      Self::String(value) => value.to_agal_number(stack),
+      Self::Char(value) => value.to_agal_number(stack),
+      Self::Byte(value) => value.to_agal_number(stack),
+    }
+  }
   fn to_agal_string(&self) -> Result<string::AgalString, internal::AgalThrow> {
     match self {
       Self::Boolean(value) => value.to_agal_string(),
@@ -87,6 +104,138 @@ impl traits::AgalValuable for AgalPrimitive {
       Self::String(value) => value.to_agal_boolean(stack),
       Self::Char(value) => value.to_agal_boolean(stack),
       Self::Byte(value) => value.to_agal_boolean(stack),
+    }
+  }
+
+  fn get_keys(&self) -> Vec<String> {
+    match self {
+      Self::Boolean(b) => b.get_keys(),
+      Self::Number(n) => n.get_keys(),
+      Self::String(s) => s.get_keys(),
+      Self::Char(c) => c.get_keys(),
+      Self::Byte(b) => b.get_keys(),
+    }
+  }
+
+  fn to_agal_array(
+    &self,
+    stack: util::RefValue<runtime::Stack>,
+  ) -> Result<super::RefAgalValue<super::complex::AgalArray>, internal::AgalThrow> {
+    match self {
+      Self::Boolean(b) => b.to_agal_array(stack),
+      Self::Number(n) => n.to_agal_array(stack),
+      Self::String(s) => s.to_agal_array(stack),
+      Self::Char(c) => c.to_agal_array(stack),
+      Self::Byte(b) => b.to_agal_array(stack),
+    }
+  }
+
+  fn binary_operation(
+    &self,
+    stack: util::RefValue<runtime::Stack>,
+    env: runtime::RefEnvironment,
+    operator: &str,
+    right: super::DefaultRefAgalValue,
+  ) -> Result<super::DefaultRefAgalValue, internal::AgalThrow> {
+    match self {
+      Self::Boolean(b) => b.binary_operation(stack, env, operator, right),
+      Self::Number(n) => n.binary_operation(stack, env, operator, right),
+      Self::String(s) => s.binary_operation(stack, env, operator, right),
+      Self::Char(c) => c.binary_operation(stack, env, operator, right),
+      Self::Byte(b) => b.binary_operation(stack, env, operator, right),
+    }
+  }
+
+  fn unary_back_operator(
+    &self,
+    stack: util::RefValue<runtime::Stack>,
+    env: runtime::RefEnvironment,
+    operator: &str,
+  ) -> super::ResultAgalValue {
+    match self {
+      Self::Boolean(b) => b.unary_back_operator(stack, env, operator),
+      Self::Number(n) => n.unary_back_operator(stack, env, operator),
+      Self::String(s) => s.unary_back_operator(stack, env, operator),
+      Self::Char(c) => c.unary_back_operator(stack, env, operator),
+      Self::Byte(b) => b.unary_back_operator(stack, env, operator),
+    }
+  }
+
+  fn unary_operator(
+    &self,
+    stack: util::RefValue<runtime::Stack>,
+    env: runtime::RefEnvironment,
+    operator: &str,
+  ) -> super::ResultAgalValue {
+    match self {
+      Self::Boolean(b) => b.unary_operator(stack, env, operator),
+      Self::Number(n) => n.unary_operator(stack, env, operator),
+      Self::String(s) => s.unary_operator(stack, env, operator),
+      Self::Char(c) => c.unary_operator(stack, env, operator),
+      Self::Byte(b) => b.unary_operator(stack, env, operator),
+    }
+  }
+
+  fn get_object_property(
+    &self,
+    stack: util::RefValue<runtime::Stack>,
+    env: runtime::RefEnvironment,
+    key: &str,
+  ) -> Result<super::DefaultRefAgalValue, internal::AgalThrow> {
+    match self {
+      Self::Boolean(b) => b.get_object_property(stack, env, key),
+      Self::Number(n) => n.get_object_property(stack, env, key),
+      Self::String(s) => s.get_object_property(stack, env, key),
+      Self::Char(c) => c.get_object_property(stack, env, key),
+      Self::Byte(b) => b.get_object_property(stack, env, key),
+    }
+  }
+
+  fn set_object_property(
+    &mut self,
+    stack: util::RefValue<runtime::Stack>,
+    env: runtime::RefEnvironment,
+    key: &str,
+    value: super::DefaultRefAgalValue,
+  ) -> Result<super::DefaultRefAgalValue, internal::AgalThrow> {
+    match self {
+      Self::Boolean(b) => b.set_object_property(stack, env, key, value),
+      Self::Number(n) => n.set_object_property(stack, env, key, value),
+      Self::String(s) => s.set_object_property(stack, env, key, value),
+      Self::Char(c) => c.set_object_property(stack, env, key, value),
+      Self::Byte(b) => b.set_object_property(stack, env, key, value),
+    }
+  }
+
+  fn get_instance_property(
+    &self,
+    stack: util::RefValue<runtime::Stack>,
+    env: runtime::RefEnvironment,
+    key: &str,
+  ) -> Result<super::DefaultRefAgalValue, internal::AgalThrow> {
+    match self {
+      Self::Boolean(b) => b.get_instance_property(stack, env, key),
+      Self::Number(n) => n.get_instance_property(stack, env, key),
+      Self::String(s) => s.get_instance_property(stack, env, key),
+      Self::Char(c) => c.get_instance_property(stack, env, key),
+      Self::Byte(b) => b.get_instance_property(stack, env, key),
+    }
+  }
+
+  async fn call(
+    &self,
+    stack: util::RefValue<runtime::Stack>,
+    env: runtime::RefEnvironment,
+    this: super::DefaultRefAgalValue,
+    args: Vec<super::DefaultRefAgalValue>,
+    modules: util::RefValue<crate::Modules>,
+  ) -> Result<crate::runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
+    match self {
+      Self::Boolean(b) => b.call(stack, env, this, args, modules).await,
+      Self::Number(n) => n.call(stack, env, this, args, modules).await,
+      Self::String(s) => s.call(stack, env, this, args, modules).await,
+      Self::Char(c) => c.call(stack, env, this, args, modules).await,
+      Self::Byte(b) => b.call(stack, env, this, args, modules).await,
     }
   }
 }

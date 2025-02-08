@@ -52,18 +52,20 @@ async fn eval(
   env: RefEnvironment,
   modules_manager: &Modules,
 ) -> EvalResult {
-  let program: frontend::ast::Node = {
+  let program = {
     let mut parser = frontend::Parser::new(code, &path);
     parser.produce_ast()
   };
-  if program.is_error() {
-    let type_err = internal::errors::ErrorNames::SyntaxError;
-    let node_err = program.get_error().unwrap();
-    let err = frontend::node_error(&node_err);
-    let data = internal::errors::error_to_string(&type_err, err);
-    internal::print_error(data);
-    return Err(());
-  }
+  let program = match program {
+    Ok(value) => value,
+    Err(err) => {
+      let type_err = internal::errors::ErrorNames::SyntaxError;
+      let err = internal::ErrorTypes::StringError(err.message);
+      let data = internal::errors::error_to_string(&type_err, err);
+      internal::print_error(data);
+      return Err(());
+    }
+  };
   let env = env.crate_child(false);
   let value = runtime::interpreter::interpreter(
     program.to_box(),

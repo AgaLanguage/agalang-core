@@ -1,2 +1,15 @@
 importar ':consola' como consola;
-consola::pintar('HaH');
+importar ':tmp' como tmp;
+consola::pintar(1);
+esperar tmp::esperar(1);
+consola::pintar(2);
+esperar tmp::esperar(1);
+consola::pintar(3);
+esperar tmp::esperar(1);
+consola::pintar(4);
+esperar tmp::esperar(1);
+consola::pintar(5);
+esperar tmp::esperar(1);
+consola::pintar(6);
+esperar tmp::esperar(1);
+consola::pintar("Go");
