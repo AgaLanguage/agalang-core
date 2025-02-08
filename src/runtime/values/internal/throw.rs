@@ -1,186 +1,221 @@
 use std::{cell::RefCell, rc::Rc};
 
-use parser::{
-  internal::{error_to_string, ErrorNames, ErrorTypes},
-  util::RefValue,
-};
+use parser::internal::ErrorNames;
 
 use crate::{
-  runtime::{
-    self,
-    values::{
-      self, primitive,
-      traits::{self, AgalValuable as _, ToAgalValue as _},
-      AgalValue,
+    runtime::{
+        env::RefEnvironment, AgalError, AgalInternal, AgalPrimitive, AgalString, AgalValuable,
+        AgalValuableManager, AgalValue, RefAgalValue, Stack,
     },
-  },
-  Modules,
+    Modules,
 };
 
-use super::AgalInternal;
-
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub enum AgalThrow {
-  Params {
-    type_error: ErrorNames,
-    message: String,
-    stack: RefValue<runtime::Stack>,
-  },
-  Value(values::DefaultRefAgalValue),
+    Params {
+        type_error: ErrorNames,
+        message: String,
+        stack: Box<Stack>,
+    },
+    Error(AgalError),
 }
 impl AgalThrow {
-  pub fn to_error(&self) -> super::AgalError {
-    match self {
-      Self::Params {
-        type_error,
-        message,
-        stack,
-      } => super::AgalError::Params {
-        type_error: type_error.clone(),
-        message: message.clone(),
-        stack: stack.clone(),
-      },
-      Self::Value(value) => super::AgalError::Value(value.clone()),
-    }
-  }
-  pub fn get_data(&self) -> (ErrorNames, ErrorTypes) {
-    match self {
-      Self::Params {
-        type_error,
-        message,
-        ..
-      } => (type_error.clone(), ErrorTypes::StringError(message.clone())),
-      Self::Value(value) => {
-        let message = value.try_to_string();
-        match message {
-          Ok(message) => (ErrorNames::None, ErrorTypes::StringError(message)),
-          Err(throw) => throw.get_data(),
+    pub fn get_error(&self) -> AgalError {
+        match self {
+            AgalThrow::Params {
+                type_error,
+                message,
+                stack,
+            } => AgalError::new(type_error.clone(), message.clone(), stack.clone()),
+            AgalThrow::Error(e) => e.clone(),
         }
-      }
     }
-  }
 }
-impl traits::ToAgalValue for AgalThrow {
-  fn to_value(self) -> AgalValue {
-    AgalInternal::Throw(self).to_value()
-  }
-  fn to_result(self) -> Result<values::DefaultRefAgalValue, AgalThrow>
-  where
-    Self: Sized,
-  {
-    Err(self)
-  }
+impl AgalThrow {
+    pub fn from_ref_value<T: AgalValuable>(
+        v: Rc<RefCell<T>>,
+        stack: &Stack,
+        env: RefEnvironment,
+    ) -> AgalThrow {
+        let str = v.borrow().clone().to_agal_console(stack, env);
+        if str.is_err() {
+            return str.err().unwrap();
+        }
+        let str = str.ok().unwrap();
+        let message = str.get_string().clone();
+        AgalThrow::Params {
+            type_error: ErrorNames::None,
+            message,
+            stack: Box::new(stack.clone()),
+        }
+    }
+    pub fn from_ref_manager<T: AgalValuableManager>(
+        v: Rc<RefCell<T>>,
+        stack: &Stack,
+        env: RefEnvironment,
+    ) -> AgalThrow {
+        let str = v.borrow().clone().to_agal_console(stack, env);
+        if str.is_err() {
+            return str.err().unwrap();
+        }
+        let str = str.ok().unwrap();
+        let message = str.get_string().clone();
+        AgalThrow::Params {
+            type_error: ErrorNames::None,
+            message,
+            stack: Box::new(stack.clone()),
+        }
+    }
 }
-impl traits::AgalValuable for AgalThrow {
-  fn get_name(&self) -> String {
-    "Lanzado".to_string()
-  }
-  fn to_agal_string(&self) -> Result<primitive::AgalString, AgalThrow> {
-    let (type_error, message) = self.get_data();
-    let message = error_to_string(&type_error, message);
-    Ok(primitive::AgalString::from_string(message))
-  }
-  fn to_agal_console(
-    &self,
-    stack: parser::util::RefValue<runtime::Stack>,
-    env: runtime::RefEnvironment,
-  ) -> Result<primitive::AgalString, AgalThrow> {
-    self.to_agal_string()
-  }
 
-  fn get_keys(&self) -> Vec<String> {
-    todo!()
-  }
+impl AgalValuable for AgalThrow {
+    fn to_value(self) -> AgalValue {
+        AgalInternal::Throw(self).to_value()
+    }
+    fn call(
+        self,
+        _: &Stack,
+        _: RefEnvironment,
+        _: RefAgalValue,
+        _: Vec<RefAgalValue>,
+        _: &Modules,
+    ) -> RefAgalValue {
+        self.to_ref_value()
+    }
+    fn get_instance_property(self, _: &Stack, _: RefEnvironment, _: String) -> RefAgalValue {
+        self.to_ref_value()
+    }
+    fn to_agal_string(self, stack: &Stack, env: RefEnvironment) -> Result<AgalString, AgalThrow> {
+        Ok(AgalString::from_string(format!("<Error>",)))
+    }
+    fn to_agal_console(self, stack: &Stack, env: RefEnvironment) -> Result<AgalString, AgalThrow> {
+        self.to_agal_string(stack, env)
+    }
 
-  fn to_agal_byte(
-    &self,
-    stack: RefValue<runtime::Stack>,
-  ) -> Result<primitive::AgalByte, super::AgalThrow> {
-    todo!()
-  }
+    fn to_ref_value(self) -> RefAgalValue {
+        self.to_value().as_ref()
+    }
 
-  fn to_agal_boolean(
-    &self,
-    stack: RefValue<runtime::Stack>,
-  ) -> Result<primitive::AgalBoolean, super::AgalThrow> {
-    todo!()
-  }
+    fn get_keys(self) -> Vec<String> {
+        std::vec![]
+    }
 
-  fn to_agal_array(
-    &self,
-    stack: RefValue<runtime::Stack>,
-  ) -> Result<values::RefAgalValue<values::complex::AgalArray>, super::AgalThrow> {
-    todo!()
-  }
+    fn get_length(self) -> usize {
+        0
+    }
 
-  fn binary_operation(
-    &self,
-    stack: RefValue<runtime::Stack>,
-    env: runtime::RefEnvironment,
-    operator: &str,
-    right: values::DefaultRefAgalValue,
-  ) -> Result<values::DefaultRefAgalValue, super::AgalThrow> {
-    todo!()
-  }
+    fn to_agal_number(
+        self,
+        stack: &Stack,
+        env: RefEnvironment,
+    ) -> Result<crate::runtime::AgalNumber, AgalThrow> {
+        Err(AgalThrow::Params {
+            type_error: ErrorNames::CustomError("Error Parseo"),
+            message: "No se pudo convertir en numero".to_string(),
+            stack: Box::new(stack.clone()),
+        })
+    }
 
-  fn unary_back_operator(
-    &self,
-    stack: RefValue<runtime::Stack>,
-    env: runtime::RefEnvironment,
-    operator: &str,
-  ) -> values::ResultAgalValue {
-    todo!()
-  }
+    fn to_agal_boolean(
+        self,
+        stack: &Stack,
+        env: RefEnvironment,
+    ) -> Result<crate::runtime::AgalBoolean, AgalThrow> {
+        let value =
+            env.as_ref()
+                .borrow()
+                .get(stack, crate::runtime::env::TRUE_KEYWORD, stack.get_value());
+        let value: &AgalValue = &value.as_ref().borrow();
+        match value {
+            &AgalValue::Primitive(AgalPrimitive::Boolean(b)) => Ok(b),
+            _ => Err(AgalThrow::Params {
+                type_error: ErrorNames::CustomError("Error Parseo"),
+                message: "No se pudo convertir en booleano".to_string(),
+                stack: Box::new(stack.clone()),
+            }),
+        }
+    }
 
-  fn unary_operator(
-    &self,
-    stack: RefValue<runtime::Stack>,
-    env: runtime::RefEnvironment,
-    operator: &str,
-  ) -> values::ResultAgalValue {
-    todo!()
-  }
+    fn to_agal_array(self, stack: &Stack) -> Result<crate::runtime::AgalArray, AgalThrow> {
+        Err(AgalThrow::Params {
+            type_error: ErrorNames::CustomError("Error Iterable"),
+            message: "El valor no es iterable".to_string(),
+            stack: Box::new(stack.clone()),
+        })
+    }
 
-  fn get_object_property(
-    &self,
-    stack: RefValue<runtime::Stack>,
-    env: runtime::RefEnvironment,
-    key: &str,
-  ) -> Result<values::DefaultRefAgalValue, super::AgalThrow> {
-    todo!()
-  }
+    fn to_agal_byte(self, stack: &Stack) -> Result<crate::runtime::AgalByte, AgalThrow> {
+        Err(AgalThrow::Params {
+            type_error: ErrorNames::TypeError,
+            message: "El valor no es un byte".to_string(),
+            stack: Box::new(stack.clone()),
+        })
+    }
 
-  fn set_object_property(
-    &mut self,
-    stack: RefValue<runtime::Stack>,
-    env: runtime::RefEnvironment,
-    key: &str,
-    value: values::DefaultRefAgalValue,
-  ) -> Result<values::DefaultRefAgalValue, super::AgalThrow> {
-    todo!()
-  }
+    fn to_agal_value(self, stack: &Stack, env: RefEnvironment) -> Result<AgalString, AgalThrow> {
+        self.to_agal_console(stack, env)
+    }
 
-  fn get_instance_property(
-    &self,
-    stack: RefValue<runtime::Stack>,
-    env: runtime::RefEnvironment,
-    key: &str,
-  ) -> Result<values::DefaultRefAgalValue, super::AgalThrow> {
-    todo!()
-  }
+    fn binary_operation(
+        &self,
+        stack: &Stack,
+        _env: RefEnvironment,
+        operator: &str,
+        other: RefAgalValue,
+    ) -> RefAgalValue {
+        crate::runtime::binary_operation_error(stack, operator, self.clone().to_ref_value(), other)
+    }
 
-  async fn call(
-    &self,
-    stack: RefValue<runtime::Stack>,
-    env: runtime::RefEnvironment,
-    this: values::DefaultRefAgalValue,
-    args: Vec<values::DefaultRefAgalValue>,
-    modules: RefValue<Modules>,
-  ) -> Result<crate::runtime::values::DefaultRefAgalValue, super::AgalThrow> {
-    todo!()
-  }
-  
-  fn to_agal_number(&self, stack: RefValue<runtime::Stack>) -> Result<primitive::AgalNumber, super::AgalThrow> {
-        todo!()
+    fn unary_operator(&self, stack: &Stack, _env: RefEnvironment, operator: &str) -> RefAgalValue {
+        crate::runtime::unary_operation_error(stack, operator, self.clone().to_ref_value())
+    }
+
+    fn unary_back_operator(
+        &self,
+        stack: &Stack,
+        _env: RefEnvironment,
+        operator: &str,
+    ) -> RefAgalValue {
+        match operator {
+            "?" => AgalValue::Null.as_ref(),
+            _ => crate::runtime::unary_back_operation_error(
+                stack,
+                operator,
+                self.clone().to_ref_value(),
+            ),
+        }
+    }
+
+    fn get_object_property(self, stack: &Stack, env: RefEnvironment, key: String) -> RefAgalValue {
+        crate::runtime::get_property_error(stack, env, key)
+    }
+
+    fn set_object_property(
+        self,
+        stack: &Stack,
+        env: RefEnvironment,
+        key: String,
+        _value: RefAgalValue,
+    ) -> RefAgalValue {
+        crate::runtime::set_property_error(stack, env, key, "No se puede asignar".to_string())
+    }
+
+    fn delete_object_property(self, stack: &Stack, env: RefEnvironment, key: String) {
+        crate::runtime::delete_property_error(stack, env, key);
+    }
+}
+
+impl std::fmt::Display for AgalThrow {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            AgalThrow::Params {
+                type_error,
+                message,
+                stack,
+            } => {
+                write!(f, "{}: {}\n{}", type_error, message, stack)
+            }
+            AgalThrow::Error(_) => write!(f, "Error"),
+        }
     }
 }

@@ -1,206 +1,159 @@
 use std::{cell::RefCell, rc::Rc};
 
-use crate::runtime::{
-  self,
-  values::{
-    self, internal, primitive,
-    traits::{self, AgalValuable as _, ToAgalValue as _},
-    AgalValue,
-  },
-};
 use parser::util::RefValue;
 
-use super::AgalComplex;
+use crate::{
+    runtime::{
+        env::RefEnvironment, get_instance_property_error, get_property_error, AgalByte,
+        AgalComplex, AgalNumber, AgalString, AgalThrow, AgalValuable, AgalValuableManager,
+        AgalValue, RefAgalValue, Stack,
+    },
+    Modules,
+};
 
-#[derive(Clone)]
-pub struct AgalArray(RefValue<Vec<values::DefaultRefAgalValue>>);
-
+pub type AgalVec = Vec<Rc<RefCell<AgalValue>>>;
+#[derive(Clone, PartialEq)]
+pub struct AgalArray(RefValue<AgalVec>);
 impl AgalArray {
-  fn new(vec: Vec<values::DefaultRefAgalValue>) -> Self {
-    Self(Rc::new(RefCell::new(vec)))
-  }
-  pub fn to_vec(&self) -> RefValue<Vec<values::DefaultRefAgalValue>> {
-    self.0.clone()
-  }
-  pub fn to_buffer(&self, stack: RefValue<runtime::Stack>) -> Result<Vec<u8>, internal::AgalThrow> {
-    let mut buffer = vec![];
-    let vec = &*self.0.as_ref().borrow();
-    for value in vec {
-      let byte = value.to_agal_byte(stack.clone());
-      if let Err(value) = byte {
-        return Err(value);
-      }
-      buffer.push(byte?.to_u8());
+    fn new(vec: AgalVec) -> AgalArray {
+        AgalArray(Rc::new(RefCell::new(vec)))
     }
-    Ok(buffer)
-  }
-}
-
-impl From<&primitive::AgalString> for AgalArray {
-  fn from(string: &primitive::AgalString) -> Self {
-    let vec = string
-      .to_agal_chars()
-      .iter()
-      .map(|c| c.to_ref_value())
-      .collect();
-    Self::new(vec)
-  }
-}
-
-impl From<Vec<values::DefaultRefAgalValue>> for AgalArray {
-  fn from(vec: Vec<values::DefaultRefAgalValue>) -> Self {
-    Self::new(vec)
-  }
-}
-
-impl From<&[u8]> for AgalArray {
-  fn from(buffer: &[u8]) -> Self {
-    let mut vec = Vec::new();
-    for byte in buffer {
-      vec.push(primitive::AgalByte::new(*byte).to_ref_value());
+    pub fn from_buffer(buffer: &[u8]) -> AgalArray {
+        let mut vec = Vec::new();
+        for byte in buffer {
+            vec.push(AgalByte::new(*byte).to_ref_value());
+        }
+        AgalArray::new(vec)
     }
-    Self::new(vec)
-  }
-}
-
-impl traits::ToAgalValue for AgalArray {
-  fn to_value(self) -> AgalValue {
-    AgalComplex::Array(self.as_ref()).to_value()
-  }
-}
-impl traits::AgalValuable for AgalArray {
-  fn get_name(&self) -> String {
-    "Lista".to_string()
-  }
-  fn to_agal_string(&self) -> Result<primitive::AgalString, internal::AgalThrow> {
-    let mut result = String::new();
-    let vec = self.to_vec();
-    let vec = &*vec.borrow();
-    for (i, value) in vec.iter().enumerate() {
-      let str = value.try_to_string()?;
-      result.push_str(&str);
-      if i < vec.len() - 1 {
-        result.push_str(", ");
-      }
+    pub fn from_vec(vec: AgalVec) -> AgalArray {
+        AgalArray::new(vec)
     }
-    Ok(primitive::AgalString::from_string(result))
-  }
-  fn to_agal_console(
-    &self,
-    stack: RefValue<runtime::Stack>,
-    env: runtime::RefEnvironment,
-  ) -> Result<primitive::AgalString, internal::AgalThrow> {
-    let mut result = String::new();
-    let vec = self.to_vec();
-    let vec = &*vec.borrow();
-    result.push_str("[");
-    for (i, value) in vec.iter().enumerate() {
-      let str = value
-        .to_agal_console(stack.clone(), env.clone())?
-        .add_prev(" ")
-        .to_string();
-      result.push_str(&str);
-      if i < vec.len() - 1 {
-        result.push_str(",");
-      }
+    pub fn get_vec(&self) -> RefValue<AgalVec> {
+        self.0.clone()
     }
-    result.push_str(" ]");
-    Ok(primitive::AgalString::from_string(result))
-  }
-
-  fn get_keys(&self) -> Vec<String> {
-    todo!()
-  }
-
-  fn to_agal_byte(
-    &self,
-    stack: RefValue<runtime::Stack>,
-  ) -> Result<primitive::AgalByte, internal::AgalThrow> {
-    todo!()
-  }
-
-  fn to_agal_boolean(
-    &self,
-    stack: RefValue<runtime::Stack>,
-  ) -> Result<primitive::AgalBoolean, internal::AgalThrow> {
-    todo!()
-  }
-
-  fn to_agal_array(
-    &self,
-    stack: RefValue<runtime::Stack>,
-  ) -> Result<values::RefAgalValue<AgalArray>, internal::AgalThrow> {
-    todo!()
-  }
-
-  fn binary_operation(
-    &self,
-    stack: RefValue<runtime::Stack>,
-    env: runtime::RefEnvironment,
-    operator: &str,
-    right: values::DefaultRefAgalValue,
-  ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
-    todo!()
-  }
-
-  fn unary_back_operator(
-    &self,
-    stack: RefValue<runtime::Stack>,
-    env: runtime::RefEnvironment,
-    operator: &str,
-  ) -> values::ResultAgalValue {
-    todo!()
-  }
-
-  fn unary_operator(
-    &self,
-    stack: RefValue<runtime::Stack>,
-    env: runtime::RefEnvironment,
-    operator: &str,
-  ) -> values::ResultAgalValue {
-    todo!()
-  }
-
-  fn get_object_property(
-    &self,
-    stack: RefValue<runtime::Stack>,
-    env: runtime::RefEnvironment,
-    key: &str,
-  ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
-    todo!()
-  }
-
-  fn set_object_property(
-    &mut self,
-    stack: RefValue<runtime::Stack>,
-    env: runtime::RefEnvironment,
-    key: &str,
-    value: values::DefaultRefAgalValue,
-  ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
-    todo!()
-  }
-
-  fn get_instance_property(
-    &self,
-    stack: RefValue<runtime::Stack>,
-    env: runtime::RefEnvironment,
-    key: &str,
-  ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
-    todo!()
-  }
-
-  async fn call(
-    &self,
-    stack: RefValue<runtime::Stack>,
-    env: runtime::RefEnvironment,
-    this: values::DefaultRefAgalValue,
-    args: Vec<values::DefaultRefAgalValue>,
-    modules: RefValue<crate::Modules>,
-  ) -> Result<crate::runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
-    todo!()
-  }
-  
-  fn to_agal_number(&self, stack: RefValue<runtime::Stack>) -> Result<primitive::AgalNumber, internal::AgalThrow> {
-        todo!()
+    pub fn get_buffer(&self, stack: &Stack) -> Result<Vec<u8>, AgalThrow> {
+        let mut buffer = vec![];
+        let vec: &AgalVec = &self.0.borrow();
+        for value in vec {
+            let byte = value.as_ref().borrow().clone().to_agal_byte(stack);
+            if let Err(value) = byte {
+                return Err(value);
+            }
+            buffer.push(byte?.to_u8());
+        }
+        Ok(buffer)
+    }
+}
+impl AgalValuable for AgalArray {
+    fn get_length(self) -> usize {
+        self.get_vec().borrow().len()
+    }
+    fn to_agal_console(self, stack: &Stack, env: RefEnvironment) -> Result<AgalString, AgalThrow> {
+        let mut result = String::new();
+        for (i, value) in self.get_vec().borrow().iter().enumerate() {
+            let str = value
+                .as_ref()
+                .borrow()
+                .clone()
+                .to_agal_value(stack, env.clone());
+            if str.is_err() {
+                return str;
+            }
+            let str = str.ok().unwrap();
+            let str = str.get_string();
+            let str = if i == 0 { str } else { &format!(", {str}") };
+            result.push_str(str);
+        }
+        Ok(AgalString::from_string(format!("[ {result} ]")))
+    }
+    fn to_agal_array(self, _: &Stack) -> Result<AgalArray, AgalThrow> {
+        Ok(self)
+    }
+    fn to_value(self) -> AgalValue {
+        AgalComplex::Array(self).to_value()
+    }
+    fn to_agal_string(self, stack: &Stack, env: RefEnvironment) -> Result<AgalString, AgalThrow> {
+        let mut result = String::new();
+        for value in self.get_vec().borrow().iter() {
+            let str = value.as_ref().borrow().clone().to_agal_string(
+                stack,
+                env.as_ref().borrow().clone().crate_child(false).as_ref(),
+            );
+            if str.is_err() {
+                return str;
+            }
+            let str = str.ok().unwrap();
+            let str = str.get_string();
+            result.push_str(&str);
+        }
+        Ok(AgalString::from_string(result))
+    }
+    fn get_instance_property(
+        self,
+        stack: &Stack,
+        env: RefEnvironment,
+        key: String,
+    ) -> RefAgalValue {
+        match key.as_str() {
+            "unir" => crate::runtime::AgalNativeFunction {
+                name: "unir".to_string(),
+                func: Rc::new(move |args, stack, env, _, _| {
+                    let sep = args.get(0);
+                    let sep = if let Some(s) = sep {
+                        s.borrow().clone()
+                    } else {
+                        AgalValue::Never
+                    };
+                    let sep = sep.to_agal_string(stack, env.clone());
+                    let sep = if let Ok(s) = &sep {
+                        s.get_string()
+                    } else if let Err(e) = sep {
+                        return e.to_ref_value();
+                    } else {
+                        ""
+                    };
+                    let mut result = String::new();
+                    for (i, value) in (&self).0.borrow().iter().enumerate() {
+                        let data = value.borrow().clone().to_agal_string(stack, env.clone());
+                        let str = if let Ok(s) = &data {
+                            s.get_string()
+                        } else if let Err(e) = data {
+                            return e.to_ref_value();
+                        } else {
+                            ""
+                        };
+                        if i > 0 {
+                            result.push_str(sep);
+                        }
+                        result.push_str(str);
+                    }
+                    AgalString::from_string(result).to_ref_value()
+                }),
+            }
+            .to_ref_value(),
+            "agregar" => crate::runtime::AgalNativeFunction {
+                name: "agregar".to_string(),
+                func: Rc::new(move |args, stack, env, _, _| {
+                    let mut vec = (&self).0.borrow_mut();
+                    for arg in args.iter() {
+                        vec.push(arg.clone());
+                    }
+                    self.clone().to_ref_value()
+                }),
+            }
+            .to_ref_value(),
+            "largo" => AgalNumber::new(self.get_length() as f64).to_ref_value(),
+            _ => get_instance_property_error(stack, env, key, self.to_value()),
+        }
+    }
+    fn get_object_property(self, stack: &Stack, env: RefEnvironment, key: String) -> RefAgalValue {
+        let int = key.parse::<usize>();
+        if int.is_err() {
+            return get_property_error(stack, env, key);
+        }
+        let int = int.unwrap();
+        let value = self.0.borrow();
+        let value = value.get(int);
+        value.unwrap_or(&AgalValue::Never.as_ref()).clone()
     }
 }

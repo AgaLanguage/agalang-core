@@ -1,169 +1,94 @@
-use crate::{
-  colors,
-  runtime::{
-    self,
-    values::{
-      internal,
-      traits::{self, AgalValuable as _, ToAgalValue as _},
-      AgalValue,
-    },
-    FALSE_KEYWORD, TRUE_KEYWORD,
-  },
+use crate::runtime::{
+    env::{RefEnvironment, FALSE_KEYWORD, TRUE_KEYWORD},
+    get_instance_property_error, unary_operation_error, AgalNumber, AgalPrimitive, AgalString,
+    AgalThrow, AgalValuable, AgalValuableManager, AgalValue, RefAgalValue, Stack,
 };
 
-use super::{string::AgalString, AgalPrimitive};
-
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum AgalBoolean {
-  False,
-  True,
-}
+pub struct AgalBoolean(bool);
 impl AgalBoolean {
-  pub fn new(value: bool) -> Self {
-    if value {
-      Self::True
-    } else {
-      Self::False
+    pub fn new(value: bool) -> AgalBoolean {
+        AgalBoolean(value)
     }
-  }
-  pub fn as_bool(&self) -> bool {
-    self == &Self::True
-  }
-  pub fn not(&self) -> Self {
-    match self {
-      Self::False => Self::True,
-      Self::True => Self::False,
+    pub fn to_bool(&self) -> bool {
+        self.0
     }
-  }
-  pub fn and(&self, other: &Self) -> Self {
-    match (self, other) {
-      (Self::True, Self::True) => Self::True,
-      (_, _) => Self::False,
-    }
-  }
-  pub fn or(&self, other: &Self) -> Self {
-    match (self, other) {
-      (Self::False, Self::False) => Self::False,
-      (_, _) => Self::True,
-    }
-  }
 }
-impl traits::ToAgalValue for AgalBoolean {
-  fn to_value(self) -> AgalValue {
-    AgalPrimitive::Boolean(self).to_value()
-  }
+fn bool_to_str(value: bool) -> String {
+    let data = if value { TRUE_KEYWORD } else { FALSE_KEYWORD };
+    data.to_string()
 }
-impl traits::AgalValuable for AgalBoolean {
-  fn get_name(&self) -> String {
-    "Buleano".to_string()
-  }
-  fn to_agal_string(&self) -> Result<AgalString, internal::AgalThrow> {
-    Ok(super::AgalString::from_string(match self {
-      Self::False => FALSE_KEYWORD.to_string(),
-      Self::True => TRUE_KEYWORD.to_string(),
-    }))
-  }
-  fn to_agal_console(
-    &self,
-    stack: parser::util::RefValue<runtime::Stack>,
-    env: runtime::RefEnvironment,
-  ) -> Result<AgalString, internal::AgalThrow> {
-    Ok(self.to_agal_string()?.set_color(colors::Color::YELLOW))
-  }
-  fn to_agal_boolean(
-    &self,
-    stack: parser::util::RefValue<runtime::Stack>,
-  ) -> Result<Self, internal::AgalThrow> {
-    Ok(*self)
-  }
-
-  fn get_keys(&self) -> Vec<String> {
-    todo!()
-  }
-
-  fn to_agal_byte(
-    &self,
-    stack: parser::util::RefValue<runtime::Stack>,
-  ) -> Result<super::AgalByte, internal::AgalThrow> {
-    todo!()
-  }
-
-  fn to_agal_array(
-    &self,
-    stack: parser::util::RefValue<runtime::Stack>,
-  ) -> Result<runtime::values::RefAgalValue<runtime::values::complex::AgalArray>, internal::AgalThrow>
-  {
-    todo!()
-  }
-
-  fn binary_operation(
-    &self,
-    stack: parser::util::RefValue<runtime::Stack>,
-    env: runtime::RefEnvironment,
-    operator: &str,
-    right: runtime::values::DefaultRefAgalValue,
-  ) -> Result<runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
-    todo!()
-  }
-
-  fn unary_back_operator(
-    &self,
-    stack: parser::util::RefValue<runtime::Stack>,
-    env: runtime::RefEnvironment,
-    operator: &str,
-  ) -> runtime::values::ResultAgalValue {
-    todo!()
-  }
-
-  fn unary_operator(
-    &self,
-    stack: parser::util::RefValue<runtime::Stack>,
-    env: runtime::RefEnvironment,
-    operator: &str,
-  ) -> runtime::values::ResultAgalValue {
-    todo!()
-  }
-
-  fn get_object_property(
-    &self,
-    stack: parser::util::RefValue<runtime::Stack>,
-    env: runtime::RefEnvironment,
-    key: &str,
-  ) -> Result<runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
-    todo!()
-  }
-
-  fn set_object_property(
-    &mut self,
-    stack: parser::util::RefValue<runtime::Stack>,
-    env: runtime::RefEnvironment,
-    key: &str,
-    value: runtime::values::DefaultRefAgalValue,
-  ) -> Result<runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
-    todo!()
-  }
-
-  fn get_instance_property(
-    &self,
-    stack: parser::util::RefValue<runtime::Stack>,
-    env: runtime::RefEnvironment,
-    key: &str,
-  ) -> Result<runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
-    todo!()
-  }
-
-  async fn call(
-    &self,
-    stack: parser::util::RefValue<runtime::Stack>,
-    env: runtime::RefEnvironment,
-    this: runtime::values::DefaultRefAgalValue,
-    args: Vec<runtime::values::DefaultRefAgalValue>,
-    modules: parser::util::RefValue<crate::Modules>,
-  ) -> Result<crate::runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
-    todo!()
-  }
-  
-  fn to_agal_number(&self, stack: parser::util::RefValue<runtime::Stack>) -> Result<super::AgalNumber, internal::AgalThrow> {
-        todo!()
+impl AgalValuable for AgalBoolean {
+    fn to_value(self) -> AgalValue {
+        AgalPrimitive::Boolean(self).to_value()
+    }
+    fn to_agal_boolean(self, _: &Stack, _: RefEnvironment) -> Result<AgalBoolean, AgalThrow> {
+        Ok(self)
+    }
+    fn to_agal_string(self, _: &Stack, _: RefEnvironment) -> Result<AgalString, AgalThrow> {
+        Ok(AgalString::from_string(bool_to_str(self.0)))
+    }
+    fn to_agal_number(self, _: &Stack, _: RefEnvironment) -> Result<AgalNumber, AgalThrow> {
+        Ok(AgalNumber::new(if self.0 { 1f64 } else { 0f64 }))
+    }
+    fn binary_operation(
+        &self,
+        stack: &Stack,
+        _env: RefEnvironment,
+        operator: &str,
+        other: RefAgalValue,
+    ) -> RefAgalValue {
+        let other: &AgalValue = &other.borrow();
+        match other {
+            AgalValue::Primitive(AgalPrimitive::Boolean(other)) => {
+                let boolean = match operator {
+                    "&&" => AgalBoolean::new(self.0 && other.0),
+                    "||" => AgalBoolean::new(self.0 || other.0),
+                    "==" => AgalBoolean::new(self.0 == other.0),
+                    "!=" => AgalBoolean::new(self.0 != other.0),
+                    _ => {
+                        return AgalThrow::Params {
+                            type_error: parser::internal::ErrorNames::TypeError,
+                            message: format!("Operador {} no soportado", operator),
+                            stack: Box::new(stack.clone()),
+                        }
+                        .to_ref_value();
+                    }
+                };
+                AgalPrimitive::Boolean(boolean).to_ref_value()
+            }
+            _ => AgalThrow::Params {
+                type_error: parser::internal::ErrorNames::TypeError,
+                message: "No se puede operar con un valor no booleano".to_string(),
+                stack: Box::new(stack.clone()),
+            }
+            .to_ref_value(),
+        }
+    }
+    fn unary_operator(&self, stack: &Stack, env: RefEnvironment, operator: &str) -> RefAgalValue {
+        match operator {
+            "&" | "?" => self.to_ref_value(),
+            "!" => AgalBoolean::new(!self.to_bool()).to_ref_value(),
+            "+" => match self.to_agal_number(stack, env) {
+                Ok(num) => num.to_ref_value(),
+                Err(throw) => throw.to_ref_value(),
+            },
+            _ => unary_operation_error(stack, operator, self.to_ref_value()),
+        }
+    }
+    fn to_agal_console(self, _: &Stack, _: RefEnvironment) -> Result<AgalString, AgalThrow> {
+        Ok(AgalString::from_string(format!(
+            "\x1b[33m{}\x1b[39m",
+            bool_to_str(self.0)
+        )))
+    }
+    fn get_instance_property(
+        self,
+        stack: &Stack,
+        env: RefEnvironment,
+        key: String,
+    ) -> RefAgalValue {
+        let value = self.to_value();
+        get_instance_property_error(stack, env, key, value)
     }
 }
