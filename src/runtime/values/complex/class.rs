@@ -166,10 +166,13 @@ impl traits::AgalValuable for AgalPrototype {
   ) -> Result<crate::runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
     todo!()
   }
-  
-  fn to_agal_number(&self, stack: RefValue<runtime::Stack>) -> Result<primitive::AgalNumber, internal::AgalThrow> {
-        todo!()
-    }
+
+  fn to_agal_number(
+    &self,
+    stack: RefValue<runtime::Stack>,
+  ) -> Result<primitive::AgalNumber, internal::AgalThrow> {
+    todo!()
+  }
 }
 
 #[derive(Clone)]
@@ -361,8 +364,11 @@ impl traits::AgalValuable for AgalClass {
   ) -> Result<crate::runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
     todo!()
   }
-  
-  fn to_agal_number(&self, stack: RefValue<runtime::Stack>) -> Result<primitive::AgalNumber, internal::AgalThrow> {
-        todo!()
-    }
+
+  fn to_agal_number(
+    &self,
+    stack: RefValue<runtime::Stack>,
+  ) -> Result<primitive::AgalNumber, internal::AgalThrow> {
+    todo!()
+  }
 }

@@ -158,10 +158,13 @@ impl traits::AgalValuable for AgalLazy {
   ) -> Result<crate::runtime::values::DefaultRefAgalValue, super::AgalThrow> {
     todo!()
   }
-  
-  fn to_agal_number(&self, stack: RefValue<crate::runtime::Stack>) -> Result<primitive::AgalNumber, super::AgalThrow> {
-        todo!()
-    }
+
+  fn to_agal_number(
+    &self,
+    stack: RefValue<crate::runtime::Stack>,
+  ) -> Result<primitive::AgalNumber, super::AgalThrow> {
+    todo!()
+  }
 }
 impl traits::ToAgalValue for AgalLazy {
   fn to_value(self) -> AgalValue {

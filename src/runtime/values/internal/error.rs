@@ -144,10 +144,13 @@ impl traits::AgalValuable for AgalError {
   ) -> Result<crate::runtime::values::DefaultRefAgalValue, super::AgalThrow> {
     todo!()
   }
-  
-  fn to_agal_number(&self, stack: RefValue<crate::runtime::Stack>) -> Result<primitive::AgalNumber, super::AgalThrow> {
-        todo!()
-    }
+
+  fn to_agal_number(
+    &self,
+    stack: RefValue<crate::runtime::Stack>,
+  ) -> Result<primitive::AgalNumber, super::AgalThrow> {
+    todo!()
+  }
 }
 impl traits::ToAgalValue for AgalError {
   fn to_value(self) -> AgalValue {

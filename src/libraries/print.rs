@@ -1,11 +1,9 @@
 use std::{cell::RefCell, rc::Rc};
 
 use crate::runtime::values::{
-  complex,
-  internal,
+  self, complex, internal,
   traits::{self, AgalValuable as _, ToAgalValue as _},
   AgalValue,
-  self
 };
 
 pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {

@@ -1,8 +1,8 @@
 #![allow(warnings)]
+mod colors;
 mod libraries;
 mod path;
 mod runtime;
-mod colors;
 
 use std::{
   cell::RefCell, collections::HashMap, process::ExitCode, rc::Rc, thread::sleep, time::Duration,

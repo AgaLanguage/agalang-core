@@ -38,7 +38,11 @@ impl traits::AgalValuable for AgalPrimitive {
       Self::Char(c) => c.get_name(),
       Self::Byte(b) => b.get_name(),
     }
-  }  fn to_agal_number(&self, stack: util::RefValue<runtime::Stack>) -> Result<AgalNumber, internal::AgalThrow> {
+  }
+  fn to_agal_number(
+    &self,
+    stack: util::RefValue<runtime::Stack>,
+  ) -> Result<AgalNumber, internal::AgalThrow> {
     match self {
       Self::Boolean(value) => value.to_agal_number(stack),
       Self::Number(value) => value.to_agal_number(stack),

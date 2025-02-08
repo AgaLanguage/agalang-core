@@ -4,8 +4,6 @@ use crate::runtime::values::traits::AgalValuable;
 
 use super::DefaultRefAgalValue;
 
-
-
 pub const SET_OBJECT_PROPERTY: &str = "No se pudo poner un valor";
 pub const GET_OBJECT_PROPERTY: &str = "No se puede obtener la propiedad";
 
@@ -26,6 +24,15 @@ pub const ONLY_ONE_NUMBER_MULT: &str = "Solo se puede multiplicar un número";
 
 pub const INVALID_OPERATOR: &str = "Operador invalido";
 
-pub fn BINARY_OPERATION(left:DefaultRefAgalValue, operator: &str, right: DefaultRefAgalValue) -> String{
-  format!("No se puede hacer la operación '{} {} {}'", left.get_name(), operator, right.get_name())
+pub fn BINARY_OPERATION(
+  left: DefaultRefAgalValue,
+  operator: &str,
+  right: DefaultRefAgalValue,
+) -> String {
+  format!(
+    "No se puede hacer la operación '{} {} {}'",
+    left.get_name(),
+    operator,
+    right.get_name()
+  )
 }

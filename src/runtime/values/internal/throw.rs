@@ -179,8 +179,11 @@ impl traits::AgalValuable for AgalThrow {
   ) -> Result<crate::runtime::values::DefaultRefAgalValue, super::AgalThrow> {
     todo!()
   }
-  
-  fn to_agal_number(&self, stack: RefValue<runtime::Stack>) -> Result<primitive::AgalNumber, super::AgalThrow> {
-        todo!()
-    }
+
+  fn to_agal_number(
+    &self,
+    stack: RefValue<runtime::Stack>,
+  ) -> Result<primitive::AgalNumber, super::AgalThrow> {
+    todo!()
+  }
 }

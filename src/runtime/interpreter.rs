@@ -21,8 +21,8 @@ use super::{
   stack::Stack,
   values::{
     complex::{
-      AgalArray, AgalClass, AgalClassProperty, AgalComplex, AgalPromiseData, AgalFunction, AgalObject,
-      AgalPromise,
+      AgalArray, AgalClass, AgalClassProperty, AgalComplex, AgalFunction, AgalObject, AgalPromise,
+      AgalPromiseData,
     },
     internal, primitive,
     traits::{self, AgalValuable as _, ToAgalValue as _},

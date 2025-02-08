@@ -1,7 +1,11 @@
 use std::{cell::RefCell, rc::Rc};
 
 use crate::runtime::values::{
-  self, complex::{self, AgalPromise, Promise}, internal, traits::{self, AgalValuable as _, ToAgalValue as _}, AgalValue
+  self,
+  complex::{self, AgalPromise, Promise},
+  internal,
+  traits::{self, AgalValuable as _, ToAgalValue as _},
+  AgalValue,
 };
 
 pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
@@ -19,15 +23,15 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
         func: Rc::new(|arguments, stack, env, modules_manager, this| {
           let arg_clone = arguments.clone();
           AgalPromise::new(Promise::new(Box::pin(async move {
-            let secs = 
-            if let Some(value) = arg_clone.get(0) {
+            let secs = if let Some(value) = arg_clone.get(0) {
               value.to_agal_number(stack)?.to_float()
-            }else {
+            } else {
               0f32
             };
             tokio::time::sleep(std::time::Duration::from_secs_f32(secs)).await;
             AgalValue::Never.to_result()
-          }))).to_result()
+          })))
+          .to_result()
         }),
       }
       .to_ref_value(),

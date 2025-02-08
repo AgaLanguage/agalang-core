@@ -26,13 +26,9 @@ type Callback = Box<dyn FnOnce(Resolver, Resolver)>;
 type ResultFuture = Result<values::DefaultRefAgalValue, internal::AgalThrow>;
 
 //#[derive(Clone)]
-pub struct Promise(
-  Pin<Box<dyn Future<Output = ResultFuture>>>,
-);
+pub struct Promise(Pin<Box<dyn Future<Output = ResultFuture>>>);
 impl Promise {
-  pub fn new(
-    future: Pin<Box<dyn Future<Output = ResultFuture>>>,
-  ) -> Self {
+  pub fn new(future: Pin<Box<dyn Future<Output = ResultFuture>>>) -> Self {
     Self(future)
   }
 }
@@ -65,11 +61,13 @@ impl IntoFuture for AgalPromiseData {
 }
 
 pub struct AgalPromise {
-  pub data: AgalPromiseData
+  pub data: AgalPromiseData,
 }
 impl AgalPromise {
   pub fn new(inner: Promise) -> Self {
-    Self { data: AgalPromiseData::Unresolved(inner) }
+    Self {
+      data: AgalPromiseData::Unresolved(inner),
+    }
   }
 }
 impl traits::ToAgalValue for AgalPromise {
