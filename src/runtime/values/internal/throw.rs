@@ -29,6 +29,9 @@ pub enum AgalThrow {
   Value(values::DefaultRefAgalValue),
 }
 impl AgalThrow {
+  pub fn throw<T>(self) -> Result<T, Self> {
+    Err(self)
+  }
   pub fn to_error(&self) -> super::AgalError {
     match self {
       Self::Params {
@@ -48,8 +51,16 @@ impl AgalThrow {
       Self::Params {
         type_error,
         message,
-        ..
-      } => (type_error.clone(), ErrorTypes::StringError(message.clone())),
+        stack
+      } => {
+        let mut string = String::new();
+        string.push_str(message);
+        for frame in stack.borrow().clone() {
+          let location = frame.get_location();
+          string.push_str(&format!("\n  {} en {}:{}:{}", frame.get_type(), location.file_name, location.start.line+1, location.start.column+1));
+        }
+        
+        (type_error.clone(), ErrorTypes::StringError(string))},
       Self::Value(value) => {
         let message = value.try_to_string();
         match message {
@@ -68,7 +79,7 @@ impl traits::ToAgalValue for AgalThrow {
   where
     Self: Sized,
   {
-    Err(self)
+    self.throw()
   }
 }
 impl traits::AgalValuable for AgalThrow {
@@ -76,9 +87,7 @@ impl traits::AgalValuable for AgalThrow {
     "Lanzado".to_string()
   }
   fn to_agal_string(&self) -> Result<primitive::AgalString, AgalThrow> {
-    let (type_error, message) = self.get_data();
-    let message = error_to_string(&type_error, message);
-    Ok(primitive::AgalString::from_string(message))
+    Ok(primitive::AgalString::from_string(self.to_string()))
   }
   fn to_agal_console(
     &self,
@@ -89,7 +98,7 @@ impl traits::AgalValuable for AgalThrow {
   }
 
   fn get_keys(&self) -> Vec<String> {
-    todo!()
+    vec![]
   }
 
   fn to_agal_byte(
@@ -185,5 +194,20 @@ impl traits::AgalValuable for AgalThrow {
     stack: RefValue<runtime::Stack>,
   ) -> Result<primitive::AgalNumber, super::AgalThrow> {
     todo!()
+  }
+
+  fn equals(&self, other: &Self) -> bool {
+    todo!()
+  }
+
+  fn less_than(&self, other: &Self) -> bool {
+    todo!()
+  }
+}
+
+impl ToString for AgalThrow {
+  fn to_string(&self) -> String {
+    let (type_error, message) = self.get_data();
+    error_to_string(&type_error, message)
   }
 }

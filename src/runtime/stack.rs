@@ -24,7 +24,7 @@ impl Stack {
       previous: None,
     }
   }
-  pub fn iter(&self) -> Vec<&Node> {
+  pub fn iter(&self) -> Vec<Node> {
     let mut stack = vec![self.get_value()];
     let mut current = self;
     while let Some(previous) = &current.previous {
@@ -36,8 +36,16 @@ impl Stack {
     }
     stack
   }
-  pub fn get_value(&self) -> &Node {
-    self.value.as_ref()
+  pub fn get_value(&self) -> Node {
+    self.value.as_ref().clone()
+  }
+}
+
+impl IntoIterator for Stack {
+  type Item = Node;
+  type IntoIter = std::vec::IntoIter<Self::Item>;
+  fn into_iter(self) -> Self::IntoIter {
+    self.iter().into_iter()
   }
 }
 

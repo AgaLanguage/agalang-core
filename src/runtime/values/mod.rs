@@ -194,7 +194,25 @@ impl<T: traits::AgalValuable + traits::ToAgalValue> traits::AgalValuable for Ref
   ) -> Result<primitive::AgalNumber, internal::AgalThrow> {
     self.borrow().to_agal_number(stack)
   }
+
+  fn equals(&self, other: &Self) -> bool {
+    self.borrow().equals(&*other.borrow())
+  }
+
+  fn less_than(&self, other: &Self) -> bool {
+    self.borrow().less_than(&*other.borrow())
+  }
 }
+
+impl<T: traits::AgalValuable + traits::ToAgalValue> ToString for RefAgalValue<T> {
+  fn to_string(&self) -> String {
+    match self.try_to_string() {
+      Ok(s) => s,
+      Err(e) => e.to_string(),
+    }
+  }
+}
+
 #[derive(Clone)]
 pub enum AgalValue {
   Complex(RefAgalValue<complex::AgalComplex>),
@@ -495,7 +513,18 @@ impl traits::AgalValuable for AgalValue {
     env: super::RefEnvironment,
     operator: &str,
   ) -> ResultAgalValue {
-    todo!()
+    match (self, operator) {
+      (Self::Complex(c), _) => c.borrow().unary_back_operator(stack, env, operator),
+      (Self::Primitive(p), _) => p.borrow().unary_back_operator(stack, env, operator),
+      (Self::Internal(i), _) => i.borrow().unary_back_operator(stack, env, operator),
+      (Self::Never | Self::Null, "?") => Self::Never.to_result(),
+      (_, _) => AgalThrow::Params {
+        type_error: ErrorNames::TypeError,
+        message: error_message::UNARY_BACK_OPERATOR.to_owned(),
+        stack,
+      }
+      .to_result(),
+    }
   }
 
   fn unary_operator(
@@ -555,6 +584,26 @@ impl traits::AgalValuable for AgalValue {
         stack,
       }
       .to_result(),
+    }
+  }
+
+  fn equals(&self, other: &Self) -> bool {
+    match (self, other) {
+      (Self::Complex(c1), Self::Complex(c2)) => c1.equals(c2),
+      (Self::Internal(i1), Self::Internal(i2)) => i1.equals(i2),
+      (Self::Primitive(p1), Self::Primitive(p2)) => p1.equals(p2),
+      (Self::Never, Self::Never) => true,
+      (Self::Null, Self::Null) => true,
+      (_, _) => false,
+    }
+  }
+
+  fn less_than(&self, other: &Self) -> bool {
+    match (self, other) {
+      (Self::Complex(c1), Self::Complex(c2)) => c1.less_than(c2),
+      (Self::Internal(i1), Self::Internal(i2)) => i1.less_than(i2),
+      (Self::Primitive(p1), Self::Primitive(p2)) => p1.less_than(p2),
+      (_, _) => false,
     }
   }
 }

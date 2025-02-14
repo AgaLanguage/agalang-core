@@ -173,6 +173,14 @@ impl traits::AgalValuable for AgalPrototype {
   ) -> Result<primitive::AgalNumber, internal::AgalThrow> {
     todo!()
   }
+  
+  fn equals(&self, other: &Self) -> bool {
+        todo!()
+    }
+  
+  fn less_than(&self, other: &Self) -> bool {
+        todo!()
+    }
 }
 
 #[derive(Clone)]
@@ -371,4 +379,12 @@ impl traits::AgalValuable for AgalClass {
   ) -> Result<primitive::AgalNumber, internal::AgalThrow> {
     todo!()
   }
+  
+  fn equals(&self, other: &Self) -> bool {
+        todo!()
+    }
+  
+  fn less_than(&self, other: &Self) -> bool {
+        todo!()
+    }
 }

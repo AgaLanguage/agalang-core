@@ -142,4 +142,12 @@ impl traits::AgalValuable for AgalByte {
   ) -> Result<super::AgalNumber, internal::AgalThrow> {
     todo!()
   }
+  
+  fn equals(&self, other: &Self) -> bool {
+        self == other
+    }
+  
+  fn less_than(&self, other: &Self) -> bool {
+      self < other
+    }
 }

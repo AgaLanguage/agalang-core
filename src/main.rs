@@ -5,22 +5,41 @@ mod path;
 mod runtime;
 
 use std::{
-  cell::RefCell, collections::HashMap, process::ExitCode, rc::Rc, thread::sleep, time::Duration,
+  cell::RefCell, collections::HashMap, process::ExitCode, rc::Rc, thread::sleep, time::Duration
 };
 
 use parser::util::RefValue;
 use runtime::values::DefaultRefAgalValue;
 
 trait ToResult<T> {
-  fn to_result(self) -> Result<T, ()>;
+  fn to_result(self) -> Result<T,()>;
 }
 
 impl<T> ToResult<T> for Option<T> {
-  fn to_result(self) -> Result<T, ()> {
+  fn to_result(self) -> Result<T,()> {
     if let Some(v) = self {
       Ok(v)
     } else {
       Err(())
+    }
+  }
+}
+trait OnError<T, E> {
+  fn on_error(self, error: E) -> Result<T,E>;
+}
+impl <T, E> OnError<T, E> for Option<T> {
+  fn on_error(self, error: E) -> Result<T,E> {
+    match self {
+      Some(v) => Ok(v),
+      None => Err(error),
+    }
+  }
+}
+impl<T, E, V> OnError<T, E> for Result<T,V> {
+  fn on_error(self, error: E) -> Result<T,E> {
+    match self {
+      Ok(v) => Ok(v),
+      Err(e) => Err(error),
     }
   }
 }

@@ -146,6 +146,14 @@ impl traits::AgalValuable for AgalNativeFunction {
   ) -> Result<primitive::AgalNumber, internal::AgalThrow> {
     todo!()
   }
+  
+  fn equals(&self, other: &Self) -> bool {
+        todo!()
+    }
+  
+  fn less_than(&self, other: &Self) -> bool {
+        todo!()
+    }
 }
 impl traits::ToAgalValue for AgalNativeFunction {
   fn to_value(self) -> AgalValue {

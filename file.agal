@@ -1,15 +1,37 @@
 importar ':consola' como consola;
-importar ':tmp' como tmp;
-consola::pintar(1);
-esperar tmp::esperar(1);
-consola::pintar(2);
-esperar tmp::esperar(1);
-consola::pintar(3);
-esperar tmp::esperar(1);
-consola::pintar(4);
-esperar tmp::esperar(1);
-consola::pintar(5);
-esperar tmp::esperar(1);
-consola::pintar(6);
-esperar tmp::esperar(1);
-consola::pintar("Go");
+def a = [1,2];
+def b = [4,5];
+consola::pintar(a+b,a,b);
+
+fn ordenar(lista, ini, fin) {
+  si ini < fin {
+    const piv = posicionPivote(lista, ini, fin);
+    ordenar(lista, ini, piv - 1);
+    ordenar(lista, piv + 1, fin);
+  }
+}
+fn posicionPivote(lista, ini, fin) {
+  const pivote = lista[fin];
+  def i = ini;
+  def j = ini;
+  mien j < fin{
+    consola::pintar(i,j, lista[j], lista[j] < pivote);
+    si lista[j] < pivote {
+      def temp = lista[i];
+      lista[i] = lista[j];
+      lista[j] = temp;
+      i=i+1;
+    }
+    j=j+1;
+  }
+  def temp = lista[i];
+  lista[i] = lista[fin];
+  lista[fin] = temp;
+  ret i;
+}
+
+def c = b+a;
+def fin_c = c::longitud;
+consola::pintar(c);
+ordenar(c, 0, fin_c-1);
+consola::pintar(c);

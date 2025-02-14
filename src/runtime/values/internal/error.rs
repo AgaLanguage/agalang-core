@@ -151,6 +151,14 @@ impl traits::AgalValuable for AgalError {
   ) -> Result<primitive::AgalNumber, super::AgalThrow> {
     todo!()
   }
+  
+  fn equals(&self, other: &Self) -> bool {
+        todo!()
+    }
+  
+  fn less_than(&self, other: &Self) -> bool {
+        todo!()
+    }
 }
 impl traits::ToAgalValue for AgalError {
   fn to_value(self) -> AgalValue {

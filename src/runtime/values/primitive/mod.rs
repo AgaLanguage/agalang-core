@@ -242,4 +242,26 @@ impl traits::AgalValuable for AgalPrimitive {
       Self::Byte(b) => b.call(stack, env, this, args, modules).await,
     }
   }
+
+  fn equals(&self, other: &Self) -> bool {
+    match (self, other) {
+      (Self::Boolean(b1), Self::Boolean(b2)) => b1 == b2,
+      (Self::Number(n1), Self::Number(n2)) => n1 == n2,
+      (Self::String(s1), Self::String(s2)) => s1 == s2,
+      (Self::Char(c1), Self::Char(c2)) => c1 == c2,
+      (Self::Byte(b1), Self::Byte(b2)) => b1 == b2,
+      _ => false,
+    }
+  }
+
+  fn less_than(&self, other: &Self) -> bool {
+    match (self, other) {
+      (Self::Boolean(b1), Self::Boolean(b2)) => b1 < b2,
+      (Self::Number(n1), Self::Number(n2)) => n1 < n2,
+      (Self::String(s1), Self::String(s2)) => s1 < s2,
+      (Self::Char(c1), Self::Char(c2)) => c1 < c2,
+      (Self::Byte(b1), Self::Byte(b2)) => b1 < b2,
+      _ => false,
+    }
+  }
 }

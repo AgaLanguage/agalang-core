@@ -250,4 +250,28 @@ impl traits::AgalValuable for AgalComplex {
       Self::Class(value) => value.to_agal_number(stack),
     }
   }
+
+  fn equals(&self, other: &Self) -> bool {
+    match (self, other) {
+      (Self::SuperInstance(a), Self::SuperInstance(b)) => a.equals(b),
+      (Self::Function(a), Self::Function(b)) => a.equals(b),
+      (Self::Promise(a), Self::Promise(b)) => a.equals(b),
+      (Self::Object(a), Self::Object(b)) => a.equals(b),
+      (Self::Array(a), Self::Array(b)) => a.equals(b),
+      (Self::Class(a), Self::Class(b)) => a.equals(b),
+      _ => false,
+    }
+  }
+
+  fn less_than(&self, other: &Self) -> bool {
+    match (self, other) {
+      (Self::SuperInstance(a), Self::SuperInstance(b)) => a.less_than(b),
+      (Self::Function(a), Self::Function(b)) => a.less_than(b),
+      (Self::Promise(a), Self::Promise(b)) => a.less_than(b),
+      (Self::Object(a), Self::Object(b)) => a.less_than(b),
+      (Self::Array(a), Self::Array(b)) => a.less_than(b),
+      (Self::Class(a), Self::Class(b)) => a.less_than(b),
+      _ => false,
+    }
+  }
 }

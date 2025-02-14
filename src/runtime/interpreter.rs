@@ -175,7 +175,7 @@ pub fn interpreter(
       Node::Block(block) => {
         let mut result = AgalValue::Never.as_ref();
         for statement in block.body.iter() {
-          let result = interpreter(
+          result = interpreter(
             statement.clone().to_box(),
             stack.clone(),
             env.clone(),
@@ -240,9 +240,17 @@ pub fn interpreter(
           .await?;
           args.push(arg);
         }
-        callee
+        let ret = callee
           .call(stack.clone(), env.clone(), this, args, modules.clone())
-          .await
+          .await?;
+        if ret.is_return() {
+          ret.into_return().unwrap_or(AgalValue::Never.to_ref_value())
+        } else if ret.is_stop() {
+          AgalValue::Never.to_ref_value()
+        } else {
+          ret
+        }
+        .to_result()
       }
       Node::Class(class) => {
         let extend_of_value = if let AgalComplex::Class(class) = {
@@ -308,7 +316,7 @@ pub fn interpreter(
           value = interpreter(
             do_while.body.clone().to_node().to_box(),
             stack.clone(),
-            env.clone(),
+            env.crate_child(false),
             modules.clone(),
           )
           .await?;
@@ -441,7 +449,7 @@ pub fn interpreter(
           value = interpreter(
             for_node.body.clone().to_node().to_box(),
             stack.clone(),
-            env.clone(),
+            env.crate_child(false),
             modules.clone(),
           )
           .await?;
@@ -476,7 +484,7 @@ pub fn interpreter(
           func.is_async,
           func.params.clone(),
           func.body.clone(),
-          env.clone(),
+          env.crate_child(false),
         )
         .to_ref_value();
         env.define(stack, &func.name, function, true, &node)
@@ -754,7 +762,7 @@ pub fn interpreter(
           value = interpreter(
             body.clone().to_box(),
             stack.clone(),
-            env.clone(),
+            env.crate_child(false),
             modules.clone(),
           )
           .await?;

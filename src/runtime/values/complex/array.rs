@@ -1,12 +1,17 @@
 use std::{cell::RefCell, rc::Rc};
 
-use crate::runtime::{
-  self,
-  values::{
-    self, internal, primitive,
-    traits::{self, AgalValuable as _, ToAgalValue as _},
-    AgalValue,
+use crate::{
+  runtime::{
+    self,
+    values::{
+      self, error_message,
+      internal::{self, AgalThrow},
+      primitive::{self, AgalBoolean, AgalNumber},
+      traits::{self, AgalValuable, ToAgalValue as _},
+      AgalValue,
+    },
   },
+  OnError, ToResult,
 };
 use parser::util::RefValue;
 
@@ -33,6 +38,14 @@ impl AgalArray {
       buffer.push(byte?.to_u8());
     }
     Ok(buffer)
+  }
+  pub fn set(&self, index: usize, value: values::DefaultRefAgalValue) -> values::DefaultRefAgalValue {
+    let mut borrowed = &mut *self.0.borrow_mut();
+    if index >= borrowed.len() {
+      borrowed.extend(std::iter::repeat(values::AgalValue::Never.to_ref_value()).take(index - borrowed.clone().len()));
+    }
+    borrowed[index] = value;
+    borrowed[index].clone()
   }
 }
 
@@ -109,28 +122,37 @@ impl traits::AgalValuable for AgalArray {
   }
 
   fn get_keys(&self) -> Vec<String> {
-    todo!()
+    (0..self.0.borrow().len()).map(|i| format!("{i}")).collect()
   }
 
   fn to_agal_byte(
     &self,
     stack: RefValue<runtime::Stack>,
   ) -> Result<primitive::AgalByte, internal::AgalThrow> {
-    todo!()
+    AgalThrow::Params {
+      type_error: parser::internal::ErrorNames::TypeError,
+      message: error_message::TO_AGAL_BYTE.to_string(),
+      stack,
+    }
+    .throw()
   }
 
   fn to_agal_boolean(
     &self,
     stack: RefValue<runtime::Stack>,
   ) -> Result<primitive::AgalBoolean, internal::AgalThrow> {
-    todo!()
+    Ok(if (self.0.borrow().len() == 0) {
+      primitive::AgalBoolean::False
+    } else {
+      primitive::AgalBoolean::True
+    })
   }
 
   fn to_agal_array(
     &self,
     stack: RefValue<runtime::Stack>,
   ) -> Result<values::RefAgalValue<AgalArray>, internal::AgalThrow> {
-    todo!()
+    Ok(self.clone().as_ref())
   }
 
   fn binary_operation(
@@ -140,7 +162,71 @@ impl traits::AgalValuable for AgalArray {
     operator: &str,
     right: values::DefaultRefAgalValue,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
-    todo!()
+    let other = if let AgalValue::Complex(c) = right.un_ref() {
+      c.un_ref()
+    } else {
+      return internal::AgalThrow::Params {
+        type_error: parser::internal::ErrorNames::TypeError,
+        message: format!(
+          "No se puede operar '{} {} {}'",
+          self.get_name(),
+          operator,
+          right.get_name()
+        ),
+        stack,
+      }
+      .throw();
+    };
+    match (other.clone(), operator) {
+      (AgalComplex::Array(a), "+") => {
+        let vec = self.to_vec();
+        let other_vec = a.un_ref().to_vec();
+        let result = vec![vec.borrow().clone(), other_vec.borrow().clone()].concat();
+        AgalArray::new(result).to_result()
+      }
+      (AgalComplex::Array(a), ">=") => {
+        let ref l = a.un_ref();
+        AgalBoolean::new(l.less_than(self) || self.equals(l)).to_result()
+      }
+      (AgalComplex::Array(a), "<=") => {
+        let ref l = a.un_ref();
+        AgalBoolean::new(self.less_than(l) || self.equals(l)).to_result()
+      }
+      (AgalComplex::Array(a), ">") => {
+        let ref l = a.un_ref();
+        AgalBoolean::new(l.less_than(self)).to_result()
+      }
+      (AgalComplex::Array(a), "<") => {
+        let ref l = a.un_ref();
+        AgalBoolean::new(self.less_than(l)).to_result()
+      }
+      (_, "??") => self.clone().to_result(),
+      (_, "||") => {
+        if self.to_agal_boolean(stack)?.as_bool() == true {
+          self.clone().to_result()
+        } else {
+          other.to_result()
+        }
+      }
+      (_, "&&") => {
+        if self.to_agal_boolean(stack)?.as_bool() == false {
+          self.clone().to_result()
+        } else {
+          other.to_result()
+        }
+      }
+      (_, _) => internal::AgalThrow::Params {
+        type_error: parser::internal::ErrorNames::TypeError,
+        message: format!(
+          "No se puede operar '{} {} {}'",
+          self.get_name(),
+          operator,
+          right.get_name()
+        ),
+        stack,
+      }
+      .throw(),
+    }
   }
 
   fn unary_back_operator(
@@ -149,7 +235,16 @@ impl traits::AgalValuable for AgalArray {
     env: runtime::RefEnvironment,
     operator: &str,
   ) -> values::ResultAgalValue {
-    todo!()
+    if operator == "?" {
+      self.clone().to_result()
+    } else {
+      internal::AgalThrow::Params {
+        type_error: parser::internal::ErrorNames::TypeError,
+        message: format!("No se puede aplicar '{}{}'", self.get_name(), operator),
+        stack,
+      }
+      .throw()
+    }
   }
 
   fn unary_operator(
@@ -158,7 +253,17 @@ impl traits::AgalValuable for AgalArray {
     env: runtime::RefEnvironment,
     operator: &str,
   ) -> values::ResultAgalValue {
-    todo!()
+    match operator {
+      "?" => self.to_agal_boolean(stack)?.to_result(),
+      "!" => self.to_agal_boolean(stack)?.not().to_result(),
+      "+" => self.to_agal_number(stack)?.to_result(),
+      _ => internal::AgalThrow::Params {
+        type_error: parser::internal::ErrorNames::TypeError,
+        message: format!("No se puede aplicar '{}{}'", operator, self.get_name()),
+        stack,
+      }
+      .throw(),
+    }
   }
 
   fn get_object_property(
@@ -167,7 +272,22 @@ impl traits::AgalValuable for AgalArray {
     env: runtime::RefEnvironment,
     key: &str,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
-    todo!()
+    let is_number = usize::from_str_radix(key, 10).on_error(AgalThrow::Params {
+      type_error: parser::internal::ErrorNames::TypeError,
+      message: error_message::TO_AGAL_NUMBER.to_string(),
+      stack: stack.clone(),
+    })?;
+    self
+      .to_vec()
+      .borrow()
+      .get(is_number)
+      .on_error(AgalThrow::Params {
+        type_error: parser::internal::ErrorNames::TypeError,
+        message: format!("'{}' no es un indice valido", is_number),
+        stack,
+      })?
+      .clone()
+      .to_result()
   }
 
   fn set_object_property(
@@ -177,7 +297,20 @@ impl traits::AgalValuable for AgalArray {
     key: &str,
     value: values::DefaultRefAgalValue,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
-    todo!()
+    let index = usize::from_str_radix(key, 10).on_error(AgalThrow::Params {
+      type_error: parser::internal::ErrorNames::TypeError,
+      message: error_message::TO_AGAL_NUMBER.to_string(),
+      stack: stack.clone(),
+    })?;
+    let len = self.to_vec().borrow().len();
+    let index = if index <= 0 {
+      0
+    } else if index < len {
+      index
+    } else {
+      len
+    };
+    self.set(index, value).to_result()
   }
 
   fn get_instance_property(
@@ -186,7 +319,17 @@ impl traits::AgalValuable for AgalArray {
     env: runtime::RefEnvironment,
     key: &str,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
-    todo!()
+    if key == "longitud" {
+      let length = self.to_vec().borrow().len();
+      AgalNumber::Integer(length as i32).to_result()
+    }else {
+      internal::AgalThrow::Params {
+        type_error: parser::internal::ErrorNames::TypeError,
+        message: format!("No se puede acceder a la propiedad '{}' de {}", key, self.get_name()),
+        stack,
+      }
+      .throw()
+    }
   }
 
   async fn call(
@@ -197,13 +340,30 @@ impl traits::AgalValuable for AgalArray {
     args: Vec<values::DefaultRefAgalValue>,
     modules: RefValue<crate::Modules>,
   ) -> Result<crate::runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
-    todo!()
+    AgalThrow::Params {
+      type_error: parser::internal::ErrorNames::TypeError,
+      message: error_message::CALL.to_string(),
+      stack,
+    }
+    .throw()
   }
 
   fn to_agal_number(
     &self,
     stack: RefValue<runtime::Stack>,
   ) -> Result<primitive::AgalNumber, internal::AgalThrow> {
+    let len = self.to_vec().borrow().len();
+    Ok(primitive::AgalNumber::Integer(len as i32))
+  }
+
+  fn equals(&self, other: &Self) -> bool {
     todo!()
+  }
+
+  fn less_than(&self, other: &Self) -> bool {
+    let vec = self.to_vec();
+    let other_vec = other.to_vec();
+    let x = vec.borrow().clone().len() < other_vec.borrow().clone().len();
+    x
   }
 }

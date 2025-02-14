@@ -78,7 +78,10 @@ impl traits::AgalValuable for AgalObject {
     key: &str,
     value: values::DefaultRefAgalValue,
   ) -> values::ResultAgalValue {
-    let hashmap = &mut *self.0.as_ref().borrow_mut();
+    let mut hashmap = self.0.as_ref().borrow_mut();
+    if hashmap.contains_key(key) {
+      hashmap.remove(key);
+    }
     hashmap.insert(key.to_string(), value.clone());
     Ok(value.clone())
   }
@@ -175,4 +178,12 @@ impl traits::AgalValuable for AgalObject {
   ) -> Result<primitive::AgalNumber, internal::AgalThrow> {
     todo!()
   }
+  
+  fn equals(&self, other: &Self) -> bool {
+        todo!()
+    }
+  
+  fn less_than(&self, other: &Self) -> bool {
+        todo!()
+    }
 }

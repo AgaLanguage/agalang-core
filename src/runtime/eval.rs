@@ -60,8 +60,7 @@ async fn eval(
     Ok(value) => value,
     Err(err) => {
       let type_err = internal::errors::ErrorNames::SyntaxError;
-      let err = internal::ErrorTypes::StringError(err.message);
-      let data = internal::errors::error_to_string(&type_err, err);
+      let data = internal::errors::error_to_string(&type_err, parser::node_error(&err));
       internal::print_error(data);
       return Err(());
     }

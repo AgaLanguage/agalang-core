@@ -6,8 +6,8 @@
   - `-(value)` transforma a negativo
   - `~(value)` quita presicion (redondea hacia abajo)
   - `(value)?` si el valor es un error (lanzado) se transforma a nulo. Ejemplo: `1/0?` es nulo.
-  - `(value1) && (value2)` comprueba si ambos valores son verdaderos
-  - `(value1) || (value2)` comprueba si uno de los valores es verdadero
+  - `(value1) && (value2)` regresa el primer valor falso o el ultimo verdadero
+  - `(value1) || (value2)` regresa el primer valor verdadero o el ultimo falso
   - `(value1) ?? (value2)` si el valor1 es nulo, devuelve el valor2
   - `(value1) = (value2)` asigna el valor2 al valor1
   - `(value1) == (value2)` comprueba si ambos valores son iguales

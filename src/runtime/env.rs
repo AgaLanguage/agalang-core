@@ -112,7 +112,7 @@ impl Environment {
         stack,
       });
     }
-    if self.has(name, node) {
+    if self._has(name) {
       return Err(internal::AgalThrow::Params {
         type_error: ErrorNames::EnvironmentError,
         message: format!("La variable {} ya ha sido declarada", name),
@@ -145,7 +145,7 @@ impl Environment {
     if !self.has(name, node) {
       return Err(internal::AgalThrow::Params {
         type_error: ErrorNames::EnvironmentError,
-        message: format!("La variable {} ya ha sido declarada", name),
+        message: format!("La variable {} no ha sido declarada", name),
         stack,
       });
     }
@@ -156,17 +156,14 @@ impl Environment {
         stack,
       });
     }
-    self
-      .variables
-      .borrow_mut()
-      .insert(name.to_string(), value.clone());
-    Ok(value)
+    Ok(self.resolve(name, node).set(name, value))
   }
   pub fn set(&mut self, name: &str, value: DefaultRefAgalValue) -> DefaultRefAgalValue {
-    self
-      .variables
-      .borrow_mut()
-      .insert(name.to_string(), value.clone());
+    let mut hashmap = self.variables.borrow_mut();
+    if hashmap.contains_key(name) {
+      hashmap.remove(name);
+    }
+    hashmap.insert(name.to_string(), value.clone());
     value
   }
   pub fn get(&self, stack: RefValue<Stack>, name: &str, node: &Node) -> ResultAgalValue {

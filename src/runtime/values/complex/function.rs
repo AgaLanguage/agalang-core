@@ -203,4 +203,12 @@ impl traits::AgalValuable for AgalFunction {
   ) -> Result<primitive::AgalNumber, internal::AgalThrow> {
     todo!()
   }
+  
+  fn equals(&self, other: &Self) -> bool {
+        todo!()
+    }
+  
+  fn less_than(&self, other: &Self) -> bool {
+        todo!()
+    }
 }

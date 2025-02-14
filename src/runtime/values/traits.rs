@@ -118,4 +118,8 @@ pub trait AgalValuable {
     args: Vec<DefaultRefAgalValue>,
     modules: RefValue<Modules>,
   ) -> Result<crate::runtime::values::DefaultRefAgalValue, internal::AgalThrow>;
+  /// self == other
+  fn equals(&self, other: &Self) -> bool;
+  /// self < other
+  fn less_than(&self, other: &Self) -> bool;
 }

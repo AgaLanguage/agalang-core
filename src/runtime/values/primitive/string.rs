@@ -148,6 +148,14 @@ impl traits::AgalValuable for AgalChar {
   ) -> Result<crate::runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
     todo!()
   }
+
+  fn equals(&self, other: &Self) -> bool {
+    self.as_char() == other.as_char()
+  }
+
+  fn less_than(&self, other: &Self) -> bool {
+    (self.as_char() as u16) < (other.as_char() as u16)
+  }
 }
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -347,5 +355,13 @@ impl traits::AgalValuable for AgalString {
       stack,
     }
     .to_result()
+  }
+
+  fn equals(&self, other: &Self) -> bool {
+    self.to_string() == other.to_string()
+  }
+
+  fn less_than(&self, other: &Self) -> bool {
+    self.0.len() < other.0.len()
   }
 }

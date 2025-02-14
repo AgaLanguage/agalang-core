@@ -3,9 +3,7 @@ use crate::{
   runtime::{
     self,
     values::{
-      internal,
-      traits::{self, AgalValuable as _, ToAgalValue as _},
-      AgalValue,
+      error_message, internal::{self, AgalThrow}, traits::{self, AgalValuable as _, ToAgalValue as _}, AgalValue
     },
     FALSE_KEYWORD, TRUE_KEYWORD,
   },
@@ -103,7 +101,26 @@ impl traits::AgalValuable for AgalBoolean {
     operator: &str,
     right: runtime::values::DefaultRefAgalValue,
   ) -> Result<runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
-    todo!()
+    let x = right.clone();
+    let x = x.borrow();
+    let prim = if let AgalValue::Primitive(p) = &*x {
+      &*p.borrow()
+    } else {
+      return Err(AgalThrow::Params {
+        type_error: parser::internal::ErrorNames::TypeError,
+        message: error_message::BINARY_OPERATION(self.to_ref_value(), operator, right.clone()),
+        stack,
+      });
+    };
+    match (prim,operator) {
+      (AgalPrimitive::Boolean(b), "&&") => self.and(b).to_result(),
+      (AgalPrimitive::Boolean(b), "||") => self.or(b).to_result(),
+      _ => Err(AgalThrow::Params {
+        type_error: parser::internal::ErrorNames::TypeError,
+        message: error_message::BINARY_OPERATION(self.to_ref_value(), operator, right.clone()),
+        stack,
+      }),
+    }
   }
 
   fn unary_back_operator(
@@ -168,5 +185,13 @@ impl traits::AgalValuable for AgalBoolean {
     stack: parser::util::RefValue<runtime::Stack>,
   ) -> Result<super::AgalNumber, internal::AgalThrow> {
     todo!()
+  }
+
+  fn equals(&self, other: &Self) -> bool {
+    self == other
+  }
+
+  fn less_than(&self, other: &Self) -> bool {
+    self.as_bool() < other.as_bool()
   }
 }

@@ -181,4 +181,12 @@ impl traits::AgalValuable for AgalPromise {
   ) -> Result<primitive::AgalNumber, internal::AgalThrow> {
     todo!()
   }
+  
+  fn equals(&self, other: &Self) -> bool {
+        todo!()
+    }
+  
+  fn less_than(&self, other: &Self) -> bool {
+        todo!()
+    }
 }

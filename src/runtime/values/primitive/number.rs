@@ -1,4 +1,5 @@
 use parser::util::RefValue;
+use std::ops::{Add, Div, Mul, Rem, Sub};
 
 use crate::{
   colors,
@@ -14,7 +15,7 @@ use crate::{
   },
 };
 
-use super::{string::AgalString, AgalPrimitive};
+use super::{string::AgalString, AgalBoolean, AgalPrimitive};
 
 type Integer = i32;
 type Decimal = f32;
@@ -24,6 +25,36 @@ pub enum AgalNumber {
   Integer(Integer),
   Decimal(Decimal),
 }
+
+macro_rules! a {
+    ($type_val:ty, $type_other:ty, $trait_name:ident, $fn_name:ident, $token:tt) => {
+      impl $trait_name<$type_other> for $type_val {
+          type Output = AgalNumber;
+          fn $fn_name(self, other: $type_other) -> AgalNumber {
+            match (self, other) {
+              (AgalNumber::Decimal(a), AgalNumber::Decimal(b)) => AgalNumber::Decimal(a $token b),
+              (AgalNumber::Integer(a), AgalNumber::Integer(b)) => AgalNumber::Integer(a $token b),
+              (a, b) => a.to_agal_dec() $token b.to_agal_dec(),
+            }
+          }
+      }
+    };
+}
+/// Genera el codigo nesesario para las implementaciones de las traits de operaciones
+macro_rules! impl_agal {
+  ($trait_name:ident, $fn_name:ident, $token:tt) => {
+    a!(AgalNumber, AgalNumber, $trait_name, $fn_name, $token);
+    a!(&AgalNumber, AgalNumber, $trait_name, $fn_name, $token);
+    a!(AgalNumber, &AgalNumber, $trait_name, $fn_name, $token);
+    a!(&AgalNumber, &AgalNumber, $trait_name, $fn_name, $token);
+  };
+}
+
+impl_agal![Add,add,+];
+impl_agal![Sub,sub,-];
+impl_agal![Mul,mul,*];
+impl_agal![Div,div,/];
+impl_agal![Rem,rem,%];
 
 impl AgalNumber {
   pub fn to_float(&self) -> f32 {
@@ -61,14 +92,8 @@ impl AgalNumber {
       _ => false,
     }
   }
-  pub fn mul(&self, other: &Self) -> Self {
-    match (self, other) {
-      (AgalNumber::Integer(a), AgalNumber::Integer(b)) => AgalNumber::Integer(a * b),
-      (AgalNumber::Decimal(a), AgalNumber::Decimal(b)) => AgalNumber::Decimal(a * b),
-      _ => AgalNumber::Integer(0),
-    }
-  }
 }
+
 impl traits::ToAgalValue for AgalNumber {
   fn to_value(self) -> AgalValue {
     AgalPrimitive::Number(self).to_value()
@@ -127,7 +152,55 @@ impl traits::AgalValuable for AgalNumber {
     operator: &str,
     right: runtime::values::DefaultRefAgalValue,
   ) -> Result<runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
-    todo!()
+    let x = right.clone();
+    let x = x.borrow();
+    let prim = if let AgalValue::Primitive(p) = &*x {
+      &*p.borrow()
+    } else {
+      return Err(AgalThrow::Params {
+        type_error: parser::internal::ErrorNames::TypeError,
+        message: error_message::BINARY_OPERATION(self.to_ref_value(), operator, right.clone()),
+        stack,
+      });
+    };
+    match (prim, operator) {
+      (AgalPrimitive::Number(number), "<") => AgalBoolean::new(self.less_than(number)).to_result(),
+      (AgalPrimitive::Number(number), "<=") => {
+        AgalBoolean::new(self.less_than(number) || self.equals(number)).to_result()
+      }
+      (AgalPrimitive::Number(number), ">") => AgalBoolean::new(number.less_than(self)).to_result(),
+      (AgalPrimitive::Number(number), ">=") => {
+        AgalBoolean::new(self.equals(number) || number.less_than(self)).to_result()
+      }
+      (AgalPrimitive::Number(number), "==") => AgalBoolean::new(self.equals(number)).to_result(),
+      (AgalPrimitive::Number(number), "!=") => {
+        AgalBoolean::new(self.equals(number)).not().to_result()
+      }
+      (AgalPrimitive::Number(number), "&&") => {
+        if self.is_zero() {
+          self.to_result()
+        } else {
+          right.to_result()
+        }
+      }
+      (AgalPrimitive::Number(number), "||") => {
+        if self.is_zero() {
+          right.to_result()
+        } else {
+          self.to_result()
+        }
+      }
+      (AgalPrimitive::Number(number), "+") => (self + number).to_result(),
+      (AgalPrimitive::Number(number), "-") => (self - number).to_result(),
+      (AgalPrimitive::Number(number), "*") => (self * number).to_result(),
+      (AgalPrimitive::Number(number), "/") => (self / number).to_result(),
+      (AgalPrimitive::Number(number), "%") => (self % number).to_result(),
+      _ => Err(AgalThrow::Params {
+        type_error: parser::internal::ErrorNames::TypeError,
+        message: error_message::BINARY_OPERATION(self.to_ref_value(), operator, right),
+        stack,
+      }),
+    }
   }
 
   fn unary_back_operator(
@@ -248,5 +321,21 @@ impl traits::AgalValuable for AgalNumber {
     stack: RefValue<runtime::Stack>,
   ) -> Result<super::AgalNumber, internal::AgalThrow> {
     Ok(self.clone())
+  }
+
+  fn equals(&self, other: &Self) -> bool {
+    match (self, other) {
+      (Self::Decimal(d1), Self::Decimal(d2)) => d1 == d2,
+      (Self::Integer(i1), Self::Integer(i2)) => i1 == i2,
+      _ => false,
+    }
+  }
+
+  fn less_than(&self, other: &Self) -> bool {
+    match (self, other) {
+      (Self::Decimal(d1), Self::Decimal(d2)) => d1 < d2,
+      (Self::Integer(i1), Self::Integer(i2)) => i1 < i2,
+      _ => false,
+    }
   }
 }
