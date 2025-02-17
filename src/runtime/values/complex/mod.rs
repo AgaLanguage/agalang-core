@@ -1,7 +1,7 @@
 use parser::util::RefValue;
 
 use crate::{
-  runtime::{env::RefEnvironment, stack::Stack},
+  runtime::{env::RefEnvironment, stack::RefStack},
   Modules,
 };
 
@@ -22,7 +22,7 @@ pub use object::*;
 mod promise;
 pub use promise::*;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum AgalComplex {
   SuperInstance(super::RefAgalValue<class::AgalPrototype>),
   Function(super::RefAgalValue<function::AgalFunction>),
@@ -47,19 +47,19 @@ impl traits::AgalValuable for AgalComplex {
       Self::Class(value) => value.get_name(),
     }
   }
-  fn to_agal_string(&self) -> Result<primitive::AgalString, internal::AgalThrow> {
+  fn to_agal_string(&self,stack: RefStack) -> Result<primitive::AgalString, internal::AgalThrow> {
     match self {
-      Self::SuperInstance(value) => value.to_agal_string(),
-      Self::Function(value) => value.to_agal_string(),
-      Self::Promise(value) => value.to_agal_string(),
-      Self::Object(value) => value.to_agal_string(),
-      Self::Array(value) => value.to_agal_string(),
-      Self::Class(value) => value.to_agal_string(),
+      Self::SuperInstance(value) => value.to_agal_string(stack),
+      Self::Function(value) => value.to_agal_string(stack),
+      Self::Promise(value) => value.to_agal_string(stack),
+      Self::Object(value) => value.to_agal_string(stack),
+      Self::Array(value) => value.to_agal_string(stack),
+      Self::Class(value) => value.to_agal_string(stack),
     }
   }
   fn to_agal_console(
     &self,
-    stack: RefValue<Stack>,
+    stack: RefStack,
     env: RefEnvironment,
   ) -> Result<primitive::AgalString, internal::AgalThrow> {
     match self {
@@ -73,7 +73,7 @@ impl traits::AgalValuable for AgalComplex {
   }
   fn get_object_property(
     &self,
-    stack: RefValue<Stack>,
+    stack: RefStack,
     env: RefEnvironment,
     key: &str,
   ) -> Result<super::DefaultRefAgalValue, internal::AgalThrow> {
@@ -88,7 +88,7 @@ impl traits::AgalValuable for AgalComplex {
   }
   fn set_object_property(
     &mut self,
-    stack: RefValue<Stack>,
+    stack: RefStack,
     env: RefEnvironment,
     key: &str,
     value: super::DefaultRefAgalValue,
@@ -104,7 +104,7 @@ impl traits::AgalValuable for AgalComplex {
   }
   fn get_instance_property(
     &self,
-    stack: RefValue<Stack>,
+    stack: RefStack,
     env: RefEnvironment,
     key: &str,
   ) -> Result<super::DefaultRefAgalValue, internal::AgalThrow> {
@@ -118,8 +118,8 @@ impl traits::AgalValuable for AgalComplex {
     }
   }
   async fn call(
-    &self,
-    stack: RefValue<Stack>,
+    &mut self,
+    stack: RefStack,
     env: RefEnvironment,
     this: super::DefaultRefAgalValue,
     args: Vec<super::DefaultRefAgalValue>,
@@ -148,7 +148,7 @@ impl traits::AgalValuable for AgalComplex {
 
   fn to_agal_byte(
     &self,
-    stack: RefValue<crate::runtime::Stack>,
+    stack: crate::runtime::RefStack,
   ) -> Result<primitive::AgalByte, internal::AgalThrow> {
     match self {
       Self::SuperInstance(value) => value.to_agal_byte(stack),
@@ -162,7 +162,7 @@ impl traits::AgalValuable for AgalComplex {
 
   fn to_agal_boolean(
     &self,
-    stack: RefValue<crate::runtime::Stack>,
+    stack: crate::runtime::RefStack,
   ) -> Result<primitive::AgalBoolean, internal::AgalThrow> {
     match self {
       Self::SuperInstance(value) => value.to_agal_boolean(stack),
@@ -176,7 +176,7 @@ impl traits::AgalValuable for AgalComplex {
 
   fn to_agal_array(
     &self,
-    stack: RefValue<crate::runtime::Stack>,
+    stack: crate::runtime::RefStack,
   ) -> Result<super::RefAgalValue<AgalArray>, internal::AgalThrow> {
     match self {
       Self::SuperInstance(value) => value.to_agal_array(stack),
@@ -190,7 +190,7 @@ impl traits::AgalValuable for AgalComplex {
 
   fn binary_operation(
     &self,
-    stack: RefValue<crate::runtime::Stack>,
+    stack: crate::runtime::RefStack,
     env: crate::runtime::RefEnvironment,
     operator: &str,
     right: super::DefaultRefAgalValue,
@@ -207,7 +207,7 @@ impl traits::AgalValuable for AgalComplex {
 
   fn unary_back_operator(
     &self,
-    stack: RefValue<crate::runtime::Stack>,
+    stack: crate::runtime::RefStack,
     env: crate::runtime::RefEnvironment,
     operator: &str,
   ) -> super::ResultAgalValue {
@@ -223,7 +223,7 @@ impl traits::AgalValuable for AgalComplex {
 
   fn unary_operator(
     &self,
-    stack: RefValue<crate::runtime::Stack>,
+    stack: crate::runtime::RefStack,
     env: crate::runtime::RefEnvironment,
     operator: &str,
   ) -> super::ResultAgalValue {
@@ -239,7 +239,7 @@ impl traits::AgalValuable for AgalComplex {
 
   fn to_agal_number(
     &self,
-    stack: RefValue<crate::runtime::Stack>,
+    stack: crate::runtime::RefStack,
   ) -> Result<primitive::AgalNumber, internal::AgalThrow> {
     match self {
       Self::SuperInstance(value) => value.to_agal_number(stack),

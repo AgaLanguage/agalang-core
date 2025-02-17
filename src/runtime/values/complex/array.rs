@@ -17,7 +17,7 @@ use parser::util::RefValue;
 
 use super::AgalComplex;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct AgalArray(RefValue<Vec<values::DefaultRefAgalValue>>);
 
 impl AgalArray {
@@ -27,7 +27,7 @@ impl AgalArray {
   pub fn to_vec(&self) -> RefValue<Vec<values::DefaultRefAgalValue>> {
     self.0.clone()
   }
-  pub fn to_buffer(&self, stack: RefValue<runtime::Stack>) -> Result<Vec<u8>, internal::AgalThrow> {
+  pub fn to_buffer(&self, stack: runtime::RefStack) -> Result<Vec<u8>, internal::AgalThrow> {
     let mut buffer = vec![];
     let vec = &*self.0.as_ref().borrow();
     for value in vec {
@@ -85,12 +85,12 @@ impl traits::AgalValuable for AgalArray {
   fn get_name(&self) -> String {
     "Lista".to_string()
   }
-  fn to_agal_string(&self) -> Result<primitive::AgalString, internal::AgalThrow> {
+  fn to_agal_string(&self,stack: runtime::RefStack) -> Result<primitive::AgalString, internal::AgalThrow> {
     let mut result = String::new();
     let vec = self.to_vec();
     let vec = &*vec.borrow();
     for (i, value) in vec.iter().enumerate() {
-      let str = value.try_to_string()?;
+      let str = value.try_to_string(stack.clone())?;
       result.push_str(&str);
       if i < vec.len() - 1 {
         result.push_str(", ");
@@ -100,7 +100,7 @@ impl traits::AgalValuable for AgalArray {
   }
   fn to_agal_console(
     &self,
-    stack: RefValue<runtime::Stack>,
+    stack: runtime::RefStack,
     env: runtime::RefEnvironment,
   ) -> Result<primitive::AgalString, internal::AgalThrow> {
     let mut result = String::new();
@@ -127,7 +127,7 @@ impl traits::AgalValuable for AgalArray {
 
   fn to_agal_byte(
     &self,
-    stack: RefValue<runtime::Stack>,
+    stack: runtime::RefStack,
   ) -> Result<primitive::AgalByte, internal::AgalThrow> {
     AgalThrow::Params {
       type_error: parser::internal::ErrorNames::TypeError,
@@ -139,7 +139,7 @@ impl traits::AgalValuable for AgalArray {
 
   fn to_agal_boolean(
     &self,
-    stack: RefValue<runtime::Stack>,
+    stack: runtime::RefStack,
   ) -> Result<primitive::AgalBoolean, internal::AgalThrow> {
     Ok(if (self.0.borrow().len() == 0) {
       primitive::AgalBoolean::False
@@ -150,14 +150,14 @@ impl traits::AgalValuable for AgalArray {
 
   fn to_agal_array(
     &self,
-    stack: RefValue<runtime::Stack>,
+    stack: runtime::RefStack,
   ) -> Result<values::RefAgalValue<AgalArray>, internal::AgalThrow> {
     Ok(self.clone().as_ref())
   }
 
   fn binary_operation(
     &self,
-    stack: RefValue<runtime::Stack>,
+    stack: runtime::RefStack,
     env: runtime::RefEnvironment,
     operator: &str,
     right: values::DefaultRefAgalValue,
@@ -231,7 +231,7 @@ impl traits::AgalValuable for AgalArray {
 
   fn unary_back_operator(
     &self,
-    stack: RefValue<runtime::Stack>,
+    stack: runtime::RefStack,
     env: runtime::RefEnvironment,
     operator: &str,
   ) -> values::ResultAgalValue {
@@ -249,7 +249,7 @@ impl traits::AgalValuable for AgalArray {
 
   fn unary_operator(
     &self,
-    stack: RefValue<runtime::Stack>,
+    stack: runtime::RefStack,
     env: runtime::RefEnvironment,
     operator: &str,
   ) -> values::ResultAgalValue {
@@ -268,7 +268,7 @@ impl traits::AgalValuable for AgalArray {
 
   fn get_object_property(
     &self,
-    stack: RefValue<runtime::Stack>,
+    stack: runtime::RefStack,
     env: runtime::RefEnvironment,
     key: &str,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
@@ -292,7 +292,7 @@ impl traits::AgalValuable for AgalArray {
 
   fn set_object_property(
     &mut self,
-    stack: RefValue<runtime::Stack>,
+    stack: runtime::RefStack,
     env: runtime::RefEnvironment,
     key: &str,
     value: values::DefaultRefAgalValue,
@@ -315,7 +315,7 @@ impl traits::AgalValuable for AgalArray {
 
   fn get_instance_property(
     &self,
-    stack: RefValue<runtime::Stack>,
+    stack: runtime::RefStack,
     env: runtime::RefEnvironment,
     key: &str,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
@@ -333,8 +333,8 @@ impl traits::AgalValuable for AgalArray {
   }
 
   async fn call(
-    &self,
-    stack: RefValue<runtime::Stack>,
+    &mut self,
+    stack: runtime::RefStack,
     env: runtime::RefEnvironment,
     this: values::DefaultRefAgalValue,
     args: Vec<values::DefaultRefAgalValue>,
@@ -350,7 +350,7 @@ impl traits::AgalValuable for AgalArray {
 
   fn to_agal_number(
     &self,
-    stack: RefValue<runtime::Stack>,
+    stack: runtime::RefStack,
   ) -> Result<primitive::AgalNumber, internal::AgalThrow> {
     let len = self.to_vec().borrow().len();
     Ok(primitive::AgalNumber::Integer(len as i32))
@@ -365,5 +365,13 @@ impl traits::AgalValuable for AgalArray {
     let other_vec = other.to_vec();
     let x = vec.borrow().clone().len() < other_vec.borrow().clone().len();
     x
+  }
+}
+
+impl IntoIterator for AgalArray {
+  type Item = values::DefaultRefAgalValue;
+  type IntoIter = std::vec::IntoIter<Self::Item>;
+  fn into_iter(self) -> Self::IntoIter {
+    self.0.borrow().clone().into_iter()
   }
 }

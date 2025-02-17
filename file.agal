@@ -1,37 +1,46 @@
-importar ':consola' como consola;
-def a = [1,2];
-def b = [4,5];
-consola::pintar(a+b,a,b);
+importar ':consola' como Consola;
+importar ':mate' como Mate;
 
-fn ordenar(lista, ini, fin) {
-  si ini < fin {
-    const piv = posicionPivote(lista, ini, fin);
-    ordenar(lista, ini, piv - 1);
-    ordenar(lista, piv + 1, fin);
+def c = [2,3,1];
+ordenar(c);
+Consola::pintar(c);
+
+fn ordenar(lista) {
+  def fin_c = lista::longitud;
+  si fin_c <= 0 {
+    ret lista;
   }
-}
-fn posicionPivote(lista, ini, fin) {
-  const pivote = lista[fin];
-  def i = ini;
-  def j = ini;
-  mien j < fin{
-    consola::pintar(i,j, lista[j], lista[j] < pivote);
-    si lista[j] < pivote {
-      def temp = lista[i];
-      lista[i] = lista[j];
-      lista[j] = temp;
-      i=i+1;
+  fn medioDeTres(ini, fin) {
+      def a = lista[ini];
+      def b = lista[fin];
+      def c = lista[Mate::suelo((ini + fin) / 2)];
+      ret Mate::min(Mate::max(a,b),Mate::max(b,c), Mate::max(c,a));
+  }
+  fn posicionPivote(ini, fin) {
+    const pivote = medioDeTres(ini, fin);
+    def i = ini;
+    def j = ini;
+    mien j < fin{
+      si lista[j] < pivote {
+        def temp = lista[i];
+        lista[i] = lista[j];
+        lista[j] = temp;
+        i+=1;
+      }
+      j+=1;
     }
-    j=j+1;
+    def temp = lista[i];
+    lista[i] = lista[fin];
+    lista[fin] = temp;
+    ret i;
   }
-  def temp = lista[i];
-  lista[i] = lista[fin];
-  lista[fin] = temp;
-  ret i;
+  fn quicksort(ini, fin) {
+    si ini < fin {
+      const piv = posicionPivote(ini, fin);
+      quicksort(ini, piv - 1);
+      quicksort(piv + 1, fin);
+    }
+  }
+  quicksort(0, fin_c-1);
+  ret lista;
 }
-
-def c = b+a;
-def fin_c = c::longitud;
-consola::pintar(c);
-ordenar(c, 0, fin_c-1);
-consola::pintar(c);

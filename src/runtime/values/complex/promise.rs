@@ -9,6 +9,7 @@ use std::{
   task::{Context, Poll},
 };
 
+use futures_util::FutureExt as _;
 use parser::util::RefValue;
 use tokio::task::JoinHandle;
 
@@ -25,37 +26,23 @@ type Callback = Box<dyn FnOnce(Resolver, Resolver)>;
 
 type ResultFuture = Result<values::DefaultRefAgalValue, internal::AgalThrow>;
 
-//#[derive(Clone)]
-pub struct Promise(Pin<Box<dyn Future<Output = ResultFuture>>>);
-impl Promise {
-  pub fn new(future: Pin<Box<dyn Future<Output = ResultFuture>>>) -> Self {
-    Self(future)
-  }
-}
-impl Future for Promise {
-  type Output = ResultFuture;
-  fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-    self.get_mut().0.as_mut().poll(cx)
-  }
-}
-
 pub enum AgalPromiseData {
-  Unresolved(Promise),
+  Unresolved(Pin<Box<dyn Future<Output = ResultFuture> + 'static>>),
   Resolved(ResultFuture),
 }
 impl AgalPromiseData {
-  pub fn new(inner: Promise) -> Self {
+  pub fn new(inner: Pin<Box<dyn Future<Output = ResultFuture> + 'static>>) -> Self {
     Self::Unresolved(inner)
   }
 }
 impl IntoFuture for AgalPromiseData {
   type Output = ResultFuture;
-  type IntoFuture = Promise;
+  type IntoFuture = Pin<Box<dyn Future<Output = ResultFuture> + 'static>>;
 
   fn into_future(self) -> Self::IntoFuture {
     match self {
       Self::Unresolved(inner) => inner,
-      Self::Resolved(value) => Promise::new(Box::pin(async move { value })),
+      Self::Resolved(value) => Box::pin(async move { value }),
     }
   }
 }
@@ -63,8 +50,13 @@ impl IntoFuture for AgalPromiseData {
 pub struct AgalPromise {
   pub data: AgalPromiseData,
 }
+impl std::fmt::Debug for AgalPromise {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "AgalPromise")
+  }
+}
 impl AgalPromise {
-  pub fn new(inner: Promise) -> Self {
+  pub fn new(inner: Pin<Box<dyn Future<Output = ResultFuture> + 'static>>) -> Self {
     Self {
       data: AgalPromiseData::Unresolved(inner),
     }
@@ -79,7 +71,7 @@ impl traits::AgalValuable for AgalPromise {
   fn get_name(&self) -> String {
     "Promesa".to_string()
   }
-  fn to_agal_string(&self) -> Result<primitive::AgalString, internal::AgalThrow> {
+  fn to_agal_string(&self,stack: crate::runtime::RefStack) -> Result<primitive::AgalString, internal::AgalThrow> {
     Ok(primitive::AgalString::from_string("Promise".to_string()))
   }
 
@@ -89,28 +81,28 @@ impl traits::AgalValuable for AgalPromise {
 
   fn to_agal_byte(
     &self,
-    stack: RefValue<crate::runtime::Stack>,
+    stack: crate::runtime::RefStack,
   ) -> Result<primitive::AgalByte, internal::AgalThrow> {
     todo!()
   }
 
   fn to_agal_boolean(
     &self,
-    stack: RefValue<crate::runtime::Stack>,
+    stack: crate::runtime::RefStack,
   ) -> Result<primitive::AgalBoolean, internal::AgalThrow> {
     todo!()
   }
 
   fn to_agal_array(
     &self,
-    stack: RefValue<crate::runtime::Stack>,
+    stack: crate::runtime::RefStack,
   ) -> Result<values::RefAgalValue<super::AgalArray>, internal::AgalThrow> {
     todo!()
   }
 
   fn binary_operation(
     &self,
-    stack: RefValue<crate::runtime::Stack>,
+    stack: crate::runtime::RefStack,
     env: crate::runtime::RefEnvironment,
     operator: &str,
     right: values::DefaultRefAgalValue,
@@ -120,7 +112,7 @@ impl traits::AgalValuable for AgalPromise {
 
   fn unary_back_operator(
     &self,
-    stack: RefValue<crate::runtime::Stack>,
+    stack: crate::runtime::RefStack,
     env: crate::runtime::RefEnvironment,
     operator: &str,
   ) -> values::ResultAgalValue {
@@ -129,7 +121,7 @@ impl traits::AgalValuable for AgalPromise {
 
   fn unary_operator(
     &self,
-    stack: RefValue<crate::runtime::Stack>,
+    stack: crate::runtime::RefStack,
     env: crate::runtime::RefEnvironment,
     operator: &str,
   ) -> values::ResultAgalValue {
@@ -138,7 +130,7 @@ impl traits::AgalValuable for AgalPromise {
 
   fn get_object_property(
     &self,
-    stack: RefValue<crate::runtime::Stack>,
+    stack: crate::runtime::RefStack,
     env: crate::runtime::RefEnvironment,
     key: &str,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
@@ -147,7 +139,7 @@ impl traits::AgalValuable for AgalPromise {
 
   fn set_object_property(
     &mut self,
-    stack: RefValue<crate::runtime::Stack>,
+    stack: crate::runtime::RefStack,
     env: crate::runtime::RefEnvironment,
     key: &str,
     value: values::DefaultRefAgalValue,
@@ -157,7 +149,7 @@ impl traits::AgalValuable for AgalPromise {
 
   fn get_instance_property(
     &self,
-    stack: RefValue<crate::runtime::Stack>,
+    stack: crate::runtime::RefStack,
     env: crate::runtime::RefEnvironment,
     key: &str,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
@@ -165,8 +157,8 @@ impl traits::AgalValuable for AgalPromise {
   }
 
   async fn call(
-    &self,
-    stack: RefValue<crate::runtime::Stack>,
+    &mut self,
+    stack: crate::runtime::RefStack,
     env: crate::runtime::RefEnvironment,
     this: values::DefaultRefAgalValue,
     args: Vec<values::DefaultRefAgalValue>,
@@ -177,7 +169,7 @@ impl traits::AgalValuable for AgalPromise {
 
   fn to_agal_number(
     &self,
-    stack: RefValue<crate::runtime::Stack>,
+    stack: crate::runtime::RefStack,
   ) -> Result<primitive::AgalNumber, internal::AgalThrow> {
     todo!()
   }

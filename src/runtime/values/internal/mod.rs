@@ -14,7 +14,7 @@ pub use error::*;
 mod lazy;
 pub use lazy::*;
 
-#[derive(Clone)]
+#[derive(Clone,Debug)]
 pub enum AgalInternal {
   Lazy(AgalLazy),
   Throw(AgalThrow),
@@ -60,18 +60,18 @@ impl traits::AgalValuable for AgalInternal {
       Self::NativeFunction(func) => func.get_name(),
     }
   }
-  fn to_agal_string(&self) -> Result<primitive::AgalString, AgalThrow> {
+  fn to_agal_string(&self,stack: runtime::RefStack) -> Result<primitive::AgalString, AgalThrow> {
     match self {
-      Self::Lazy(lazy) => lazy.to_agal_string(),
-      Self::Throw(throw) => throw.to_agal_string(),
-      Self::Error(error) => error.to_agal_string(),
-      Self::Return(val) => val.to_agal_string(),
-      Self::NativeFunction(func) => func.to_agal_string(),
+      Self::Lazy(lazy) => lazy.to_agal_string(stack),
+      Self::Throw(throw) => throw.to_agal_string(stack),
+      Self::Error(error) => error.to_agal_string(stack),
+      Self::Return(val) => val.to_agal_string(stack),
+      Self::NativeFunction(func) => func.to_agal_string(stack),
     }
   }
   fn to_agal_console(
     &self,
-    stack: parser::util::RefValue<runtime::Stack>,
+    stack: runtime::RefStack,
     env: runtime::RefEnvironment,
   ) -> Result<primitive::AgalString, AgalThrow> {
     match self {
@@ -83,8 +83,8 @@ impl traits::AgalValuable for AgalInternal {
     }
   }
   async fn call(
-    &self,
-    stack: parser::util::RefValue<runtime::Stack>,
+    &mut self,
+    stack: runtime::RefStack,
     env: runtime::RefEnvironment,
     this: super::DefaultRefAgalValue,
     args: Vec<super::DefaultRefAgalValue>,
@@ -111,7 +111,7 @@ impl traits::AgalValuable for AgalInternal {
 
   fn to_agal_byte(
     &self,
-    stack: parser::util::RefValue<runtime::Stack>,
+    stack: runtime::RefStack,
   ) -> Result<primitive::AgalByte, internal::AgalThrow> {
     match self {
       Self::Error(e) => e.to_agal_byte(stack),
@@ -124,7 +124,7 @@ impl traits::AgalValuable for AgalInternal {
 
   fn to_agal_boolean(
     &self,
-    stack: parser::util::RefValue<runtime::Stack>,
+    stack: runtime::RefStack,
   ) -> Result<primitive::AgalBoolean, internal::AgalThrow> {
     match self {
       Self::Error(e) => e.to_agal_boolean(stack),
@@ -137,7 +137,7 @@ impl traits::AgalValuable for AgalInternal {
 
   fn to_agal_array(
     &self,
-    stack: parser::util::RefValue<runtime::Stack>,
+    stack: runtime::RefStack,
   ) -> Result<super::RefAgalValue<super::complex::AgalArray>, internal::AgalThrow> {
     match self {
       Self::Error(e) => e.to_agal_array(stack),
@@ -150,7 +150,7 @@ impl traits::AgalValuable for AgalInternal {
 
   fn binary_operation(
     &self,
-    stack: parser::util::RefValue<runtime::Stack>,
+    stack: runtime::RefStack,
     env: runtime::RefEnvironment,
     operator: &str,
     right: super::DefaultRefAgalValue,
@@ -166,7 +166,7 @@ impl traits::AgalValuable for AgalInternal {
 
   fn unary_back_operator(
     &self,
-    stack: parser::util::RefValue<runtime::Stack>,
+    stack: runtime::RefStack,
     env: runtime::RefEnvironment,
     operator: &str,
   ) -> super::ResultAgalValue {
@@ -181,7 +181,7 @@ impl traits::AgalValuable for AgalInternal {
 
   fn unary_operator(
     &self,
-    stack: parser::util::RefValue<runtime::Stack>,
+    stack: runtime::RefStack,
     env: runtime::RefEnvironment,
     operator: &str,
   ) -> super::ResultAgalValue {
@@ -196,7 +196,7 @@ impl traits::AgalValuable for AgalInternal {
 
   fn get_object_property(
     &self,
-    stack: parser::util::RefValue<runtime::Stack>,
+    stack: runtime::RefStack,
     env: runtime::RefEnvironment,
     key: &str,
   ) -> Result<super::DefaultRefAgalValue, internal::AgalThrow> {
@@ -211,7 +211,7 @@ impl traits::AgalValuable for AgalInternal {
 
   fn set_object_property(
     &mut self,
-    stack: parser::util::RefValue<runtime::Stack>,
+    stack: runtime::RefStack,
     env: runtime::RefEnvironment,
     key: &str,
     value: super::DefaultRefAgalValue,
@@ -227,7 +227,7 @@ impl traits::AgalValuable for AgalInternal {
 
   fn get_instance_property(
     &self,
-    stack: parser::util::RefValue<runtime::Stack>,
+    stack: runtime::RefStack,
     env: runtime::RefEnvironment,
     key: &str,
   ) -> Result<super::DefaultRefAgalValue, internal::AgalThrow> {
@@ -242,7 +242,7 @@ impl traits::AgalValuable for AgalInternal {
 
   fn to_agal_number(
     &self,
-    stack: parser::util::RefValue<runtime::Stack>,
+    stack: runtime::RefStack,
   ) -> Result<primitive::AgalNumber, internal::AgalThrow> {
     match self {
       Self::Error(e) => e.to_agal_number(stack),

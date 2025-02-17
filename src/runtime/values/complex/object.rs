@@ -18,7 +18,7 @@ use super::AgalComplex;
 type AgalHashMap = HashMap<String, values::DefaultRefAgalValue>;
 type RefAgalHashMap = Rc<RefCell<AgalHashMap>>;
 type RefAgalProto = values::RefAgalValue<super::AgalPrototype>;
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct AgalObject(RefAgalHashMap, Option<RefAgalProto>);
 
 impl AgalObject {
@@ -51,12 +51,12 @@ impl traits::AgalValuable for AgalObject {
   fn get_name(&self) -> String {
     "Objeto".to_string()
   }
-  fn to_agal_string(&self) -> Result<primitive::AgalString, internal::AgalThrow> {
+  fn to_agal_string(&self,stack: runtime::RefStack) -> Result<primitive::AgalString, internal::AgalThrow> {
     Ok(primitive::AgalString::from_string("<Objeto>".to_string()))
   }
   fn get_object_property(
     &self,
-    stack: parser::util::RefValue<runtime::Stack>,
+    stack: runtime::RefStack,
     env: runtime::RefEnvironment,
     key: &str,
   ) -> values::ResultAgalValue {
@@ -73,7 +73,7 @@ impl traits::AgalValuable for AgalObject {
   }
   fn set_object_property(
     &mut self,
-    stack: parser::util::RefValue<runtime::Stack>,
+    stack: runtime::RefStack,
     env: runtime::RefEnvironment,
     key: &str,
     value: values::DefaultRefAgalValue,
@@ -87,7 +87,7 @@ impl traits::AgalValuable for AgalObject {
   }
   fn get_instance_property(
     &self,
-    stack: parser::util::RefValue<runtime::Stack>,
+    stack: runtime::RefStack,
     env: runtime::RefEnvironment,
     key: &str,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
@@ -114,28 +114,28 @@ impl traits::AgalValuable for AgalObject {
 
   fn to_agal_byte(
     &self,
-    stack: parser::util::RefValue<runtime::Stack>,
+    stack: runtime::RefStack,
   ) -> Result<primitive::AgalByte, internal::AgalThrow> {
     todo!()
   }
 
   fn to_agal_boolean(
     &self,
-    stack: parser::util::RefValue<runtime::Stack>,
+    stack: runtime::RefStack,
   ) -> Result<primitive::AgalBoolean, internal::AgalThrow> {
     todo!()
   }
 
   fn to_agal_array(
     &self,
-    stack: parser::util::RefValue<runtime::Stack>,
+    stack: runtime::RefStack,
   ) -> Result<values::RefAgalValue<super::AgalArray>, internal::AgalThrow> {
     todo!()
   }
 
   fn binary_operation(
     &self,
-    stack: parser::util::RefValue<runtime::Stack>,
+    stack: runtime::RefStack,
     env: runtime::RefEnvironment,
     operator: &str,
     right: values::DefaultRefAgalValue,
@@ -145,7 +145,7 @@ impl traits::AgalValuable for AgalObject {
 
   fn unary_back_operator(
     &self,
-    stack: parser::util::RefValue<runtime::Stack>,
+    stack: runtime::RefStack,
     env: runtime::RefEnvironment,
     operator: &str,
   ) -> values::ResultAgalValue {
@@ -154,7 +154,7 @@ impl traits::AgalValuable for AgalObject {
 
   fn unary_operator(
     &self,
-    stack: parser::util::RefValue<runtime::Stack>,
+    stack: runtime::RefStack,
     env: runtime::RefEnvironment,
     operator: &str,
   ) -> values::ResultAgalValue {
@@ -162,8 +162,8 @@ impl traits::AgalValuable for AgalObject {
   }
 
   async fn call(
-    &self,
-    stack: parser::util::RefValue<runtime::Stack>,
+    &mut self,
+    stack: runtime::RefStack,
     env: runtime::RefEnvironment,
     this: values::DefaultRefAgalValue,
     args: Vec<values::DefaultRefAgalValue>,
@@ -174,7 +174,7 @@ impl traits::AgalValuable for AgalObject {
 
   fn to_agal_number(
     &self,
-    stack: parser::util::RefValue<runtime::Stack>,
+    stack: runtime::RefStack,
   ) -> Result<primitive::AgalNumber, internal::AgalThrow> {
     todo!()
   }

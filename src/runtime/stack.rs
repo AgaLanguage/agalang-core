@@ -1,64 +1,106 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, collections::VecDeque, rc::Rc};
 
-use parser::ast::Node;
+use parser::ast::{BNode, Node};
 
-#[derive(Clone, PartialEq)]
+use super::RefEnvironment;
+#[derive(Clone, Debug, Default)]
+pub struct RefStack(Rc<RefCell<Stack>>);
+impl RefStack {
+  pub fn crate_child(&self, in_class: bool, value: BNode) -> Self {
+    Stack {
+      env: self.env().crate_child(in_class),
+      prev: Some(self.clone()),
+      node: value,
+    }.to_ref()
+  }
+  pub fn next(self, value: BNode) -> Self {
+    self.0.borrow_mut().next(value);
+    self
+  }
+  pub fn pop(self) -> Option<Self> {
+    self.0.borrow_mut().pop()
+  }
+  pub fn current(&self) -> BNode {
+    self.0.borrow().current()
+  }
+  pub fn env(&self) -> RefEnvironment {
+    self.0.borrow().env()
+  }
+}
+impl IntoIterator for RefStack {
+  type Item = BNode;
+  type IntoIter = std::vec::IntoIter<Self::Item>;
+  fn into_iter(self) -> Self::IntoIter {
+    let mut stack = vec![];
+    let mut current = Some(self);
+    while let Some(mut current_val) = current {
+      stack.push(current_val.current());
+      current = current_val.pop();
+    }
+    stack.into_iter()
+  }
+}
+impl IntoIterator for &RefStack {
+  type Item = BNode;
+  type IntoIter = std::vec::IntoIter<Self::Item>;
+  fn into_iter(self) -> Self::IntoIter {
+    self.clone().into_iter()
+  }
+}
+
+#[derive(Clone, Debug, Default)]
 pub struct Stack {
-  value: Box<Node>,
-  previous: Option<Box<Stack>>,
+  node: BNode,
+  env: RefEnvironment,
+  prev: Option<RefStack>
 }
 
 impl Stack {
-  pub fn to_ref(self) -> Rc<RefCell<Self>> {
-    Rc::new(RefCell::new(self))
-  }
-  pub fn next(&self, value: &Node) -> Stack {
-    Stack {
-      value: Box::new(value.clone()),
-      previous: Some(Box::new(self.clone())),
+  fn new(env: RefEnvironment) -> Self {
+    Self {
+      env,
+      prev: None,
+      node: Default::default(),
     }
   }
-  pub fn get_default() -> Stack {
-    Stack {
-      value: Box::new(Node::None),
-      previous: None,
+  pub fn to_ref(self) -> RefStack {
+    RefStack (Rc::new(RefCell::new(self)))
+  }
+  pub fn crate_child(&self, in_class: bool, value: BNode) -> Self {
+    Self {
+      env: self.env.crate_child(in_class),
+      prev: Some(self.clone().to_ref()),
+      node: value,
     }
   }
-  pub fn iter(&self) -> Vec<Node> {
-    let mut stack = vec![self.get_value()];
-    let mut current = self;
-    while let Some(previous) = &current.previous {
-      if previous.get_value().get_type() == "Nada" {
-        break;
-      }
-      stack.push(previous.get_value());
-      current = previous.as_ref();
+  pub fn next(&self, value: BNode) -> Self {
+    Self {
+      env: self.env.clone(),
+      prev: Some(self.clone().to_ref()),
+      node: value,
     }
-    stack
   }
-  pub fn get_value(&self) -> Node {
-    self.value.as_ref().clone()
+  pub fn pop(&self) -> Option<RefStack> {
+    self.prev.clone()
+  }
+  pub fn current(&self) -> BNode {
+    self.node.clone().to_box()
+  }
+  pub fn env(&self) -> RefEnvironment {
+    self.env.clone()
   }
 }
-
 impl IntoIterator for Stack {
-  type Item = Node;
+  type Item = BNode;
   type IntoIter = std::vec::IntoIter<Self::Item>;
   fn into_iter(self) -> Self::IntoIter {
-    self.iter().into_iter()
+    self.to_ref().into_iter()
   }
 }
-
-impl<'a> std::fmt::Display for Stack {
-  fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-    write!(
-      f,
-      "{} -> {}",
-      self.value.get_type(),
-      match &self.previous {
-        Some(previous) => previous.to_string(),
-        None => "None".to_string(),
-      }
-    )
+impl IntoIterator for &Stack {
+  type Item = BNode;
+  type IntoIter = std::vec::IntoIter<Self::Item>;
+  fn into_iter(self) -> Self::IntoIter {
+    self.clone().to_ref().into_iter()
   }
 }

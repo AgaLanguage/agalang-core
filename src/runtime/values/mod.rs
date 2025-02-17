@@ -15,7 +15,7 @@ pub mod primitive;
 pub mod traits;
 use primitive::AgalBoolean;
 use traits::{AgalValuable as _, ToAgalValue};
-
+#[derive(Debug, Default)]
 pub struct RefAgalValue<T: traits::AgalValuable + traits::ToAgalValue>(Rc<RefCell<T>>);
 impl<T: traits::AgalValuable + traits::ToAgalValue> RefAgalValue<T> {
   pub fn new(value: T) -> Self {
@@ -33,6 +33,11 @@ impl<T: traits::AgalValuable + traits::ToAgalValue> RefAgalValue<T> {
   pub fn ptr(&self) -> *const T {
     let b = &*self.borrow();
     b as *const T
+  }
+}
+impl<T: traits::AgalValuable + traits::ToAgalValue> Clone for RefAgalValue<T> {
+  fn clone(&self) -> Self {
+    Self(Rc::clone(&self.0))
   }
 }
 impl<T: traits::AgalValuable + traits::ToAgalValue + Clone> traits::ToAgalValue
@@ -76,48 +81,42 @@ impl RefAgalValue<AgalValue> {
     self.un_ref().into_return()
   }
 }
-
-impl<T: traits::AgalValuable + traits::ToAgalValue> Clone for RefAgalValue<T> {
-  fn clone(&self) -> Self {
-    Self(self.0.clone())
-  }
-}
 impl<T: traits::AgalValuable + traits::ToAgalValue> traits::AgalValuable for RefAgalValue<T> {
   fn get_name(&self) -> String {
     self.borrow().get_name().to_string()
   }
-  fn to_agal_string(&self) -> Result<primitive::AgalString, internal::AgalThrow> {
-    self.borrow().to_agal_string()
+  fn to_agal_string(&self,stack: super::RefStack) -> Result<primitive::AgalString, internal::AgalThrow> {
+    self.borrow().to_agal_string(stack)
   }
   fn to_agal_byte(
     &self,
-    stack: RefValue<super::Stack>,
+    stack: super::RefStack,
   ) -> Result<primitive::AgalByte, internal::AgalThrow> {
     self.borrow().to_agal_byte(stack)
   }
   fn to_agal_boolean(
     &self,
-    stack: RefValue<super::Stack>,
+    stack: super::RefStack,
   ) -> Result<primitive::AgalBoolean, internal::AgalThrow> {
     self.borrow().to_agal_boolean(stack)
   }
   fn to_agal_console(
     &self,
-    stack: RefValue<super::Stack>,
+    stack: super::RefStack,
     env: super::RefEnvironment,
   ) -> Result<primitive::AgalString, internal::AgalThrow> {
     self.borrow().to_agal_console(stack, env)
   }
   fn to_agal_value(
     &self,
-    stack: RefValue<super::Stack>,
+    stack: super::RefStack,
     env: super::RefEnvironment,
   ) -> Result<primitive::AgalString, internal::AgalThrow> {
     self.borrow().to_agal_value(stack, env)
   }
   fn get_instance_property(
     &self,
-    stack: util::RefValue<super::Stack>,
+    stack: super::RefStack,
     env: super::RefEnvironment,
     key: &str,
   ) -> Result<DefaultRefAgalValue, internal::AgalThrow> {
@@ -125,7 +124,7 @@ impl<T: traits::AgalValuable + traits::ToAgalValue> traits::AgalValuable for Ref
   }
   fn get_object_property(
     &self,
-    stack: util::RefValue<super::Stack>,
+    stack: super::RefStack,
     env: super::RefEnvironment,
     key: &str,
   ) -> Result<DefaultRefAgalValue, internal::AgalThrow> {
@@ -133,7 +132,7 @@ impl<T: traits::AgalValuable + traits::ToAgalValue> traits::AgalValuable for Ref
   }
   fn set_object_property(
     &mut self,
-    stack: util::RefValue<super::Stack>,
+    stack: super::RefStack,
     env: super::env::RefEnvironment,
     key: &str,
     value: DefaultRefAgalValue,
@@ -143,19 +142,19 @@ impl<T: traits::AgalValuable + traits::ToAgalValue> traits::AgalValuable for Ref
       .set_object_property(stack, env, key, value)
   }
   async fn call(
-    &self,
-    stack: util::RefValue<super::Stack>,
+    &mut self,
+    stack: super::RefStack,
     env: super::env::RefEnvironment,
     this: DefaultRefAgalValue,
     args: Vec<DefaultRefAgalValue>,
     modules: util::RefValue<crate::Modules>,
   ) -> Result<crate::runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
-    self.borrow().call(stack, env, this, args, modules).await
+    self.borrow_mut().call(stack, env, this, args, modules).await
   }
 
   fn binary_operation(
     &self,
-    stack: RefValue<super::Stack>,
+    stack: super::RefStack,
     env: super::RefEnvironment,
     operator: &str,
     right: DefaultRefAgalValue,
@@ -164,7 +163,7 @@ impl<T: traits::AgalValuable + traits::ToAgalValue> traits::AgalValuable for Ref
   }
   fn unary_operator(
     &self,
-    stack: RefValue<super::Stack>,
+    stack: super::RefStack,
     env: super::RefEnvironment,
     operator: &str,
   ) -> ResultAgalValue {
@@ -172,7 +171,7 @@ impl<T: traits::AgalValuable + traits::ToAgalValue> traits::AgalValuable for Ref
   }
   fn unary_back_operator(
     &self,
-    stack: RefValue<super::Stack>,
+    stack: super::RefStack,
     env: super::RefEnvironment,
     operator: &str,
   ) -> ResultAgalValue {
@@ -180,7 +179,7 @@ impl<T: traits::AgalValuable + traits::ToAgalValue> traits::AgalValuable for Ref
   }
   fn to_agal_array(
     &self,
-    stack: RefValue<super::Stack>,
+    stack: super::RefStack,
   ) -> Result<RefAgalValue<complex::AgalArray>, internal::AgalThrow> {
     self.borrow().to_agal_array(stack)
   }
@@ -190,7 +189,7 @@ impl<T: traits::AgalValuable + traits::ToAgalValue> traits::AgalValuable for Ref
 
   fn to_agal_number(
     &self,
-    stack: RefValue<super::Stack>,
+    stack: super::RefStack,
   ) -> Result<primitive::AgalNumber, internal::AgalThrow> {
     self.borrow().to_agal_number(stack)
   }
@@ -203,23 +202,23 @@ impl<T: traits::AgalValuable + traits::ToAgalValue> traits::AgalValuable for Ref
     self.borrow().less_than(&*other.borrow())
   }
 }
-
 impl<T: traits::AgalValuable + traits::ToAgalValue> ToString for RefAgalValue<T> {
   fn to_string(&self) -> String {
-    match self.try_to_string() {
+    match self.try_to_string(Default::default()) {
       Ok(s) => s,
       Err(e) => e.to_string(),
     }
   }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, Default)]
 pub enum AgalValue {
   Complex(RefAgalValue<complex::AgalComplex>),
   Primitive(RefAgalValue<primitive::AgalPrimitive>),
   Internal(RefAgalValue<internal::AgalInternal>),
   Export(String, DefaultRefAgalValue),
   Continue,
+  #[default]
   Never,
   Break,
   Null,
@@ -294,24 +293,24 @@ impl traits::AgalValuable for AgalValue {
       Self::Break => "<Palabra clave Romper>".to_string(),
     }
   }
-  fn to_agal_string(&self) -> Result<primitive::AgalString, internal::AgalThrow> {
+  fn to_agal_string(&self,stack: super::RefStack) -> Result<primitive::AgalString, internal::AgalThrow> {
     match self {
-      Self::Complex(c) => c.to_agal_string(),
-      Self::Primitive(p) => p.to_agal_string(),
-      Self::Internal(i) => i.to_agal_string(),
+      Self::Complex(c) => c.to_agal_string(stack),
+      Self::Primitive(p) => p.to_agal_string(stack),
+      Self::Internal(i) => i.to_agal_string(stack),
       Self::Never | Self::Null => Ok(primitive::AgalString::from_string(
         super::NULL_KEYWORD.to_string(),
       )),
       _ => Err(internal::AgalThrow::Params {
         type_error: parser::internal::ErrorNames::TypeError,
         message: error_message::TO_AGAL_STRING.to_string(),
-        stack: super::Stack::get_default().to_ref(),
+        stack,
       }),
     }
   }
   fn to_agal_number(
     &self,
-    stack: RefValue<super::Stack>,
+    stack: super::RefStack,
   ) -> Result<primitive::AgalNumber, internal::AgalThrow> {
     match self {
       Self::Complex(c) => c.to_agal_number(stack),
@@ -326,7 +325,7 @@ impl traits::AgalValuable for AgalValue {
   }
   fn to_agal_byte(
     &self,
-    stack: util::RefValue<super::Stack>,
+    stack: super::RefStack,
   ) -> Result<primitive::AgalByte, internal::AgalThrow> {
     match self {
       Self::Complex(c) => c.to_agal_byte(stack),
@@ -342,7 +341,7 @@ impl traits::AgalValuable for AgalValue {
   }
   fn to_agal_boolean(
     &self,
-    stack: util::RefValue<super::Stack>,
+    stack: super::RefStack,
   ) -> Result<primitive::AgalBoolean, internal::AgalThrow> {
     match self {
       Self::Complex(c) => c.to_agal_boolean(stack),
@@ -354,7 +353,7 @@ impl traits::AgalValuable for AgalValue {
   }
   fn to_agal_console(
     &self,
-    stack: util::RefValue<super::Stack>,
+    stack: super::RefStack,
     env: super::env::RefEnvironment,
   ) -> Result<primitive::AgalString, internal::AgalThrow> {
     match self {
@@ -377,7 +376,7 @@ impl traits::AgalValuable for AgalValue {
   }
   fn to_agal_value(
     &self,
-    stack: util::RefValue<super::Stack>,
+    stack: super::RefStack,
     env: super::env::RefEnvironment,
   ) -> Result<primitive::AgalString, internal::AgalThrow> {
     match self {
@@ -397,7 +396,7 @@ impl traits::AgalValuable for AgalValue {
   }
   fn get_instance_property(
     &self,
-    stack: util::RefValue<super::Stack>,
+    stack: super::RefStack,
     env: super::env::RefEnvironment,
     key: &str,
   ) -> Result<DefaultRefAgalValue, internal::AgalThrow> {
@@ -411,7 +410,7 @@ impl traits::AgalValuable for AgalValue {
         message: format!(
           "No se puede obtener la propiedad '{}' de {}",
           key,
-          self.to_agal_string()?.to_string()
+          self.to_agal_string(stack.clone())?.to_string()
         ),
         stack,
       }
@@ -419,8 +418,8 @@ impl traits::AgalValuable for AgalValue {
     }
   }
   fn call(
-    &self,
-    stack: util::RefValue<super::Stack>,
+    &mut self,
+    stack: super::RefStack,
     env: super::env::RefEnvironment,
     this: DefaultRefAgalValue,
     args: Vec<DefaultRefAgalValue>,
@@ -454,7 +453,7 @@ impl traits::AgalValuable for AgalValue {
 
   fn to_agal_array(
     &self,
-    stack: RefValue<super::Stack>,
+    stack: super::RefStack,
   ) -> Result<RefAgalValue<complex::AgalArray>, internal::AgalThrow> {
     match self {
       Self::Complex(c) => c.to_agal_array(stack),
@@ -471,7 +470,7 @@ impl traits::AgalValuable for AgalValue {
 
   fn binary_operation(
     &self,
-    stack: RefValue<super::Stack>,
+    stack: super::RefStack,
     env: super::RefEnvironment,
     operator: &str,
     right: DefaultRefAgalValue,
@@ -509,7 +508,7 @@ impl traits::AgalValuable for AgalValue {
 
   fn unary_back_operator(
     &self,
-    stack: RefValue<super::Stack>,
+    stack: super::RefStack,
     env: super::RefEnvironment,
     operator: &str,
   ) -> ResultAgalValue {
@@ -529,7 +528,7 @@ impl traits::AgalValuable for AgalValue {
 
   fn unary_operator(
     &self,
-    stack: RefValue<super::Stack>,
+    stack: super::RefStack,
     env: super::RefEnvironment,
     operator: &str,
   ) -> ResultAgalValue {
@@ -550,7 +549,7 @@ impl traits::AgalValuable for AgalValue {
 
   fn get_object_property(
     &self,
-    stack: RefValue<super::Stack>,
+    stack: super::RefStack,
     env: super::RefEnvironment,
     key: &str,
   ) -> ResultAgalValue {
@@ -569,7 +568,7 @@ impl traits::AgalValuable for AgalValue {
 
   fn set_object_property(
     &mut self,
-    stack: RefValue<super::Stack>,
+    stack: super::RefStack,
     env: super::RefEnvironment,
     key: &str,
     value: DefaultRefAgalValue,

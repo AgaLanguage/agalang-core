@@ -11,9 +11,10 @@ use crate::{
 
 use super::{string::AgalString, AgalPrimitive};
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub enum AgalBoolean {
   False,
+  #[default]
   True,
 }
 impl AgalBoolean {
@@ -55,7 +56,7 @@ impl traits::AgalValuable for AgalBoolean {
   fn get_name(&self) -> String {
     "Buleano".to_string()
   }
-  fn to_agal_string(&self) -> Result<AgalString, internal::AgalThrow> {
+  fn to_agal_string(&self,stack: runtime::RefStack) -> Result<AgalString, internal::AgalThrow> {
     Ok(super::AgalString::from_string(match self {
       Self::False => FALSE_KEYWORD.to_string(),
       Self::True => TRUE_KEYWORD.to_string(),
@@ -63,14 +64,14 @@ impl traits::AgalValuable for AgalBoolean {
   }
   fn to_agal_console(
     &self,
-    stack: parser::util::RefValue<runtime::Stack>,
+    stack: runtime::RefStack,
     env: runtime::RefEnvironment,
   ) -> Result<AgalString, internal::AgalThrow> {
-    Ok(self.to_agal_string()?.set_color(colors::Color::YELLOW))
+    Ok(self.to_agal_string(stack)?.set_color(colors::Color::YELLOW))
   }
   fn to_agal_boolean(
     &self,
-    stack: parser::util::RefValue<runtime::Stack>,
+    stack: runtime::RefStack,
   ) -> Result<Self, internal::AgalThrow> {
     Ok(*self)
   }
@@ -81,14 +82,14 @@ impl traits::AgalValuable for AgalBoolean {
 
   fn to_agal_byte(
     &self,
-    stack: parser::util::RefValue<runtime::Stack>,
+    stack: runtime::RefStack,
   ) -> Result<super::AgalByte, internal::AgalThrow> {
     todo!()
   }
 
   fn to_agal_array(
     &self,
-    stack: parser::util::RefValue<runtime::Stack>,
+    stack: runtime::RefStack,
   ) -> Result<runtime::values::RefAgalValue<runtime::values::complex::AgalArray>, internal::AgalThrow>
   {
     todo!()
@@ -96,7 +97,7 @@ impl traits::AgalValuable for AgalBoolean {
 
   fn binary_operation(
     &self,
-    stack: parser::util::RefValue<runtime::Stack>,
+    stack: runtime::RefStack,
     env: runtime::RefEnvironment,
     operator: &str,
     right: runtime::values::DefaultRefAgalValue,
@@ -125,7 +126,7 @@ impl traits::AgalValuable for AgalBoolean {
 
   fn unary_back_operator(
     &self,
-    stack: parser::util::RefValue<runtime::Stack>,
+    stack: runtime::RefStack,
     env: runtime::RefEnvironment,
     operator: &str,
   ) -> runtime::values::ResultAgalValue {
@@ -134,7 +135,7 @@ impl traits::AgalValuable for AgalBoolean {
 
   fn unary_operator(
     &self,
-    stack: parser::util::RefValue<runtime::Stack>,
+    stack: runtime::RefStack,
     env: runtime::RefEnvironment,
     operator: &str,
   ) -> runtime::values::ResultAgalValue {
@@ -143,7 +144,7 @@ impl traits::AgalValuable for AgalBoolean {
 
   fn get_object_property(
     &self,
-    stack: parser::util::RefValue<runtime::Stack>,
+    stack: runtime::RefStack,
     env: runtime::RefEnvironment,
     key: &str,
   ) -> Result<runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
@@ -152,7 +153,7 @@ impl traits::AgalValuable for AgalBoolean {
 
   fn set_object_property(
     &mut self,
-    stack: parser::util::RefValue<runtime::Stack>,
+    stack: runtime::RefStack,
     env: runtime::RefEnvironment,
     key: &str,
     value: runtime::values::DefaultRefAgalValue,
@@ -162,7 +163,7 @@ impl traits::AgalValuable for AgalBoolean {
 
   fn get_instance_property(
     &self,
-    stack: parser::util::RefValue<runtime::Stack>,
+    stack: runtime::RefStack,
     env: runtime::RefEnvironment,
     key: &str,
   ) -> Result<runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
@@ -170,8 +171,8 @@ impl traits::AgalValuable for AgalBoolean {
   }
 
   async fn call(
-    &self,
-    stack: parser::util::RefValue<runtime::Stack>,
+    &mut self,
+    stack: runtime::RefStack,
     env: runtime::RefEnvironment,
     this: runtime::values::DefaultRefAgalValue,
     args: Vec<runtime::values::DefaultRefAgalValue>,
@@ -182,7 +183,7 @@ impl traits::AgalValuable for AgalBoolean {
 
   fn to_agal_number(
     &self,
-    stack: parser::util::RefValue<runtime::Stack>,
+    stack: runtime::RefStack,
   ) -> Result<super::AgalNumber, internal::AgalThrow> {
     todo!()
   }

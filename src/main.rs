@@ -44,7 +44,7 @@ impl<T, E, V> OnError<T, E> for Result<T,V> {
   }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct Modules {
   map: Rc<RefCell<HashMap<String, DefaultRefAgalValue>>>,
 }
@@ -75,20 +75,15 @@ impl Modules {
 
 #[tokio::main]
 async fn main() -> ExitCode {
-  my_main().await
-}
-
-async fn my_main() -> ExitCode {
   let modules_manager = Modules::new();
   let filename = file();
   if filename.is_none() {
     return ExitCode::FAILURE;
   }
   let filename = filename.unwrap();
-  let ref stack = runtime::Stack::get_default();
-  let global_env = runtime::Environment::get_default().as_ref();
+  let stack = runtime::RefStack::default();
 
-  let program = runtime::full_eval(&filename, stack, global_env, modules_manager.to_ref()).await;
+  let program = runtime::full_eval(filename, stack, modules_manager.to_ref()).await;
   if program.is_err() {
     return ExitCode::FAILURE;
   }

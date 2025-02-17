@@ -1,48 +1,469 @@
 use std::{
   cell::RefCell,
-  collections::HashMap,
+  collections::{HashMap, VecDeque},
   future::{Future, IntoFuture},
+  hash::Hash,
   path::Path,
   pin::Pin,
   rc::Rc,
+  sync::{Arc, Mutex},
 };
-
 use parser::{
   ast::{BNode, Node, NodeLoopEditType, NodeProperty, StringData},
   internal::ErrorNames,
   util::RefValue,
 };
-
-use crate::{path::absolute_path, Modules};
-
+use tokio::sync::oneshot::{self, Receiver, Sender};
+use crate::{path::absolute_path, Modules, OnError as _, ToResult as _};
 use super::{
   env::{RefEnvironment, THIS_KEYWORD},
   eval::full_eval,
-  stack::Stack,
+  stack::{self, RefStack},
   values::{
     complex::{
       AgalArray, AgalClass, AgalClassProperty, AgalComplex, AgalFunction, AgalObject, AgalPromise,
       AgalPromiseData,
     },
-    internal, primitive,
-    traits::{self, AgalValuable as _, ToAgalValue as _},
-    AgalValue, DefaultRefAgalValue,
+    internal::{self, AgalThrow},
+    primitive,
+    traits::{self, AgalValuable as _, ToAgalValue},
+    AgalValue, DefaultRefAgalValue, ResultAgalValue,
   },
+  Stack,
 };
+#[derive(Clone, Debug)]
+struct Waiter<E: Eq + Hash + Clone, R> {
+  listeners: Arc<Mutex<HashMap<E, Sender<R>>>>,
+}
 
+impl<E: Eq + Hash + Clone, R> Waiter<E, R> {
+  fn new() -> Self {
+    Self {
+      listeners: Arc::new(Mutex::new(HashMap::new())),
+    }
+  }
+
+  fn on(&self, event: E) -> Receiver<R> {
+    let (tx, rx) = oneshot::channel();
+    self.listeners.lock().unwrap().insert(event, tx);
+    rx
+  }
+
+  fn emit(&self, event: E, value: R) {
+    if let Some(tx) = self.listeners.lock().unwrap().remove(&event) {
+      tx.send(value);
+    }
+  }
+
+  fn len(&self) -> usize {
+    self.listeners.lock().unwrap().keys().len()
+  }
+}
+
+#[derive(Clone, Debug)]
+pub struct Interpreter {
+  stack: RefStack,
+  modules: RefValue<Modules>,
+  events: Waiter<BNode, ResultAgalValue>,
+}
+impl Interpreter {
+  fn new(stack: RefStack, modules: RefValue<Modules>) -> Self {
+    Self {
+      stack,
+      modules,
+      events: Waiter::new(),
+    }
+  }
+  fn next(&mut self, node: BNode){
+    self.stack = self.stack.clone().next(node);
+  }
+  fn pop(&mut self) -> Option<BNode> {
+    match self.stack.clone().pop() {
+      Some(stack) => {
+        self.stack = stack;
+        Some(self.stack.current())
+      }
+      None => None
+    }
+  }
+  async fn eval(&mut self, node: BNode) -> ResultAgalValue {
+    let stack = self.stack.clone();
+    let data = self.next(node.clone());
+    let data = self.clone().events.on(node);
+    self.analyze().await;
+    match data.await {
+      Ok(value) => {
+        self.pop();
+        value
+      }
+      Err(e) => Err(AgalThrow::Params {
+        type_error: ErrorNames::EnvironmentError,
+        message: "Se perdio el valor".into(),
+        stack,
+      }),
+    }
+  }
+  async fn analyze(&mut self) {
+
+    let b_node = self.stack.clone().current();
+    if b_node.is_none() {
+      return;
+    }
+    println!("node: {}", b_node.get_type());
+    let value = Box::pin(self.eval_inner(b_node.clone())).await;
+    self.pop();
+    println!(
+      "value: {}",
+      match &value {
+        Ok(v) => match v.try_to_string(self.stack.clone()){
+          Ok(s) => s,
+          Err(e) => e.to_string(),
+        },
+        Err(e) => e.to_string(),
+      }
+    );
+    self.events.emit(b_node, value);
+  }
+  async fn resolve(&mut self, node: BNode) -> ResultAgalValue {
+    self.next(node.clone());
+    let data = self.events.on(node);
+    self.analyze().await;
+    let val = match data.await {
+      Ok(value) => value,
+      Err(e) => Err(AgalThrow::Params {
+        type_error: ErrorNames::EnvironmentError,
+        message: "Se perdio el valor".into(),
+        stack:self.stack.clone(),
+      }),
+    };
+    val
+  }
+  pub fn resolve_pinned(
+    mut self,
+    node: BNode,
+  ) -> Pin<Box<dyn Future<Output = ResultAgalValue> + 'static>> {
+    Box::pin(async move {
+      self.next(node.clone());
+      let data = self.events.on(node);
+      self.analyze().await;
+      let val = match data.await {
+        Ok(value) => value,
+        Err(e) => Err(AgalThrow::Params {
+          type_error: ErrorNames::EnvironmentError,
+          message: "Se perdio el valor".into(),
+          stack:self.stack.clone(),
+        }),
+      };
+      val
+    })
+  }
+  async fn eval_inner(&mut self, node: BNode) -> ResultAgalValue {
+    let stack = self.clone().stack;
+    let mut env = stack.env();
+    let modules = self.clone().modules;
+    match node.as_ref() {
+      Node::Array(arr) => {
+        let mut vec = vec![];
+        for n in &arr.elements {
+          match n {
+            NodeProperty::Indexable(value) => {
+              let data = self.clone().resolve(value.clone().to_box()).await?;
+              vec.push(data);
+            }
+            NodeProperty::Iterable(iter) => {
+              let data = self
+                .clone()
+                .resolve(iter.clone().to_box())
+                .await?
+                .to_agal_array(stack.clone())?
+                .un_ref();
+              for item in data {
+                vec.push(item);
+              }
+            }
+            _ => unreachable!("Invalid array element"),
+          }
+        }
+        AgalArray::from(vec).to_result()
+      }
+      Node::Assignment(assignment) => {
+        let value = self.clone().resolve(assignment.value.clone()).await?;
+        if value.borrow().is_never() {
+          return Err(internal::AgalThrow::Params {
+            type_error: ErrorNames::TypeError,
+            message: "No se puede asignar \"nada\" a una variable".to_string(),
+            stack,
+          });
+        }
+        match assignment.identifier.as_ref() {
+          Node::Identifier(identifier) => env.assign(stack, &identifier.name, value, node.as_ref()),
+          Node::Member(member) => {
+            if member.instance {
+              return Err(internal::AgalThrow::Params {
+                type_error: ErrorNames::TypeError,
+                message: "No se puede asignar una propiedad de instancia".to_string(),
+                stack,
+              });
+            }
+            let key = if !member.computed && member.member.is_identifier() {
+              member.member.get_identifier().unwrap().name.clone()
+            } else {
+              self
+                .clone()
+                .resolve(member.member.clone())
+                .await?
+                .to_agal_string(stack.clone())?
+                .to_string()
+            };
+
+            self
+              .resolve(member.object.clone())
+              .await?
+              .set_object_property(stack.clone(), env.clone(), &key, value)
+          }
+          _ => Ok(AgalValue::Never.as_ref()),
+        }
+      }
+      Node::Await(a) => {
+        let value = self.resolve(a.expression.clone()).await?;
+        if let AgalComplex::Promise(a) = {
+          if let AgalValue::Complex(c) = value.un_ref() {
+            c.un_ref()
+          } else {
+            return Ok(value);
+          }
+        } {
+          let mut value = a.borrow_mut();
+          if let AgalPromiseData::Resolved(r) = &value.data {
+            return r.clone();
+          }
+          if let AgalPromiseData::Unresolved(future) = std::mem::replace(
+            &mut value.data,
+            AgalPromiseData::Resolved(AgalValue::Never.to_result()),
+          ) {
+            let agal_value = future.await;
+            value.data = AgalPromiseData::Resolved(agal_value.clone());
+            return agal_value;
+          }
+        }
+        Ok(value)
+      }
+      Node::Binary(binary) => {
+        let left = self.clone().resolve(binary.left.clone()).await?;
+        let right = self.clone().resolve(binary.right.clone()).await?;
+        left.binary_operation(stack.clone(), env.clone(), &binary.operator, right)
+      }
+      Node::Block(block) => {
+        let mut result = AgalValue::Never.as_ref();
+        for statement in &block.body {
+          result = self.clone().resolve(statement.clone().to_box()).await?;
+          if (result.is_stop()) {
+            break;
+          }
+        }
+        Ok(result)
+      }
+      Node::Call(call) => {
+        let callee = call.callee.as_ref();
+        let (mut callee, this) = if let Node::Member(member) = callee {
+          let this = self.clone().resolve(member.object.clone()).await?;
+          let this = this.clone();
+          let key = if !member.computed && member.member.is_identifier() {
+            member.member.get_identifier().unwrap().name.clone()
+          } else {
+            // No deberia ser posible llegar a este punto
+            self
+              .clone()
+              .resolve(member.member.clone())
+              .await?
+              .try_to_string(stack.clone())?
+          };
+          let callee = this
+            .clone()
+            .get_instance_property(stack.clone(), env.clone(), &key)?;
+          (callee, this)
+        } else {
+          let callee = self.clone().resolve(callee.clone().to_box()).await?;
+          (callee.clone(), callee)
+        };
+
+        let mut args = vec![];
+        for arg in &call.arguments {
+          let arg = self.clone().resolve(arg.clone().to_box()).await?;
+          args.push(arg);
+        }
+        let ret = callee
+          .call(stack.clone(), env.clone(), this, args, modules.clone())
+          .await?;
+        if ret.is_return() {
+          ret.into_return().unwrap_or(AgalValue::Never.to_ref_value())
+        } else if ret.is_stop() {
+          AgalValue::Never.to_ref_value()
+        } else {
+          ret
+        }
+        .to_result()
+      }
+      Node::Function(func) => {
+        let function = AgalFunction::new(
+          func.name.clone(),
+          func.is_async,
+          func.params.clone(),
+          func.body.clone(),
+          env.crate_child(false),
+          self.clone(),
+        )
+        .to_ref_value();
+        env
+          .define(self.stack.clone(), &func.name, function, true, &node)
+      }
+      Node::Identifier(id) => env.un_ref().get(self.stack.clone(), &id.name, &node),
+      Node::If(if_node) => {
+        let condition = self
+          .clone()
+          .resolve(if_node.condition.clone())
+          .await?
+          .to_agal_boolean(stack.clone())?;
+        if condition.as_bool() {
+          return self.resolve(if_node.body.clone().to_node().to_box()).await;
+        }
+        if let Some(else_body) = &if_node.else_body {
+          return self.resolve(else_body.clone().to_node().to_box()).await;
+        }
+        return AgalValue::Never.to_result();
+      }
+      Node::Import(import) => {
+        let module = if import
+          .path
+          .starts_with(crate::libraries::PREFIX_NATIVE_MODULES)
+        {
+          crate::libraries::get_module(&import.path, self.modules.clone())
+        } else {
+          let path = absolute_path(&import.file);
+          let path = Path::new(&path).parent();
+          if let Some(path) = path {
+            let filename = format!("{}/{}", path.to_string_lossy(), import.path);
+            let filename = absolute_path(&filename);
+            full_eval(
+              filename,
+              self.stack.clone(),
+              self.modules.clone(),
+            )
+            .await
+          } else {
+            Err(())
+          }
+        };
+        if let Err(e) = module {
+          return AgalValue::Never.to_result();
+        }
+        let module = module.unwrap();
+        if let Some(n) = import.name.clone() {
+          env.define(self.stack.clone(), &n, module, true, &node);
+        }
+        AgalValue::Never.to_result()
+      }
+      Node::Member(member) => {
+        let mut object = self.clone().resolve(member.object.clone()).await?;
+        if member.instance && !member.computed && member.member.is_identifier() {
+          let key = member.member.get_identifier().unwrap().name.clone();
+          object.get_instance_property(stack.clone(), env.clone(), &key)
+        } else {
+          let key = if !member.computed && member.member.is_identifier() {
+            member.member.get_identifier().unwrap().name.clone()
+          } else {
+            self
+              .resolve(member.member.clone())
+              .await?
+              .to_agal_string(stack.clone())?
+              .to_string()
+          };
+          object.get_object_property(stack.clone(), env.clone(), &key)
+        }
+      }
+      Node::Number(num) => if num.base == 10 {
+        let d = str::parse::<f32>(&num.value).unwrap();
+        primitive::AgalNumber::Decimal(d)
+      } else {
+        let i = i32::from_str_radix(&num.value, num.base as u32).unwrap();
+        primitive::AgalNumber::Integer(i)
+      }
+      .to_result(),
+      Node::Program(program) => self.resolve(program.body.clone().to_node().to_box()).await,
+      Node::Return(ret) => {
+        if ret.value.is_none() {
+          return internal::AgalInternal::Return(AgalValue::Never.as_ref()).to_result();
+        }
+        let ret_value = ret.value.clone().unwrap();
+        let value = self.resolve(ret_value).await?;
+        internal::AgalInternal::Return(value).to_result()
+      }
+      Node::VarDecl(var) => match &var.value {
+        Some(value) => {
+          let value = self.resolve(value.clone()).await?;
+          if value.is_never() {
+            return internal::AgalThrow::Params {
+              type_error: ErrorNames::TypeError,
+              message: "No se puede asignar \"nada\" a una variable".to_string(),
+              stack,
+            }
+            .to_result();
+          }
+          env.define(stack.clone(), &var.name, value, var.is_const, &node)
+        }
+        None => env.define(
+          stack.clone(),
+          &var.name,
+          AgalValue::Never.as_ref(),
+          var.is_const,
+          &node,
+        ),
+      },
+      Node::While(while_node) => {
+        let mut value = AgalValue::Never.as_ref();
+        let body = &while_node.body.clone().to_node();
+        loop {
+          let condition = self
+            .clone()
+            .resolve(while_node.condition.clone())
+            .await?
+            .to_agal_boolean(stack.clone())?;
+          if !condition.as_bool() {
+            break;
+          }
+          value = self.clone().resolve(body.clone().to_box()).await?;
+          if value.is_return() {
+            return Ok(value);
+          }
+          if value.is_break() {
+            break;
+          }
+        }
+        Ok(value)
+      }
+      _ => Ok(Default::default()),
+    }
+  }
+}
+pub fn interpreter(node:BNode,
+  stack: RefStack,
+  modules: RefValue<Modules>,) -> Pin<Box<dyn Future<Output = ResultAgalValue>>> {
+    Box::pin(async move {Interpreter::new(stack, modules).eval(node).await})
+}
+/*
 pub fn interpreter(
   node: BNode,
-  stack: RefValue<Stack>,
+  stack: RefStack,
   mut env: RefEnvironment,
   modules: RefValue<Modules>,
-) -> Pin<Box<dyn Future<Output = Result<DefaultRefAgalValue, internal::AgalThrow>>>> {
+) -> Pin<Box<dyn Future<Output = ResultAgalValue>>> {
   Box::pin(async move {
     let pre_stack = stack;
-    let stack = pre_stack.borrow().next(&node).to_ref();
+    let stack = pre_stack.next(node);
     match node.as_ref() {
       Node::Array(list) => {
         let mut vec = vec![];
-        for n in list.elements.iter() {
+        for n in &list.elements {
           match n {
             NodeProperty::Indexable(value) => {
               let data = interpreter(
@@ -174,7 +595,7 @@ pub fn interpreter(
       }
       Node::Block(block) => {
         let mut result = AgalValue::Never.as_ref();
-        for statement in block.body.iter() {
+        for statement in &block.body {
           result = interpreter(
             statement.clone().to_box(),
             stack.clone(),
@@ -211,8 +632,7 @@ pub fn interpreter(
               modules.clone(),
             )
             .await?
-            .to_agal_string()?
-            .to_string()
+            .try_to_string()?
           };
           let callee = this
             .clone()
@@ -230,7 +650,7 @@ pub fn interpreter(
         };
 
         let mut args = vec![];
-        for arg in call.arguments.iter() {
+        for arg in &call.arguments {
           let arg = interpreter(
             arg.clone().to_box(),
             stack.clone(),
@@ -280,7 +700,7 @@ pub fn interpreter(
         };
         let mut properties = Vec::new();
         let mut class_env = env.clone().crate_child(true);
-        for property in class.body.iter() {
+        for property in &class.body {
           let is_static = (property.meta & 1) != 0;
           let is_public = (property.meta & 2) != 0;
 
@@ -397,7 +817,7 @@ pub fn interpreter(
           };
           let mut properties = Vec::new();
           let mut class_env = env.clone().crate_child(true);
-          for property in class.body.iter() {
+          for property in &class.body {
             let is_static = (property.meta & 1) != 0;
             let is_public = (property.meta & 2) != 0;
 
@@ -531,7 +951,7 @@ pub fn interpreter(
           if let Some(path) = path {
             let filename = format!("{}/{}", path.to_string_lossy(), import.path);
             let filename = absolute_path(&filename);
-            full_eval(&filename, &stack.borrow(), env.get_global(), modules).await
+            full_eval(&filename, stack.clone(), env.get_global(), modules).await
           } else {
             Err(())
           }
@@ -591,7 +1011,7 @@ pub fn interpreter(
       .to_result(),
       Node::Object(obj) => {
         let mut hashmap = HashMap::new();
-        for prop in obj.properties.iter() {
+        for prop in &obj.properties {
           match prop {
             NodeProperty::Property(key, value) => {
               let value = interpreter(
@@ -653,8 +1073,8 @@ pub fn interpreter(
       }
       Node::String(str) => {
         let mut string = String::new();
-        for s in str.value.iter() {
-          match s {
+        for s in &str.value {
+          match &s {
             StringData::Id(id) => {
               let data = env
                 .un_ref()
@@ -779,3 +1199,4 @@ pub fn interpreter(
     .to_result()
   })
 }
+*/
