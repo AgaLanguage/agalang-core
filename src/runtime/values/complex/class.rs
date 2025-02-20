@@ -62,7 +62,10 @@ impl traits::AgalValuable for AgalPrototype {
   fn get_name(&self) -> String {
     "Clase".to_string()
   }
-  fn to_agal_string(&self,stack: runtime::RefStack) -> Result<primitive::AgalString, internal::AgalThrow> {
+  fn to_agal_string(
+    &self,
+    stack: runtime::RefStack,
+  ) -> Result<primitive::AgalString, internal::AgalThrow> {
     Ok(primitive::AgalString::from_string(
       "<instancia super>".to_string(),
     ))
@@ -70,7 +73,6 @@ impl traits::AgalValuable for AgalPrototype {
   fn to_agal_console(
     &self,
     stack: runtime::RefStack,
-    env: runtime::RefEnvironment,
   ) -> Result<primitive::AgalString, internal::AgalThrow> {
     Ok(self.to_agal_string(stack)?.set_color(colors::Color::CYAN))
   }
@@ -103,7 +105,6 @@ impl traits::AgalValuable for AgalPrototype {
   fn binary_operation(
     &self,
     stack: runtime::RefStack,
-    env: runtime::RefEnvironment,
     operator: &str,
     right: values::DefaultRefAgalValue,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
@@ -113,7 +114,6 @@ impl traits::AgalValuable for AgalPrototype {
   fn unary_back_operator(
     &self,
     stack: runtime::RefStack,
-    env: runtime::RefEnvironment,
     operator: &str,
   ) -> values::ResultAgalValue {
     todo!()
@@ -122,7 +122,6 @@ impl traits::AgalValuable for AgalPrototype {
   fn unary_operator(
     &self,
     stack: runtime::RefStack,
-    env: runtime::RefEnvironment,
     operator: &str,
   ) -> values::ResultAgalValue {
     todo!()
@@ -131,7 +130,6 @@ impl traits::AgalValuable for AgalPrototype {
   fn get_object_property(
     &self,
     stack: runtime::RefStack,
-    env: runtime::RefEnvironment,
     key: &str,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
     todo!()
@@ -140,7 +138,6 @@ impl traits::AgalValuable for AgalPrototype {
   fn set_object_property(
     &mut self,
     stack: runtime::RefStack,
-    env: runtime::RefEnvironment,
     key: &str,
     value: values::DefaultRefAgalValue,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
@@ -150,7 +147,6 @@ impl traits::AgalValuable for AgalPrototype {
   fn get_instance_property(
     &self,
     stack: runtime::RefStack,
-    env: runtime::RefEnvironment,
     key: &str,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
     todo!()
@@ -159,7 +155,6 @@ impl traits::AgalValuable for AgalPrototype {
   async fn call(
     &mut self,
     stack: runtime::RefStack,
-    env: runtime::RefEnvironment,
     this: values::DefaultRefAgalValue,
     args: Vec<values::DefaultRefAgalValue>,
     modules: RefValue<Modules>,
@@ -173,14 +168,14 @@ impl traits::AgalValuable for AgalPrototype {
   ) -> Result<primitive::AgalNumber, internal::AgalThrow> {
     todo!()
   }
-  
+
   fn equals(&self, other: &Self) -> bool {
-        todo!()
-    }
-  
+    todo!()
+  }
+
   fn less_than(&self, other: &Self) -> bool {
-        todo!()
-    }
+    todo!()
+  }
 }
 
 #[derive(Clone, Debug)]
@@ -253,7 +248,7 @@ impl AgalClass {
       let property_value = property.value.un_ref();
       property_value
         .clone()
-        .call(stack, env, this_value.clone(), args, modules_manager);
+        .call(stack, this_value.clone(), args, modules_manager);
     }
     this_value
   }
@@ -268,7 +263,10 @@ impl traits::AgalValuable for AgalClass {
   fn get_name(&self) -> String {
     "Clase".to_string()
   }
-  fn to_agal_string(&self,stack: runtime::RefStack) -> Result<primitive::AgalString, internal::AgalThrow> {
+  fn to_agal_string(
+    &self,
+    stack: runtime::RefStack,
+  ) -> Result<primitive::AgalString, internal::AgalThrow> {
     Ok(primitive::AgalString::from_string(
       "<instancia super>".to_string(),
     ))
@@ -276,7 +274,6 @@ impl traits::AgalValuable for AgalClass {
   fn to_agal_console(
     &self,
     stack: runtime::RefStack,
-    env: runtime::RefEnvironment,
   ) -> Result<primitive::AgalString, internal::AgalThrow> {
     Ok(self.to_agal_string(stack)?.set_color(colors::Color::CYAN))
   }
@@ -309,7 +306,6 @@ impl traits::AgalValuable for AgalClass {
   fn binary_operation(
     &self,
     stack: runtime::RefStack,
-    env: runtime::RefEnvironment,
     operator: &str,
     right: values::DefaultRefAgalValue,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
@@ -319,7 +315,6 @@ impl traits::AgalValuable for AgalClass {
   fn unary_back_operator(
     &self,
     stack: runtime::RefStack,
-    env: runtime::RefEnvironment,
     operator: &str,
   ) -> values::ResultAgalValue {
     todo!()
@@ -328,7 +323,6 @@ impl traits::AgalValuable for AgalClass {
   fn unary_operator(
     &self,
     stack: runtime::RefStack,
-    env: runtime::RefEnvironment,
     operator: &str,
   ) -> values::ResultAgalValue {
     todo!()
@@ -337,7 +331,6 @@ impl traits::AgalValuable for AgalClass {
   fn get_object_property(
     &self,
     stack: runtime::RefStack,
-    env: runtime::RefEnvironment,
     key: &str,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
     todo!()
@@ -346,7 +339,6 @@ impl traits::AgalValuable for AgalClass {
   fn set_object_property(
     &mut self,
     stack: runtime::RefStack,
-    env: runtime::RefEnvironment,
     key: &str,
     value: values::DefaultRefAgalValue,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
@@ -356,7 +348,6 @@ impl traits::AgalValuable for AgalClass {
   fn get_instance_property(
     &self,
     stack: runtime::RefStack,
-    env: runtime::RefEnvironment,
     key: &str,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
     todo!()
@@ -365,7 +356,6 @@ impl traits::AgalValuable for AgalClass {
   async fn call(
     &mut self,
     stack: runtime::RefStack,
-    env: runtime::RefEnvironment,
     this: values::DefaultRefAgalValue,
     args: Vec<values::DefaultRefAgalValue>,
     modules: RefValue<Modules>,
@@ -379,12 +369,12 @@ impl traits::AgalValuable for AgalClass {
   ) -> Result<primitive::AgalNumber, internal::AgalThrow> {
     todo!()
   }
-  
+
   fn equals(&self, other: &Self) -> bool {
-        todo!()
-    }
-  
+    todo!()
+  }
+
   fn less_than(&self, other: &Self) -> bool {
-        todo!()
-    }
+    todo!()
+  }
 }

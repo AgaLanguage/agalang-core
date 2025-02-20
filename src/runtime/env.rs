@@ -1,5 +1,8 @@
 use std::{
-  cell::RefCell, collections::{HashMap, HashSet}, fmt::Debug, rc::Rc
+  cell::RefCell,
+  collections::{HashMap, HashSet},
+  fmt::Debug,
+  rc::Rc,
 };
 
 use parser::{ast::Node, internal::ErrorNames, util::RefValue};
@@ -172,7 +175,7 @@ impl Environment {
         stack,
       });
     }
-    Ok(env.get(name).clone())
+    Ok(env.get_key(name).clone())
   }
   fn _has(&self, name: &str) -> bool {
     self.variables.borrow_mut().contains_key(name)
@@ -193,9 +196,9 @@ impl Environment {
 pub struct RefEnvironment(Rc<RefCell<Environment>>);
 
 impl Default for RefEnvironment {
-    fn default() -> Self {
-        Self::get_default()
-    }
+  fn default() -> Self {
+    Self::get_default()
+  }
 }
 
 impl RefEnvironment {
@@ -236,7 +239,7 @@ impl RefEnvironment {
       .borrow_mut()
       .define(stack, name, value, is_constant, node)
   }
-  pub fn get(&self, name: &str) -> DefaultRefAgalValue {
+  pub fn get_key(&self, name: &str) -> DefaultRefAgalValue {
     self
       .0
       .borrow()
@@ -246,6 +249,9 @@ impl RefEnvironment {
       .get(name)
       .unwrap()
       .clone()
+  }
+  pub fn get(&self, stack: RefStack, name: &str, node: &Node) -> ResultAgalValue {
+    self.0.borrow().get(stack, name, node)
   }
   pub fn has(&self, name: &str) -> bool {
     self.0.borrow().variables.borrow_mut().contains_key(name)

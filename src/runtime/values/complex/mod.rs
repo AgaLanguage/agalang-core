@@ -47,7 +47,7 @@ impl traits::AgalValuable for AgalComplex {
       Self::Class(value) => value.get_name(),
     }
   }
-  fn to_agal_string(&self,stack: RefStack) -> Result<primitive::AgalString, internal::AgalThrow> {
+  fn to_agal_string(&self, stack: RefStack) -> Result<primitive::AgalString, internal::AgalThrow> {
     match self {
       Self::SuperInstance(value) => value.to_agal_string(stack),
       Self::Function(value) => value.to_agal_string(stack),
@@ -60,78 +60,73 @@ impl traits::AgalValuable for AgalComplex {
   fn to_agal_console(
     &self,
     stack: RefStack,
-    env: RefEnvironment,
   ) -> Result<primitive::AgalString, internal::AgalThrow> {
     match self {
-      Self::SuperInstance(value) => value.to_agal_console(stack, env),
-      Self::Function(value) => value.to_agal_console(stack, env),
-      Self::Promise(value) => value.to_agal_console(stack, env),
-      Self::Object(value) => value.to_agal_console(stack, env),
-      Self::Array(value) => value.to_agal_console(stack, env),
-      Self::Class(value) => value.to_agal_console(stack, env),
+      Self::SuperInstance(value) => value.to_agal_console(stack),
+      Self::Function(value) => value.to_agal_console(stack),
+      Self::Promise(value) => value.to_agal_console(stack),
+      Self::Object(value) => value.to_agal_console(stack),
+      Self::Array(value) => value.to_agal_console(stack),
+      Self::Class(value) => value.to_agal_console(stack),
     }
   }
   fn get_object_property(
     &self,
     stack: RefStack,
-    env: RefEnvironment,
     key: &str,
   ) -> Result<super::DefaultRefAgalValue, internal::AgalThrow> {
     match self {
-      Self::SuperInstance(value) => value.get_object_property(stack, env, key),
-      Self::Function(value) => value.get_object_property(stack, env, key),
-      Self::Promise(value) => value.get_object_property(stack, env, key),
-      Self::Object(value) => value.get_object_property(stack, env, key),
-      Self::Array(value) => value.get_object_property(stack, env, key),
-      Self::Class(value) => value.get_object_property(stack, env, key),
+      Self::SuperInstance(value) => value.get_object_property(stack, key),
+      Self::Function(value) => value.get_object_property(stack, key),
+      Self::Promise(value) => value.get_object_property(stack, key),
+      Self::Object(value) => value.get_object_property(stack, key),
+      Self::Array(value) => value.get_object_property(stack, key),
+      Self::Class(value) => value.get_object_property(stack, key),
     }
   }
   fn set_object_property(
     &mut self,
     stack: RefStack,
-    env: RefEnvironment,
     key: &str,
     value: super::DefaultRefAgalValue,
   ) -> Result<super::DefaultRefAgalValue, internal::AgalThrow> {
     match self {
-      Self::SuperInstance(val) => val.set_object_property(stack, env, key, value),
-      Self::Function(val) => val.set_object_property(stack, env, key, value),
-      Self::Promise(val) => val.set_object_property(stack, env, key, value),
-      Self::Object(val) => val.set_object_property(stack, env, key, value),
-      Self::Array(val) => val.set_object_property(stack, env, key, value),
-      Self::Class(val) => val.set_object_property(stack, env, key, value),
+      Self::SuperInstance(val) => val.set_object_property(stack, key, value),
+      Self::Function(val) => val.set_object_property(stack, key, value),
+      Self::Promise(val) => val.set_object_property(stack, key, value),
+      Self::Object(val) => val.set_object_property(stack, key, value),
+      Self::Array(val) => val.set_object_property(stack, key, value),
+      Self::Class(val) => val.set_object_property(stack, key, value),
     }
   }
   fn get_instance_property(
     &self,
     stack: RefStack,
-    env: RefEnvironment,
     key: &str,
   ) -> Result<super::DefaultRefAgalValue, internal::AgalThrow> {
     match self {
-      Self::SuperInstance(value) => value.get_instance_property(stack, env, key),
-      Self::Function(value) => value.get_instance_property(stack, env, key),
-      Self::Promise(value) => value.get_instance_property(stack, env, key),
-      Self::Object(value) => value.get_instance_property(stack, env, key),
-      Self::Array(value) => value.get_instance_property(stack, env, key),
-      Self::Class(value) => value.get_instance_property(stack, env, key),
+      Self::SuperInstance(value) => value.get_instance_property(stack, key),
+      Self::Function(value) => value.get_instance_property(stack, key),
+      Self::Promise(value) => value.get_instance_property(stack, key),
+      Self::Object(value) => value.get_instance_property(stack, key),
+      Self::Array(value) => value.get_instance_property(stack, key),
+      Self::Class(value) => value.get_instance_property(stack, key),
     }
   }
   async fn call(
     &mut self,
     stack: RefStack,
-    env: RefEnvironment,
     this: super::DefaultRefAgalValue,
     args: Vec<super::DefaultRefAgalValue>,
     modules: RefValue<Modules>,
   ) -> Result<super::DefaultRefAgalValue, internal::AgalThrow> {
     match self {
-      Self::SuperInstance(value) => value.call(stack, env, this, args, modules).await,
-      Self::Function(value) => value.call(stack, env, this, args, modules).await,
-      Self::Promise(value) => value.call(stack, env, this, args, modules).await,
-      Self::Object(value) => value.call(stack, env, this, args, modules).await,
-      Self::Array(value) => value.call(stack, env, this, args, modules).await,
-      Self::Class(value) => value.call(stack, env, this, args, modules).await,
+      Self::SuperInstance(value) => value.call(stack, this, args, modules).await,
+      Self::Function(value) => value.call(stack, this, args, modules).await,
+      Self::Promise(value) => value.call(stack, this, args, modules).await,
+      Self::Object(value) => value.call(stack, this, args, modules).await,
+      Self::Array(value) => value.call(stack, this, args, modules).await,
+      Self::Class(value) => value.call(stack, this, args, modules).await,
     }
   }
 
@@ -191,49 +186,46 @@ impl traits::AgalValuable for AgalComplex {
   fn binary_operation(
     &self,
     stack: crate::runtime::RefStack,
-    env: crate::runtime::RefEnvironment,
     operator: &str,
     right: super::DefaultRefAgalValue,
   ) -> Result<super::DefaultRefAgalValue, internal::AgalThrow> {
     match self {
-      Self::SuperInstance(value) => value.binary_operation(stack, env, operator, right),
-      Self::Function(value) => value.binary_operation(stack, env, operator, right),
-      Self::Promise(value) => value.binary_operation(stack, env, operator, right),
-      Self::Object(value) => value.binary_operation(stack, env, operator, right),
-      Self::Array(value) => value.binary_operation(stack, env, operator, right),
-      Self::Class(value) => value.binary_operation(stack, env, operator, right),
+      Self::SuperInstance(value) => value.binary_operation(stack, operator, right),
+      Self::Function(value) => value.binary_operation(stack, operator, right),
+      Self::Promise(value) => value.binary_operation(stack, operator, right),
+      Self::Object(value) => value.binary_operation(stack, operator, right),
+      Self::Array(value) => value.binary_operation(stack, operator, right),
+      Self::Class(value) => value.binary_operation(stack, operator, right),
     }
   }
 
   fn unary_back_operator(
     &self,
     stack: crate::runtime::RefStack,
-    env: crate::runtime::RefEnvironment,
     operator: &str,
   ) -> super::ResultAgalValue {
     match self {
-      Self::SuperInstance(value) => value.unary_back_operator(stack, env, operator),
-      Self::Function(value) => value.unary_back_operator(stack, env, operator),
-      Self::Promise(value) => value.unary_back_operator(stack, env, operator),
-      Self::Object(value) => value.unary_back_operator(stack, env, operator),
-      Self::Array(value) => value.unary_back_operator(stack, env, operator),
-      Self::Class(value) => value.unary_back_operator(stack, env, operator),
+      Self::SuperInstance(value) => value.unary_back_operator(stack, operator),
+      Self::Function(value) => value.unary_back_operator(stack, operator),
+      Self::Promise(value) => value.unary_back_operator(stack, operator),
+      Self::Object(value) => value.unary_back_operator(stack, operator),
+      Self::Array(value) => value.unary_back_operator(stack, operator),
+      Self::Class(value) => value.unary_back_operator(stack, operator),
     }
   }
 
   fn unary_operator(
     &self,
     stack: crate::runtime::RefStack,
-    env: crate::runtime::RefEnvironment,
     operator: &str,
   ) -> super::ResultAgalValue {
     match self {
-      Self::SuperInstance(value) => value.unary_operator(stack, env, operator),
-      Self::Function(value) => value.unary_operator(stack, env, operator),
-      Self::Promise(value) => value.unary_operator(stack, env, operator),
-      Self::Object(value) => value.unary_operator(stack, env, operator),
-      Self::Array(value) => value.unary_operator(stack, env, operator),
-      Self::Class(value) => value.unary_operator(stack, env, operator),
+      Self::SuperInstance(value) => value.unary_operator(stack, operator),
+      Self::Function(value) => value.unary_operator(stack, operator),
+      Self::Promise(value) => value.unary_operator(stack, operator),
+      Self::Object(value) => value.unary_operator(stack, operator),
+      Self::Array(value) => value.unary_operator(stack, operator),
+      Self::Class(value) => value.unary_operator(stack, operator),
     }
   }
 

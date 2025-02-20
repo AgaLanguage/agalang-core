@@ -22,7 +22,6 @@ pub struct AgalFunction {
   args: List<NodeIdentifier>,
   body: NodeBlock,
   env: runtime::RefEnvironment,
-  interpreter: interpreter::Interpreter,
 }
 
 impl AgalFunction {
@@ -32,7 +31,6 @@ impl AgalFunction {
     args: List<NodeIdentifier>,
     body: NodeBlock,
     env: runtime::RefEnvironment,
-    interpreter: interpreter::Interpreter,
   ) -> Self {
     Self {
       name,
@@ -40,7 +38,6 @@ impl AgalFunction {
       args,
       body,
       env,
-      interpreter,
     }
   }
 }
@@ -55,7 +52,10 @@ impl traits::AgalValuable for AgalFunction {
   fn get_name(&self) -> String {
     "Función".to_string()
   }
-  fn to_agal_string(&self,stack: runtime::RefStack) -> Result<primitive::AgalString, internal::AgalThrow> {
+  fn to_agal_string(
+    &self,
+    stack: runtime::RefStack,
+  ) -> Result<primitive::AgalString, internal::AgalThrow> {
     Ok(primitive::AgalString::from_string(format!(
       "[{} {}]",
       if self.is_async {
@@ -73,14 +73,12 @@ impl traits::AgalValuable for AgalFunction {
   fn to_agal_console(
     &self,
     stack: runtime::RefStack,
-    env: runtime::RefEnvironment,
   ) -> Result<primitive::AgalString, internal::AgalThrow> {
     Ok(self.to_agal_string(stack)?.set_color(colors::Color::CYAN))
   }
   async fn call(
     &mut self,
     stack: runtime::RefStack,
-    env: runtime::RefEnvironment,
     this: crate::runtime::values::DefaultRefAgalValue,
     args: Vec<crate::runtime::values::DefaultRefAgalValue>,
     modules: RefValue<crate::Modules>,
@@ -101,10 +99,7 @@ impl traits::AgalValuable for AgalFunction {
         &parser::ast::Node::Identifier(arg.clone()),
       );
     }
-    let value = self
-      .interpreter
-      .clone()
-      .resolve_pinned(parser::ast::Node::Block(self.body.clone()).to_box());
+    let value = interpreter(self.body.clone().to_node().to_box(), stack, modules);
     if self.is_async {
       super::promise::AgalPromise::new(value).to_result()
     } else {
@@ -140,7 +135,6 @@ impl traits::AgalValuable for AgalFunction {
   fn binary_operation(
     &self,
     stack: runtime::RefStack,
-    env: runtime::RefEnvironment,
     operator: &str,
     right: runtime::values::DefaultRefAgalValue,
   ) -> Result<runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
@@ -150,7 +144,6 @@ impl traits::AgalValuable for AgalFunction {
   fn unary_back_operator(
     &self,
     stack: runtime::RefStack,
-    env: runtime::RefEnvironment,
     operator: &str,
   ) -> runtime::values::ResultAgalValue {
     todo!()
@@ -159,7 +152,6 @@ impl traits::AgalValuable for AgalFunction {
   fn unary_operator(
     &self,
     stack: runtime::RefStack,
-    env: runtime::RefEnvironment,
     operator: &str,
   ) -> runtime::values::ResultAgalValue {
     todo!()
@@ -168,7 +160,6 @@ impl traits::AgalValuable for AgalFunction {
   fn get_object_property(
     &self,
     stack: runtime::RefStack,
-    env: runtime::RefEnvironment,
     key: &str,
   ) -> Result<runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
     todo!()
@@ -177,7 +168,6 @@ impl traits::AgalValuable for AgalFunction {
   fn set_object_property(
     &mut self,
     stack: runtime::RefStack,
-    env: runtime::RefEnvironment,
     key: &str,
     value: runtime::values::DefaultRefAgalValue,
   ) -> Result<runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
@@ -187,7 +177,6 @@ impl traits::AgalValuable for AgalFunction {
   fn get_instance_property(
     &self,
     stack: runtime::RefStack,
-    env: runtime::RefEnvironment,
     key: &str,
   ) -> Result<runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
     todo!()

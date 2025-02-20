@@ -71,7 +71,10 @@ impl traits::AgalValuable for AgalPromise {
   fn get_name(&self) -> String {
     "Promesa".to_string()
   }
-  fn to_agal_string(&self,stack: crate::runtime::RefStack) -> Result<primitive::AgalString, internal::AgalThrow> {
+  fn to_agal_string(
+    &self,
+    stack: crate::runtime::RefStack,
+  ) -> Result<primitive::AgalString, internal::AgalThrow> {
     Ok(primitive::AgalString::from_string("Promise".to_string()))
   }
 
@@ -103,7 +106,6 @@ impl traits::AgalValuable for AgalPromise {
   fn binary_operation(
     &self,
     stack: crate::runtime::RefStack,
-    env: crate::runtime::RefEnvironment,
     operator: &str,
     right: values::DefaultRefAgalValue,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
@@ -113,7 +115,6 @@ impl traits::AgalValuable for AgalPromise {
   fn unary_back_operator(
     &self,
     stack: crate::runtime::RefStack,
-    env: crate::runtime::RefEnvironment,
     operator: &str,
   ) -> values::ResultAgalValue {
     todo!()
@@ -122,7 +123,6 @@ impl traits::AgalValuable for AgalPromise {
   fn unary_operator(
     &self,
     stack: crate::runtime::RefStack,
-    env: crate::runtime::RefEnvironment,
     operator: &str,
   ) -> values::ResultAgalValue {
     todo!()
@@ -131,7 +131,6 @@ impl traits::AgalValuable for AgalPromise {
   fn get_object_property(
     &self,
     stack: crate::runtime::RefStack,
-    env: crate::runtime::RefEnvironment,
     key: &str,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
     todo!()
@@ -140,7 +139,6 @@ impl traits::AgalValuable for AgalPromise {
   fn set_object_property(
     &mut self,
     stack: crate::runtime::RefStack,
-    env: crate::runtime::RefEnvironment,
     key: &str,
     value: values::DefaultRefAgalValue,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
@@ -150,7 +148,6 @@ impl traits::AgalValuable for AgalPromise {
   fn get_instance_property(
     &self,
     stack: crate::runtime::RefStack,
-    env: crate::runtime::RefEnvironment,
     key: &str,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
     todo!()
@@ -159,7 +156,6 @@ impl traits::AgalValuable for AgalPromise {
   async fn call(
     &mut self,
     stack: crate::runtime::RefStack,
-    env: crate::runtime::RefEnvironment,
     this: values::DefaultRefAgalValue,
     args: Vec<values::DefaultRefAgalValue>,
     modules: RefValue<crate::Modules>,
@@ -173,12 +169,12 @@ impl traits::AgalValuable for AgalPromise {
   ) -> Result<primitive::AgalNumber, internal::AgalThrow> {
     todo!()
   }
-  
+
   fn equals(&self, other: &Self) -> bool {
-        todo!()
-    }
-  
+    todo!()
+  }
+
   fn less_than(&self, other: &Self) -> bool {
-        todo!()
-    }
+    todo!()
+  }
 }

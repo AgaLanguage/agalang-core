@@ -20,7 +20,7 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
       is_static: true,
       value: internal::AgalNativeFunction {
         name: format!("{module_name}::esperar"),
-        func: Rc::new(|arguments, stack, env, modules_manager, this| {
+        func: Rc::new(|arguments, stack, modules_manager, this| {
           let arg_clone = arguments.clone();
           AgalPromise::new(Box::pin(async move {
             let secs = if let Some(value) = arg_clone.get(0) {

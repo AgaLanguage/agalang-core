@@ -39,10 +39,17 @@ impl AgalArray {
     }
     Ok(buffer)
   }
-  pub fn set(&self, index: usize, value: values::DefaultRefAgalValue) -> values::DefaultRefAgalValue {
+  pub fn set(
+    &self,
+    index: usize,
+    value: values::DefaultRefAgalValue,
+  ) -> values::DefaultRefAgalValue {
     let mut borrowed = &mut *self.0.borrow_mut();
     if index >= borrowed.len() {
-      borrowed.extend(std::iter::repeat(values::AgalValue::Never.to_ref_value()).take(index - borrowed.clone().len()));
+      borrowed.extend(
+        std::iter::repeat(values::AgalValue::Never.to_ref_value())
+          .take(index - borrowed.clone().len()),
+      );
     }
     borrowed[index] = value;
     borrowed[index].clone()
@@ -85,7 +92,10 @@ impl traits::AgalValuable for AgalArray {
   fn get_name(&self) -> String {
     "Lista".to_string()
   }
-  fn to_agal_string(&self,stack: runtime::RefStack) -> Result<primitive::AgalString, internal::AgalThrow> {
+  fn to_agal_string(
+    &self,
+    stack: runtime::RefStack,
+  ) -> Result<primitive::AgalString, internal::AgalThrow> {
     let mut result = String::new();
     let vec = self.to_vec();
     let vec = &*vec.borrow();
@@ -101,7 +111,6 @@ impl traits::AgalValuable for AgalArray {
   fn to_agal_console(
     &self,
     stack: runtime::RefStack,
-    env: runtime::RefEnvironment,
   ) -> Result<primitive::AgalString, internal::AgalThrow> {
     let mut result = String::new();
     let vec = self.to_vec();
@@ -109,7 +118,7 @@ impl traits::AgalValuable for AgalArray {
     result.push_str("[");
     for (i, value) in vec.iter().enumerate() {
       let str = value
-        .to_agal_console(stack.clone(), env.clone())?
+        .to_agal_console(stack.clone())?
         .add_prev(" ")
         .to_string();
       result.push_str(&str);
@@ -158,7 +167,6 @@ impl traits::AgalValuable for AgalArray {
   fn binary_operation(
     &self,
     stack: runtime::RefStack,
-    env: runtime::RefEnvironment,
     operator: &str,
     right: values::DefaultRefAgalValue,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
@@ -232,7 +240,6 @@ impl traits::AgalValuable for AgalArray {
   fn unary_back_operator(
     &self,
     stack: runtime::RefStack,
-    env: runtime::RefEnvironment,
     operator: &str,
   ) -> values::ResultAgalValue {
     if operator == "?" {
@@ -250,7 +257,6 @@ impl traits::AgalValuable for AgalArray {
   fn unary_operator(
     &self,
     stack: runtime::RefStack,
-    env: runtime::RefEnvironment,
     operator: &str,
   ) -> values::ResultAgalValue {
     match operator {
@@ -269,7 +275,6 @@ impl traits::AgalValuable for AgalArray {
   fn get_object_property(
     &self,
     stack: runtime::RefStack,
-    env: runtime::RefEnvironment,
     key: &str,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
     let is_number = usize::from_str_radix(key, 10).on_error(AgalThrow::Params {
@@ -293,7 +298,6 @@ impl traits::AgalValuable for AgalArray {
   fn set_object_property(
     &mut self,
     stack: runtime::RefStack,
-    env: runtime::RefEnvironment,
     key: &str,
     value: values::DefaultRefAgalValue,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
@@ -316,16 +320,19 @@ impl traits::AgalValuable for AgalArray {
   fn get_instance_property(
     &self,
     stack: runtime::RefStack,
-    env: runtime::RefEnvironment,
     key: &str,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
     if key == "longitud" {
       let length = self.to_vec().borrow().len();
       AgalNumber::Integer(length as i32).to_result()
-    }else {
+    } else {
       internal::AgalThrow::Params {
         type_error: parser::internal::ErrorNames::TypeError,
-        message: format!("No se puede acceder a la propiedad '{}' de {}", key, self.get_name()),
+        message: format!(
+          "No se puede acceder a la propiedad '{}' de {}",
+          key,
+          self.get_name()
+        ),
         stack,
       }
       .throw()
@@ -335,7 +342,6 @@ impl traits::AgalValuable for AgalArray {
   async fn call(
     &mut self,
     stack: runtime::RefStack,
-    env: runtime::RefEnvironment,
     this: values::DefaultRefAgalValue,
     args: Vec<values::DefaultRefAgalValue>,
     modules: RefValue<crate::Modules>,

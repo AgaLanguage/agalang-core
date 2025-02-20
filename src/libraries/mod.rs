@@ -2,9 +2,9 @@ use parser::util::RefValue;
 
 use crate::{runtime::values, Modules};
 mod fs;
+mod math;
 mod print;
 mod time;
-mod math;
 
 type EvalResult = Result<values::DefaultRefAgalValue, ()>;
 

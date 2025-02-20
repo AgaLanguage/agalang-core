@@ -51,13 +51,15 @@ impl traits::AgalValuable for AgalObject {
   fn get_name(&self) -> String {
     "Objeto".to_string()
   }
-  fn to_agal_string(&self,stack: runtime::RefStack) -> Result<primitive::AgalString, internal::AgalThrow> {
+  fn to_agal_string(
+    &self,
+    stack: runtime::RefStack,
+  ) -> Result<primitive::AgalString, internal::AgalThrow> {
     Ok(primitive::AgalString::from_string("<Objeto>".to_string()))
   }
   fn get_object_property(
     &self,
     stack: runtime::RefStack,
-    env: runtime::RefEnvironment,
     key: &str,
   ) -> values::ResultAgalValue {
     let hashmap = &mut *self.0.as_ref().borrow_mut();
@@ -74,7 +76,6 @@ impl traits::AgalValuable for AgalObject {
   fn set_object_property(
     &mut self,
     stack: runtime::RefStack,
-    env: runtime::RefEnvironment,
     key: &str,
     value: values::DefaultRefAgalValue,
   ) -> values::ResultAgalValue {
@@ -88,7 +89,6 @@ impl traits::AgalValuable for AgalObject {
   fn get_instance_property(
     &self,
     stack: runtime::RefStack,
-    env: runtime::RefEnvironment,
     key: &str,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
     if let Some(v) = {
@@ -136,7 +136,6 @@ impl traits::AgalValuable for AgalObject {
   fn binary_operation(
     &self,
     stack: runtime::RefStack,
-    env: runtime::RefEnvironment,
     operator: &str,
     right: values::DefaultRefAgalValue,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
@@ -146,7 +145,6 @@ impl traits::AgalValuable for AgalObject {
   fn unary_back_operator(
     &self,
     stack: runtime::RefStack,
-    env: runtime::RefEnvironment,
     operator: &str,
   ) -> values::ResultAgalValue {
     todo!()
@@ -155,7 +153,6 @@ impl traits::AgalValuable for AgalObject {
   fn unary_operator(
     &self,
     stack: runtime::RefStack,
-    env: runtime::RefEnvironment,
     operator: &str,
   ) -> values::ResultAgalValue {
     todo!()
@@ -164,7 +161,6 @@ impl traits::AgalValuable for AgalObject {
   async fn call(
     &mut self,
     stack: runtime::RefStack,
-    env: runtime::RefEnvironment,
     this: values::DefaultRefAgalValue,
     args: Vec<values::DefaultRefAgalValue>,
     modules: parser::util::RefValue<crate::Modules>,
@@ -178,12 +174,12 @@ impl traits::AgalValuable for AgalObject {
   ) -> Result<primitive::AgalNumber, internal::AgalThrow> {
     todo!()
   }
-  
+
   fn equals(&self, other: &Self) -> bool {
-        todo!()
-    }
-  
+    todo!()
+  }
+
   fn less_than(&self, other: &Self) -> bool {
-        todo!()
-    }
+    todo!()
+  }
 }

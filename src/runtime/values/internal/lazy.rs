@@ -2,11 +2,13 @@ use parser::{ast::NodeExpressionMedicator, util::RefValue};
 
 use crate::{
   runtime::{
-    interpreter, values::{
+    interpreter,
+    values::{
       self, primitive,
       traits::{self, AgalValuable as _, ToAgalValue},
       AgalValue, ResultAgalValue,
-    }, RefEnvironment, RefStack, Stack
+    },
+    RefEnvironment, RefStack, Stack,
   },
   Modules,
 };
@@ -18,34 +20,29 @@ pub struct AgalLazy {
   node: NodeExpressionMedicator,
   value: Option<ResultAgalValue>,
   stack: RefStack,
-  env: RefEnvironment,
   modules: RefValue<Modules>,
 }
 impl AgalLazy {
   pub fn new(
     node: NodeExpressionMedicator,
     stack: RefStack,
-    env: RefEnvironment,
     modules: RefValue<Modules>,
   ) -> Self {
     AgalLazy {
       node,
       value: None,
       stack,
-      env,
       modules,
     }
   }
-  pub async fn get(&mut self, mut interpreter: interpreter::Interpreter) -> ResultAgalValue {
+  pub async fn get(&mut self) -> ResultAgalValue {
     if let Some(v) = &self.value {
       return v.clone();
     }
     self.value = Some(AgalValue::Never.to_result());
     self.value = Some(
-      interpreter.resolve_pinned(
-        self.node.expression.clone(),
-      )
-      .await,
+      interpreter(self.node.expression.clone(), self.stack.clone(), self.modules.clone())
+        .await,
     );
 
     self.value.clone().unwrap()
@@ -56,7 +53,10 @@ impl traits::AgalValuable for AgalLazy {
   fn get_name(&self) -> String {
     "Vago".to_string()
   }
-  fn to_agal_string(&self,stack: crate::runtime::RefStack) -> Result<primitive::AgalString, super::AgalThrow> {
+  fn to_agal_string(
+    &self,
+    stack: crate::runtime::RefStack,
+  ) -> Result<primitive::AgalString, super::AgalThrow> {
     Ok(primitive::AgalString::from_string(
       "<valor vago>".to_string(),
     ))
@@ -90,7 +90,6 @@ impl traits::AgalValuable for AgalLazy {
   fn binary_operation(
     &self,
     stack: crate::runtime::RefStack,
-    env: crate::runtime::RefEnvironment,
     operator: &str,
     right: values::DefaultRefAgalValue,
   ) -> Result<values::DefaultRefAgalValue, super::AgalThrow> {
@@ -100,7 +99,6 @@ impl traits::AgalValuable for AgalLazy {
   fn unary_back_operator(
     &self,
     stack: crate::runtime::RefStack,
-    env: crate::runtime::RefEnvironment,
     operator: &str,
   ) -> values::ResultAgalValue {
     todo!()
@@ -109,7 +107,6 @@ impl traits::AgalValuable for AgalLazy {
   fn unary_operator(
     &self,
     stack: crate::runtime::RefStack,
-    env: crate::runtime::RefEnvironment,
     operator: &str,
   ) -> values::ResultAgalValue {
     todo!()
@@ -118,7 +115,6 @@ impl traits::AgalValuable for AgalLazy {
   fn get_object_property(
     &self,
     stack: crate::runtime::RefStack,
-    env: crate::runtime::RefEnvironment,
     key: &str,
   ) -> Result<values::DefaultRefAgalValue, super::AgalThrow> {
     todo!()
@@ -127,7 +123,6 @@ impl traits::AgalValuable for AgalLazy {
   fn set_object_property(
     &mut self,
     stack: crate::runtime::RefStack,
-    env: crate::runtime::RefEnvironment,
     key: &str,
     value: values::DefaultRefAgalValue,
   ) -> Result<values::DefaultRefAgalValue, super::AgalThrow> {
@@ -137,7 +132,6 @@ impl traits::AgalValuable for AgalLazy {
   fn get_instance_property(
     &self,
     stack: crate::runtime::RefStack,
-    env: crate::runtime::RefEnvironment,
     key: &str,
   ) -> Result<values::DefaultRefAgalValue, super::AgalThrow> {
     todo!()
@@ -146,7 +140,6 @@ impl traits::AgalValuable for AgalLazy {
   async fn call(
     &mut self,
     stack: crate::runtime::RefStack,
-    env: crate::runtime::RefEnvironment,
     this: values::DefaultRefAgalValue,
     args: Vec<values::DefaultRefAgalValue>,
     modules: parser::util::RefValue<crate::Modules>,
@@ -160,14 +153,14 @@ impl traits::AgalValuable for AgalLazy {
   ) -> Result<primitive::AgalNumber, super::AgalThrow> {
     todo!()
   }
-  
+
   fn equals(&self, other: &Self) -> bool {
-        todo!()
-    }
-  
+    todo!()
+  }
+
   fn less_than(&self, other: &Self) -> bool {
-        todo!()
-    }
+    todo!()
+  }
 }
 impl traits::ToAgalValue for AgalLazy {
   fn to_value(self) -> AgalValue {

@@ -1,16 +1,19 @@
 use std::{cell::RefCell, rc::Rc};
 
 use parser::{
-  ast::Node, internal::{error_to_string, ErrorNames, ErrorTypes}, util::RefValue
+  ast::Node,
+  internal::{error_to_string, ErrorNames, ErrorTypes},
+  util::RefValue,
 };
 
 use crate::{
   runtime::{
-    self, values::{
+    self,
+    values::{
       self, primitive,
       traits::{self, AgalValuable as _, ToAgalValue as _},
       AgalValue,
-    }
+    },
   },
   Modules,
 };
@@ -44,12 +47,12 @@ impl AgalThrow {
       Self::Value(value) => super::AgalError::Value(value.clone()),
     }
   }
-  pub fn get_data(&self, stack:runtime::RefStack) -> (ErrorNames, ErrorTypes) {
+  pub fn get_data(&self, stack: runtime::RefStack) -> (ErrorNames, ErrorTypes) {
     match self {
       Self::Params {
         type_error,
         message,
-        stack
+        stack,
       } => {
         let mut string = String::new();
         string.push_str(message);
@@ -60,11 +63,17 @@ impl AgalThrow {
           let location = frame.get_location();
           string.push_str(&match frame.get_type() {
             "Programa" => format!("\n  en {}", location.file_name),
-            str => format!("\n  {str} en {}:{}:{}", location.file_name, location.start.line+1, location.start.column+1)
+            str => format!(
+              "\n  {str} en {}:{}:{}",
+              location.file_name,
+              location.start.line + 1,
+              location.start.column + 1
+            ),
           });
         }
-        
-        (type_error.clone(), ErrorTypes::StringError(string))},
+
+        (type_error.clone(), ErrorTypes::StringError(string))
+      }
       Self::Value(value) => {
         let message = value.try_to_string(stack.clone());
         match message {
@@ -90,13 +99,12 @@ impl traits::AgalValuable for AgalThrow {
   fn get_name(&self) -> String {
     "Lanzado".to_string()
   }
-  fn to_agal_string(&self,stack: runtime::RefStack) -> Result<primitive::AgalString, AgalThrow> {
+  fn to_agal_string(&self, stack: runtime::RefStack) -> Result<primitive::AgalString, AgalThrow> {
     Ok(primitive::AgalString::from_string(self.to_string()))
   }
   fn to_agal_console(
     &self,
     stack: runtime::RefStack,
-    env: runtime::RefEnvironment,
   ) -> Result<primitive::AgalString, AgalThrow> {
     self.to_agal_string(stack)
   }
@@ -129,7 +137,6 @@ impl traits::AgalValuable for AgalThrow {
   fn binary_operation(
     &self,
     stack: runtime::RefStack,
-    env: runtime::RefEnvironment,
     operator: &str,
     right: values::DefaultRefAgalValue,
   ) -> Result<values::DefaultRefAgalValue, super::AgalThrow> {
@@ -139,7 +146,6 @@ impl traits::AgalValuable for AgalThrow {
   fn unary_back_operator(
     &self,
     stack: runtime::RefStack,
-    env: runtime::RefEnvironment,
     operator: &str,
   ) -> values::ResultAgalValue {
     todo!()
@@ -148,7 +154,6 @@ impl traits::AgalValuable for AgalThrow {
   fn unary_operator(
     &self,
     stack: runtime::RefStack,
-    env: runtime::RefEnvironment,
     operator: &str,
   ) -> values::ResultAgalValue {
     todo!()
@@ -157,7 +162,6 @@ impl traits::AgalValuable for AgalThrow {
   fn get_object_property(
     &self,
     stack: runtime::RefStack,
-    env: runtime::RefEnvironment,
     key: &str,
   ) -> Result<values::DefaultRefAgalValue, super::AgalThrow> {
     todo!()
@@ -166,7 +170,6 @@ impl traits::AgalValuable for AgalThrow {
   fn set_object_property(
     &mut self,
     stack: runtime::RefStack,
-    env: runtime::RefEnvironment,
     key: &str,
     value: values::DefaultRefAgalValue,
   ) -> Result<values::DefaultRefAgalValue, super::AgalThrow> {
@@ -176,7 +179,6 @@ impl traits::AgalValuable for AgalThrow {
   fn get_instance_property(
     &self,
     stack: runtime::RefStack,
-    env: runtime::RefEnvironment,
     key: &str,
   ) -> Result<values::DefaultRefAgalValue, super::AgalThrow> {
     todo!()
@@ -185,7 +187,6 @@ impl traits::AgalValuable for AgalThrow {
   async fn call(
     &mut self,
     stack: runtime::RefStack,
-    env: runtime::RefEnvironment,
     this: values::DefaultRefAgalValue,
     args: Vec<values::DefaultRefAgalValue>,
     modules: RefValue<Modules>,

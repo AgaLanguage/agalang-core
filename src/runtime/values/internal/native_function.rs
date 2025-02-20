@@ -25,7 +25,6 @@ pub struct AgalNativeFunction {
     dyn Fn(
       Vec<values::DefaultRefAgalValue>,
       RefStack,
-      RefEnvironment,
       RefValue<Modules>,
       values::DefaultRefAgalValue,
     ) -> Result<values::DefaultRefAgalValue, super::AgalThrow>,
@@ -40,7 +39,7 @@ impl traits::AgalValuable for AgalNativeFunction {
   fn get_name(&self) -> String {
     "<Función nativa>".to_string()
   }
-  fn to_agal_string(&self,stack: RefStack) -> Result<primitive::AgalString, super::AgalThrow> {
+  fn to_agal_string(&self, stack: RefStack) -> Result<primitive::AgalString, super::AgalThrow> {
     Ok(primitive::AgalString::from_string(format!(
       "[nativo fn {}]",
       self.name
@@ -49,19 +48,17 @@ impl traits::AgalValuable for AgalNativeFunction {
   fn to_agal_console(
     &self,
     stack: RefStack,
-    env: RefEnvironment,
   ) -> Result<primitive::AgalString, super::AgalThrow> {
     Ok(self.to_agal_string(stack)?.set_color(colors::Color::CYAN))
   }
   async fn call(
     &mut self,
     stack: RefStack,
-    env: RefEnvironment,
     this: values::DefaultRefAgalValue,
     args: Vec<values::DefaultRefAgalValue>,
     modules: RefValue<Modules>,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
-    (self.func)(args, stack, env, modules, this)
+    (self.func)(args, stack, modules, this)
   }
 
   fn get_keys(&self) -> Vec<String> {
@@ -92,7 +89,6 @@ impl traits::AgalValuable for AgalNativeFunction {
   fn binary_operation(
     &self,
     stack: crate::runtime::RefStack,
-    env: crate::runtime::RefEnvironment,
     operator: &str,
     right: values::DefaultRefAgalValue,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
@@ -102,7 +98,6 @@ impl traits::AgalValuable for AgalNativeFunction {
   fn unary_back_operator(
     &self,
     stack: crate::runtime::RefStack,
-    env: crate::runtime::RefEnvironment,
     operator: &str,
   ) -> values::ResultAgalValue {
     todo!()
@@ -111,7 +106,6 @@ impl traits::AgalValuable for AgalNativeFunction {
   fn unary_operator(
     &self,
     stack: crate::runtime::RefStack,
-    env: crate::runtime::RefEnvironment,
     operator: &str,
   ) -> values::ResultAgalValue {
     todo!()
@@ -120,7 +114,6 @@ impl traits::AgalValuable for AgalNativeFunction {
   fn get_object_property(
     &self,
     stack: crate::runtime::RefStack,
-    env: crate::runtime::RefEnvironment,
     key: &str,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
     todo!()
@@ -129,7 +122,6 @@ impl traits::AgalValuable for AgalNativeFunction {
   fn set_object_property(
     &mut self,
     stack: crate::runtime::RefStack,
-    env: crate::runtime::RefEnvironment,
     key: &str,
     value: values::DefaultRefAgalValue,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
@@ -139,7 +131,6 @@ impl traits::AgalValuable for AgalNativeFunction {
   fn get_instance_property(
     &self,
     stack: crate::runtime::RefStack,
-    env: crate::runtime::RefEnvironment,
     key: &str,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
     todo!()
@@ -151,14 +142,14 @@ impl traits::AgalValuable for AgalNativeFunction {
   ) -> Result<primitive::AgalNumber, internal::AgalThrow> {
     todo!()
   }
-  
+
   fn equals(&self, other: &Self) -> bool {
-        todo!()
-    }
-  
+    todo!()
+  }
+
   fn less_than(&self, other: &Self) -> bool {
-        todo!()
-    }
+    todo!()
+  }
 }
 impl traits::ToAgalValue for AgalNativeFunction {
   fn to_value(self) -> AgalValue {

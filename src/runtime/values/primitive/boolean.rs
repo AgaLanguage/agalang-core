@@ -3,7 +3,10 @@ use crate::{
   runtime::{
     self,
     values::{
-      error_message, internal::{self, AgalThrow}, traits::{self, AgalValuable as _, ToAgalValue as _}, AgalValue
+      error_message,
+      internal::{self, AgalThrow},
+      traits::{self, AgalValuable as _, ToAgalValue as _},
+      AgalValue,
     },
     FALSE_KEYWORD, TRUE_KEYWORD,
   },
@@ -56,7 +59,7 @@ impl traits::AgalValuable for AgalBoolean {
   fn get_name(&self) -> String {
     "Buleano".to_string()
   }
-  fn to_agal_string(&self,stack: runtime::RefStack) -> Result<AgalString, internal::AgalThrow> {
+  fn to_agal_string(&self, stack: runtime::RefStack) -> Result<AgalString, internal::AgalThrow> {
     Ok(super::AgalString::from_string(match self {
       Self::False => FALSE_KEYWORD.to_string(),
       Self::True => TRUE_KEYWORD.to_string(),
@@ -65,14 +68,10 @@ impl traits::AgalValuable for AgalBoolean {
   fn to_agal_console(
     &self,
     stack: runtime::RefStack,
-    env: runtime::RefEnvironment,
   ) -> Result<AgalString, internal::AgalThrow> {
     Ok(self.to_agal_string(stack)?.set_color(colors::Color::YELLOW))
   }
-  fn to_agal_boolean(
-    &self,
-    stack: runtime::RefStack,
-  ) -> Result<Self, internal::AgalThrow> {
+  fn to_agal_boolean(&self, stack: runtime::RefStack) -> Result<Self, internal::AgalThrow> {
     Ok(*self)
   }
 
@@ -80,10 +79,7 @@ impl traits::AgalValuable for AgalBoolean {
     todo!()
   }
 
-  fn to_agal_byte(
-    &self,
-    stack: runtime::RefStack,
-  ) -> Result<super::AgalByte, internal::AgalThrow> {
+  fn to_agal_byte(&self, stack: runtime::RefStack) -> Result<super::AgalByte, internal::AgalThrow> {
     todo!()
   }
 
@@ -98,7 +94,6 @@ impl traits::AgalValuable for AgalBoolean {
   fn binary_operation(
     &self,
     stack: runtime::RefStack,
-    env: runtime::RefEnvironment,
     operator: &str,
     right: runtime::values::DefaultRefAgalValue,
   ) -> Result<runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
@@ -113,7 +108,7 @@ impl traits::AgalValuable for AgalBoolean {
         stack,
       });
     };
-    match (prim,operator) {
+    match (prim, operator) {
       (AgalPrimitive::Boolean(b), "&&") => self.and(b).to_result(),
       (AgalPrimitive::Boolean(b), "||") => self.or(b).to_result(),
       _ => Err(AgalThrow::Params {
@@ -127,7 +122,6 @@ impl traits::AgalValuable for AgalBoolean {
   fn unary_back_operator(
     &self,
     stack: runtime::RefStack,
-    env: runtime::RefEnvironment,
     operator: &str,
   ) -> runtime::values::ResultAgalValue {
     todo!()
@@ -136,7 +130,6 @@ impl traits::AgalValuable for AgalBoolean {
   fn unary_operator(
     &self,
     stack: runtime::RefStack,
-    env: runtime::RefEnvironment,
     operator: &str,
   ) -> runtime::values::ResultAgalValue {
     todo!()
@@ -145,7 +138,6 @@ impl traits::AgalValuable for AgalBoolean {
   fn get_object_property(
     &self,
     stack: runtime::RefStack,
-    env: runtime::RefEnvironment,
     key: &str,
   ) -> Result<runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
     todo!()
@@ -154,7 +146,6 @@ impl traits::AgalValuable for AgalBoolean {
   fn set_object_property(
     &mut self,
     stack: runtime::RefStack,
-    env: runtime::RefEnvironment,
     key: &str,
     value: runtime::values::DefaultRefAgalValue,
   ) -> Result<runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
@@ -164,7 +155,6 @@ impl traits::AgalValuable for AgalBoolean {
   fn get_instance_property(
     &self,
     stack: runtime::RefStack,
-    env: runtime::RefEnvironment,
     key: &str,
   ) -> Result<runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
     todo!()
@@ -173,7 +163,6 @@ impl traits::AgalValuable for AgalBoolean {
   async fn call(
     &mut self,
     stack: runtime::RefStack,
-    env: runtime::RefEnvironment,
     this: runtime::values::DefaultRefAgalValue,
     args: Vec<runtime::values::DefaultRefAgalValue>,
     modules: parser::util::RefValue<crate::Modules>,

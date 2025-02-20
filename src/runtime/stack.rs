@@ -11,7 +11,8 @@ impl RefStack {
       env: self.env().crate_child(in_class),
       prev: Some(self.clone()),
       node: value,
-    }.to_ref()
+    }
+    .to_ref()
   }
   pub fn next(self, value: BNode) -> Self {
     self.0.borrow_mut().next(value);
@@ -25,6 +26,14 @@ impl RefStack {
   }
   pub fn env(&self) -> RefEnvironment {
     self.0.borrow().env()
+  }
+  pub fn get_global(&self) -> Self {
+    Stack {
+      env: self.env().get_global(),
+      prev: Some(self.clone()),
+      node: self.current(),
+    }
+    .to_ref()
   }
 }
 impl IntoIterator for RefStack {
@@ -52,7 +61,7 @@ impl IntoIterator for &RefStack {
 pub struct Stack {
   node: BNode,
   env: RefEnvironment,
-  prev: Option<RefStack>
+  prev: Option<RefStack>,
 }
 
 impl Stack {
@@ -64,7 +73,7 @@ impl Stack {
     }
   }
   pub fn to_ref(self) -> RefStack {
-    RefStack (Rc::new(RefCell::new(self)))
+    RefStack(Rc::new(RefCell::new(self)))
   }
   pub fn crate_child(&self, in_class: bool, value: BNode) -> Self {
     Self {
@@ -73,7 +82,17 @@ impl Stack {
       node: value,
     }
   }
+  pub fn get_global(&self) -> Self {
+    Self {
+      env: self.env.get_global(),
+      prev: Some(self.clone().to_ref()),
+      node: self.node.clone(),
+    }
+  }
   pub fn next(&self, value: BNode) -> Self {
+    if (self.node == value) {
+      return self.clone();
+    }
     Self {
       env: self.env.clone(),
       prev: Some(self.clone().to_ref()),

@@ -2,7 +2,12 @@ use std::{cell::RefCell, rc::Rc};
 
 use crate::{
   runtime::values::{
-    self, complex::{self, AgalPromise}, internal::{self, AgalThrow}, primitive::AgalNumber, traits::{self, AgalValuable as _, ToAgalValue as _}, AgalValue
+    self,
+    complex::{self, AgalPromise},
+    internal::{self, AgalThrow},
+    primitive::AgalNumber,
+    traits::{self, AgalValuable as _, ToAgalValue as _},
+    AgalValue,
   },
   OnError, ToResult,
 };
@@ -19,7 +24,7 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
       is_static: true,
       value: internal::AgalNativeFunction {
         name: format!("{module_name}::suelo"),
-        func: Rc::new(|arguments, stack, env, modules_manager, this| {
+        func: Rc::new(|arguments, stack, modules_manager, this| {
           arguments
             .get(0)
             .to_result()
@@ -43,7 +48,7 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
       is_static: true,
       value: internal::AgalNativeFunction {
         name: format!("{module_name}::min"),
-        func: Rc::new(|arguments, stack, env, modules_manager, this| {
+        func: Rc::new(|arguments, stack, modules_manager, this| {
           let mut val = AgalNumber::Infinity;
           for argument in arguments {
             let n = argument.to_agal_number(stack.clone())?;
@@ -64,7 +69,7 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
       is_static: true,
       value: internal::AgalNativeFunction {
         name: format!("{module_name}::max"),
-        func: Rc::new(|arguments, stack, env, modules_manager, this| {
+        func: Rc::new(|arguments, stack, modules_manager, this| {
           let mut val = AgalNumber::NegInfinity;
           for argument in arguments {
             let n = argument.to_agal_number(stack.clone())?;
