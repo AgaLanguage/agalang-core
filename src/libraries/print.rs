@@ -18,9 +18,9 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
       is_static: true,
       value: internal::AgalNativeFunction {
         name: format!("{module_name}::pintar"),
-        func: Rc::new(|arguments, stack, env, modules_manager, this| {
+        func: Rc::new(|arguments, stack, modules_manager, this| {
           for arg in arguments {
-            let data = arg.to_agal_console(stack.clone(), env.clone())?;
+            let data = arg.to_agal_console(stack.clone())?;
             print!("{} ", data.to_string());
           }
           print!("\n");

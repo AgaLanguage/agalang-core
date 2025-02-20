@@ -21,13 +21,13 @@ type RefHasMap<Value> = Rc<RefCell<HashMap<String, Value>>>;
 fn ref_hash_map<T: Clone>() -> RefHasMap<T> {
   Rc::new(RefCell::new(HashMap::new()))
 }
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct AgalClassProperty {
   pub is_public: bool,
   pub is_static: bool,
   pub value: values::DefaultRefAgalValue,
 }
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct AgalPrototype {
   instance_properties: RefHasMap<AgalClassProperty>,
   super_instance: Option<values::RefAgalValue<AgalPrototype>>,
@@ -62,17 +62,19 @@ impl traits::AgalValuable for AgalPrototype {
   fn get_name(&self) -> String {
     "Clase".to_string()
   }
-  fn to_agal_string(&self) -> Result<primitive::AgalString, internal::AgalThrow> {
+  fn to_agal_string(
+    &self,
+    stack: runtime::RefStack,
+  ) -> Result<primitive::AgalString, internal::AgalThrow> {
     Ok(primitive::AgalString::from_string(
       "<instancia super>".to_string(),
     ))
   }
   fn to_agal_console(
     &self,
-    stack: parser::util::RefValue<runtime::Stack>,
-    env: runtime::RefEnvironment,
+    stack: runtime::RefStack,
   ) -> Result<primitive::AgalString, internal::AgalThrow> {
-    Ok(self.to_agal_string()?.set_color(colors::Color::CYAN))
+    Ok(self.to_agal_string(stack)?.set_color(colors::Color::CYAN))
   }
 
   fn get_keys(&self) -> Vec<String> {
@@ -81,29 +83,28 @@ impl traits::AgalValuable for AgalPrototype {
 
   fn to_agal_byte(
     &self,
-    stack: RefValue<runtime::Stack>,
+    stack: runtime::RefStack,
   ) -> Result<primitive::AgalByte, internal::AgalThrow> {
     todo!()
   }
 
   fn to_agal_boolean(
     &self,
-    stack: RefValue<runtime::Stack>,
+    stack: runtime::RefStack,
   ) -> Result<primitive::AgalBoolean, internal::AgalThrow> {
     todo!()
   }
 
   fn to_agal_array(
     &self,
-    stack: RefValue<runtime::Stack>,
+    stack: runtime::RefStack,
   ) -> Result<values::RefAgalValue<super::AgalArray>, internal::AgalThrow> {
     todo!()
   }
 
   fn binary_operation(
     &self,
-    stack: RefValue<runtime::Stack>,
-    env: runtime::RefEnvironment,
+    stack: runtime::RefStack,
     operator: &str,
     right: values::DefaultRefAgalValue,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
@@ -112,26 +113,19 @@ impl traits::AgalValuable for AgalPrototype {
 
   fn unary_back_operator(
     &self,
-    stack: RefValue<runtime::Stack>,
-    env: runtime::RefEnvironment,
+    stack: runtime::RefStack,
     operator: &str,
   ) -> values::ResultAgalValue {
     todo!()
   }
 
-  fn unary_operator(
-    &self,
-    stack: RefValue<runtime::Stack>,
-    env: runtime::RefEnvironment,
-    operator: &str,
-  ) -> values::ResultAgalValue {
+  fn unary_operator(&self, stack: runtime::RefStack, operator: &str) -> values::ResultAgalValue {
     todo!()
   }
 
   fn get_object_property(
     &self,
-    stack: RefValue<runtime::Stack>,
-    env: runtime::RefEnvironment,
+    stack: runtime::RefStack,
     key: &str,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
     todo!()
@@ -139,8 +133,7 @@ impl traits::AgalValuable for AgalPrototype {
 
   fn set_object_property(
     &mut self,
-    stack: RefValue<runtime::Stack>,
-    env: runtime::RefEnvironment,
+    stack: runtime::RefStack,
     key: &str,
     value: values::DefaultRefAgalValue,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
@@ -149,17 +142,15 @@ impl traits::AgalValuable for AgalPrototype {
 
   fn get_instance_property(
     &self,
-    stack: RefValue<runtime::Stack>,
-    env: runtime::RefEnvironment,
+    stack: runtime::RefStack,
     key: &str,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
     todo!()
   }
 
   async fn call(
-    &self,
-    stack: RefValue<runtime::Stack>,
-    env: runtime::RefEnvironment,
+    &mut self,
+    stack: runtime::RefStack,
     this: values::DefaultRefAgalValue,
     args: Vec<values::DefaultRefAgalValue>,
     modules: RefValue<Modules>,
@@ -169,21 +160,21 @@ impl traits::AgalValuable for AgalPrototype {
 
   fn to_agal_number(
     &self,
-    stack: RefValue<runtime::Stack>,
+    stack: runtime::RefStack,
   ) -> Result<primitive::AgalNumber, internal::AgalThrow> {
     todo!()
   }
-  
+
   fn equals(&self, other: &Self) -> bool {
-        todo!()
-    }
-  
+    todo!()
+  }
+
   fn less_than(&self, other: &Self) -> bool {
-        todo!()
-    }
+    todo!()
+  }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct AgalClass {
   name: String,
   extend_of: Option<values::RefAgalValue<AgalClass>>,
@@ -229,7 +220,7 @@ impl AgalClass {
   }
   pub fn constructor(
     &self,
-    stack: RefValue<runtime::Stack>,
+    stack: runtime::RefStack,
     env: runtime::RefEnvironment,
     this: values::RefAgalValue<super::AgalObject>,
     args: Vec<values::DefaultRefAgalValue>,
@@ -253,7 +244,7 @@ impl AgalClass {
       let property_value = property.value.un_ref();
       property_value
         .clone()
-        .call(stack, env, this_value.clone(), args, modules_manager);
+        .call(stack, this_value.clone(), args, modules_manager);
     }
     this_value
   }
@@ -268,17 +259,19 @@ impl traits::AgalValuable for AgalClass {
   fn get_name(&self) -> String {
     "Clase".to_string()
   }
-  fn to_agal_string(&self) -> Result<primitive::AgalString, internal::AgalThrow> {
+  fn to_agal_string(
+    &self,
+    stack: runtime::RefStack,
+  ) -> Result<primitive::AgalString, internal::AgalThrow> {
     Ok(primitive::AgalString::from_string(
       "<instancia super>".to_string(),
     ))
   }
   fn to_agal_console(
     &self,
-    stack: parser::util::RefValue<runtime::Stack>,
-    env: runtime::RefEnvironment,
+    stack: runtime::RefStack,
   ) -> Result<primitive::AgalString, internal::AgalThrow> {
-    Ok(self.to_agal_string()?.set_color(colors::Color::CYAN))
+    Ok(self.to_agal_string(stack)?.set_color(colors::Color::CYAN))
   }
 
   fn get_keys(&self) -> Vec<String> {
@@ -287,29 +280,28 @@ impl traits::AgalValuable for AgalClass {
 
   fn to_agal_byte(
     &self,
-    stack: RefValue<runtime::Stack>,
+    stack: runtime::RefStack,
   ) -> Result<primitive::AgalByte, internal::AgalThrow> {
     todo!()
   }
 
   fn to_agal_boolean(
     &self,
-    stack: RefValue<runtime::Stack>,
+    stack: runtime::RefStack,
   ) -> Result<primitive::AgalBoolean, internal::AgalThrow> {
     todo!()
   }
 
   fn to_agal_array(
     &self,
-    stack: RefValue<runtime::Stack>,
+    stack: runtime::RefStack,
   ) -> Result<values::RefAgalValue<super::AgalArray>, internal::AgalThrow> {
     todo!()
   }
 
   fn binary_operation(
     &self,
-    stack: RefValue<runtime::Stack>,
-    env: runtime::RefEnvironment,
+    stack: runtime::RefStack,
     operator: &str,
     right: values::DefaultRefAgalValue,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
@@ -318,26 +310,19 @@ impl traits::AgalValuable for AgalClass {
 
   fn unary_back_operator(
     &self,
-    stack: RefValue<runtime::Stack>,
-    env: runtime::RefEnvironment,
+    stack: runtime::RefStack,
     operator: &str,
   ) -> values::ResultAgalValue {
     todo!()
   }
 
-  fn unary_operator(
-    &self,
-    stack: RefValue<runtime::Stack>,
-    env: runtime::RefEnvironment,
-    operator: &str,
-  ) -> values::ResultAgalValue {
+  fn unary_operator(&self, stack: runtime::RefStack, operator: &str) -> values::ResultAgalValue {
     todo!()
   }
 
   fn get_object_property(
     &self,
-    stack: RefValue<runtime::Stack>,
-    env: runtime::RefEnvironment,
+    stack: runtime::RefStack,
     key: &str,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
     todo!()
@@ -345,8 +330,7 @@ impl traits::AgalValuable for AgalClass {
 
   fn set_object_property(
     &mut self,
-    stack: RefValue<runtime::Stack>,
-    env: runtime::RefEnvironment,
+    stack: runtime::RefStack,
     key: &str,
     value: values::DefaultRefAgalValue,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
@@ -355,17 +339,15 @@ impl traits::AgalValuable for AgalClass {
 
   fn get_instance_property(
     &self,
-    stack: RefValue<runtime::Stack>,
-    env: runtime::RefEnvironment,
+    stack: runtime::RefStack,
     key: &str,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
     todo!()
   }
 
   async fn call(
-    &self,
-    stack: RefValue<runtime::Stack>,
-    env: runtime::RefEnvironment,
+    &mut self,
+    stack: runtime::RefStack,
     this: values::DefaultRefAgalValue,
     args: Vec<values::DefaultRefAgalValue>,
     modules: RefValue<Modules>,
@@ -375,16 +357,16 @@ impl traits::AgalValuable for AgalClass {
 
   fn to_agal_number(
     &self,
-    stack: RefValue<runtime::Stack>,
+    stack: runtime::RefStack,
   ) -> Result<primitive::AgalNumber, internal::AgalThrow> {
     todo!()
   }
-  
+
   fn equals(&self, other: &Self) -> bool {
-        todo!()
-    }
-  
+    todo!()
+  }
+
   fn less_than(&self, other: &Self) -> bool {
-        todo!()
-    }
+    todo!()
+  }
 }

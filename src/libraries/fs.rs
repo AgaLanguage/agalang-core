@@ -20,12 +20,11 @@ use crate::{
   Modules,
 };
 fn get_path(
-  stack: util::RefValue<runtime::Stack>,
-  env: runtime::RefEnvironment,
+  stack: runtime::RefStack,
   this: values::DefaultRefAgalValue,
 ) -> Result<primitive::AgalString, internal::AgalThrow> {
-  let string = this.get_object_property(stack, env.clone(), "@ruta");
-  string?.borrow().to_agal_string()
+  let string = this.get_object_property(stack.clone(), "@ruta");
+  string?.borrow().to_agal_string(stack)
 }
 
 pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
@@ -43,8 +42,8 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
           is_static: false,
           value: internal::AgalNativeFunction {
             name: format!("{path_name}::es_archivo"),
-            func: Rc::new(|_, stack, env, _, this| {
-              let string = get_path(stack.clone(), env, this)?;
+            func: Rc::new(|_, stack, _, this| {
+              let string = get_path(stack.clone(), this)?;
               let binding = string.to_string();
               let path = std::path::Path::new(&binding);
               primitive::AgalBoolean::new(path.is_file()).to_result()
@@ -60,8 +59,8 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
           is_static: false,
           value: internal::AgalNativeFunction {
             name: format!("{path_name}::es_carpeta"),
-            func: Rc::new(|_, stack, env, _, this| {
-              let string = get_path(stack, env, this)?;
+            func: Rc::new(|_, stack, _, this| {
+              let string = get_path(stack, this)?;
               let binding = string.to_string();
               let path = std::path::Path::new(&binding);
               primitive::AgalBoolean::new(path.is_dir()).to_result()
@@ -77,7 +76,7 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
           is_static: false,
           value: internal::AgalNativeFunction {
             name: format!("{path_name}::nombre"),
-            func: Rc::new(|_, stack, env, _, this| get_path(stack, env, this)?.to_result()),
+            func: Rc::new(|_, stack, _, this| get_path(stack, this)?.to_result()),
           }
           .to_ref_value(),
         },
@@ -89,8 +88,8 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
           is_static: false,
           value: internal::AgalNativeFunction {
             name: format!("{path_name}::obtener_padre"),
-            func: Rc::new(|_, stack, env, _, this| {
-              let string = get_path(stack, env, this)?;
+            func: Rc::new(|_, stack, _, this| {
+              let string = get_path(stack, this)?;
               let binding = string.to_string();
               let path = std::path::Path::new(&binding);
               let parent = path.parent().unwrap();
@@ -113,7 +112,7 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
       is_static: true,
       value: internal::AgalNativeFunction {
         name: format!("{module_name}::leer_archivo"),
-        func: Rc::new(|arguments, stack, env, modules_manager, this| {
+        func: Rc::new(|arguments, stack, modules_manager, this| {
           let path: Option<&values::DefaultRefAgalValue> = arguments.get(0);
           if !path.is_some() {
             return internal::AgalThrow::Params {
@@ -123,7 +122,7 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
             }
             .to_result();
           }
-          let path = path.unwrap().try_to_string()?;
+          let path = path.unwrap().try_to_string(stack.clone())?;
           let mut file = std::fs::File::open(path);
           if let Ok(file) = &mut file {
             let mut buffer_writer = Vec::new();
@@ -149,12 +148,12 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
       is_static: true,
       value: internal::AgalNativeFunction {
         name: format!("{module_name}::leer_carpeta"),
-        func: Rc::new(|arguments, stack, env, modules_manager, this| {
+        func: Rc::new(|arguments, stack, modules_manager, this| {
           let path: Option<&values::DefaultRefAgalValue> = arguments.get(0);
           if !path.is_some() {
             return AgalValue::Never.to_result();
           }
-          let path = path.unwrap().try_to_string()?;
+          let path = path.unwrap().try_to_string(stack.clone())?;
           let mut dir = std::fs::read_dir(path);
           if let Ok(dir) = &mut dir {
             let mut files = Vec::new();
@@ -188,35 +187,28 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
       is_static: true,
       value: internal::AgalNativeFunction {
         name: format!("{module_name}::obtener_ruta"),
-        func: Rc::new(
-          move |arguments: Vec<values::DefaultRefAgalValue>,
-                stack: util::RefValue<runtime::Stack>,
-                env: runtime::RefEnvironment,
-                modules_manager: util::RefValue<Modules>,
-                this: values::DefaultRefAgalValue|
-                -> values::ResultAgalValue {
-            let p: Option<&values::DefaultRefAgalValue> = arguments.get(0);
-            if !p.is_some() {
-              return AgalValue::Never.to_result();
-            }
-            let value = p.unwrap().to_agal_string()?;
-            complex::AgalPromise::new(complex::Promise::new(Box::pin({
-              let path = path.clone();
-              async move {
-                let mut path = path
-                  .call(stack.clone(), env.clone(), this, vec![], modules_manager)
-                  .await?;
+        func: Rc::new(move |arguments, stack, modules_manager, this| {
+          let p: Option<&values::DefaultRefAgalValue> = arguments.get(0);
+          if !p.is_some() {
+            return AgalValue::Never.to_result();
+          }
+          let value = p.unwrap().to_agal_string(stack.clone())?;
+          complex::AgalPromise::new(Box::pin({
+            let mut path = path.clone();
+            async move {
+              let mut path = path
+                .call(stack.clone(), this, vec![], modules_manager)
+                .await?;
 
-                let p = value.to_string();
-                let p = crate::path::absolute_path(&p);
-                let value = primitive::AgalString::from_string(p);
-                path.set_object_property(stack, env, "@ruta", value.to_ref_value());
-                path.to_result()
-              }
-            })))
-            .to_result()
-          },
-        ),
+              let p = value.to_string();
+              let p = crate::path::absolute_path(&p);
+              let value = primitive::AgalString::from_string(p);
+              path.set_object_property(stack, "@ruta", value.to_ref_value());
+              path.to_result()
+            }
+          }))
+          .to_result()
+        }),
       }
       .to_ref_value(),
     },
@@ -228,12 +220,12 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
       is_static: true,
       value: internal::AgalNativeFunction {
         name: format!("{module_name}::escribir_archivo"),
-        func: Rc::new(|arguments, stack, env, modules_manager, this| {
+        func: Rc::new(|arguments, stack, modules_manager, this| {
           let path: Option<&values::DefaultRefAgalValue> = arguments.get(0);
           if !path.is_some() {
             return AgalValue::Never.to_result();
           }
-          let path = path.unwrap().try_to_string()?;
+          let path = path.unwrap().try_to_string(stack.clone())?;
           let exists = Path::new(&path).exists();
           if !exists {
             return internal::AgalThrow::Params {
@@ -287,12 +279,12 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
       is_static: true,
       value: internal::AgalNativeFunction {
         name: format!("{module_name}::crear_archivo"),
-        func: Rc::new(|arguments, stack, env, modules_manager, this| {
+        func: Rc::new(|arguments, stack, modules_manager, this| {
           let path: Option<&values::DefaultRefAgalValue> = arguments.get(0);
           if !path.is_some() {
             return AgalValue::Never.to_result();
           }
-          let path = path.unwrap().try_to_string()?;
+          let path = path.unwrap().try_to_string(stack.clone())?;
           let exists = Path::new(&path).exists();
           if exists {
             return internal::AgalThrow::Params {
@@ -325,12 +317,12 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
       is_static: true,
       value: internal::AgalNativeFunction {
         name: format!("{module_name}::crear_carpeta"),
-        func: Rc::new(|arguments, stack, env, modules_manager, this| {
+        func: Rc::new(|arguments, stack, modules_manager, this| {
           let path: Option<&values::DefaultRefAgalValue> = arguments.get(0);
           if !path.is_some() {
             return AgalValue::Never.to_result();
           }
-          let path = path.unwrap().try_to_string()?;
+          let path = path.unwrap().try_to_string(stack.clone())?;
           let exists = Path::new(&path).exists();
           if exists {
             return internal::AgalThrow::Params {

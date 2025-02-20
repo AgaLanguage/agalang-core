@@ -1,6 +1,7 @@
 use std::{
   cell::RefCell,
   collections::{HashMap, HashSet},
+  fmt::Debug,
   rc::Rc,
 };
 
@@ -8,7 +9,7 @@ use parser::{ast::Node, internal::ErrorNames, util::RefValue};
 
 use super::values::{DefaultRefAgalValue, ResultAgalValue};
 use super::{
-  stack::Stack,
+  stack::RefStack,
   values::{
     internal, primitive,
     traits::{self, AgalValuable as _, ToAgalValue as _},
@@ -16,7 +17,7 @@ use super::{
   },
 };
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Environment {
   in_class: bool,
   parent: Option<RefEnvironment>,
@@ -37,7 +38,6 @@ const KEYWORDS: [&str; 6] = [
   THIS_KEYWORD,
   SUPER_KEYWORD,
 ];
-
 impl Environment {
   pub fn get_default() -> Environment {
     let mut env = Environment {
@@ -74,7 +74,7 @@ impl Environment {
   pub fn as_ref(self) -> RefEnvironment {
     RefEnvironment(Rc::new(RefCell::new(self)))
   }
-  pub fn get_this(&self, stack: RefValue<Stack>, node: &Node) -> ResultAgalValue {
+  pub fn get_this(&self, stack: RefStack, node: &Node) -> ResultAgalValue {
     self.get(stack, THIS_KEYWORD, node)
   }
   pub fn use_private(self) -> bool {
@@ -99,7 +99,7 @@ impl Environment {
   }
   pub fn define(
     &mut self,
-    stack: RefValue<Stack>,
+    stack: RefStack,
     name: &str,
     value: DefaultRefAgalValue,
     is_constant: bool,
@@ -130,7 +130,7 @@ impl Environment {
   }
   pub fn assign(
     &mut self,
-    stack: RefValue<Stack>,
+    stack: RefStack,
     name: &str,
     value: DefaultRefAgalValue,
     node: &Node,
@@ -166,7 +166,7 @@ impl Environment {
     hashmap.insert(name.to_string(), value.clone());
     value
   }
-  pub fn get(&self, stack: RefValue<Stack>, name: &str, node: &Node) -> ResultAgalValue {
+  pub fn get(&self, stack: RefStack, name: &str, node: &Node) -> ResultAgalValue {
     let env = self.resolve(name, node);
     if !env.has(name) {
       return Err(internal::AgalThrow::Params {
@@ -175,7 +175,7 @@ impl Environment {
         stack,
       });
     }
-    Ok(env.get(name).clone())
+    Ok(env.get_key(name).clone())
   }
   fn _has(&self, name: &str) -> bool {
     self.variables.borrow_mut().contains_key(name)
@@ -192,10 +192,19 @@ impl Environment {
   }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct RefEnvironment(Rc<RefCell<Environment>>);
 
+impl Default for RefEnvironment {
+  fn default() -> Self {
+    Self::get_default()
+  }
+}
+
 impl RefEnvironment {
+  pub fn get_default() -> RefEnvironment {
+    RefEnvironment(Rc::new(RefCell::new(Environment::get_default())))
+  }
   pub fn un_ref(&self) -> Environment {
     self.0.borrow().clone()
   }
@@ -219,7 +228,7 @@ impl RefEnvironment {
   }
   pub fn define(
     &mut self,
-    stack: RefValue<Stack>,
+    stack: RefStack,
     name: &str,
     value: DefaultRefAgalValue,
     is_constant: bool,
@@ -230,7 +239,7 @@ impl RefEnvironment {
       .borrow_mut()
       .define(stack, name, value, is_constant, node)
   }
-  pub fn get(&self, name: &str) -> DefaultRefAgalValue {
+  pub fn get_key(&self, name: &str) -> DefaultRefAgalValue {
     self
       .0
       .borrow()
@@ -240,6 +249,9 @@ impl RefEnvironment {
       .get(name)
       .unwrap()
       .clone()
+  }
+  pub fn get(&self, stack: RefStack, name: &str, node: &Node) -> ResultAgalValue {
+    self.0.borrow().get(stack, name, node)
   }
   pub fn has(&self, name: &str) -> bool {
     self.0.borrow().variables.borrow_mut().contains_key(name)
@@ -253,7 +265,7 @@ impl RefEnvironment {
   }
   pub fn assign(
     &mut self,
-    stack: RefValue<Stack>,
+    stack: RefStack,
     name: &str,
     value: DefaultRefAgalValue,
     node: &Node,

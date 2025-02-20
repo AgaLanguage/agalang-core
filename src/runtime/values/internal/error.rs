@@ -4,7 +4,7 @@ use parser::{
 };
 
 use crate::runtime::{
-  stack::Stack,
+  stack::{self, RefStack},
   values::{
     self, primitive,
     traits::{self, AgalValuable as _, ToAgalValue as _},
@@ -14,18 +14,18 @@ use crate::runtime::{
 
 use super::AgalInternal;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum AgalError {
   Params {
     type_error: ErrorNames,
     message: String,
-    stack: RefValue<Stack>,
+    stack: RefStack,
   },
   Value(values::DefaultRefAgalValue),
 }
 
 impl AgalError {
-  pub fn get_data(&self) -> (ErrorNames, ErrorTypes) {
+  pub fn get_data(&self, stack: crate::runtime::RefStack) -> (ErrorNames, ErrorTypes) {
     match self {
       Self::Params {
         type_error,
@@ -33,10 +33,10 @@ impl AgalError {
         ..
       } => (type_error.clone(), ErrorTypes::StringError(message.clone())),
       Self::Value(value) => {
-        let message = value.try_to_string();
+        let message = value.try_to_string(stack.clone());
         match message {
           Ok(message) => (ErrorNames::None, ErrorTypes::StringError(message)),
-          Err(throw) => throw.get_data(),
+          Err(throw) => throw.get_data(stack),
         }
       }
     }
@@ -47,8 +47,11 @@ impl traits::AgalValuable for AgalError {
   fn get_name(&self) -> String {
     "Error".to_string()
   }
-  fn to_agal_string(&self) -> Result<primitive::AgalString, super::throw::AgalThrow> {
-    let (type_error, message) = self.get_data();
+  fn to_agal_string(
+    &self,
+    stack: crate::runtime::RefStack,
+  ) -> Result<primitive::AgalString, super::throw::AgalThrow> {
+    let (type_error, message) = self.get_data(stack);
     let message = error_to_string(&type_error, message);
     Ok(primitive::AgalString::from_string(message))
   }
@@ -59,29 +62,28 @@ impl traits::AgalValuable for AgalError {
 
   fn to_agal_byte(
     &self,
-    stack: RefValue<crate::runtime::Stack>,
+    stack: crate::runtime::RefStack,
   ) -> Result<primitive::AgalByte, super::AgalThrow> {
     todo!()
   }
 
   fn to_agal_boolean(
     &self,
-    stack: RefValue<crate::runtime::Stack>,
+    stack: crate::runtime::RefStack,
   ) -> Result<primitive::AgalBoolean, super::AgalThrow> {
     todo!()
   }
 
   fn to_agal_array(
     &self,
-    stack: RefValue<crate::runtime::Stack>,
+    stack: crate::runtime::RefStack,
   ) -> Result<values::RefAgalValue<values::complex::AgalArray>, super::AgalThrow> {
     todo!()
   }
 
   fn binary_operation(
     &self,
-    stack: RefValue<crate::runtime::Stack>,
-    env: crate::runtime::RefEnvironment,
+    stack: crate::runtime::RefStack,
     operator: &str,
     right: values::DefaultRefAgalValue,
   ) -> Result<values::DefaultRefAgalValue, super::AgalThrow> {
@@ -90,8 +92,7 @@ impl traits::AgalValuable for AgalError {
 
   fn unary_back_operator(
     &self,
-    stack: RefValue<crate::runtime::Stack>,
-    env: crate::runtime::RefEnvironment,
+    stack: crate::runtime::RefStack,
     operator: &str,
   ) -> values::ResultAgalValue {
     todo!()
@@ -99,8 +100,7 @@ impl traits::AgalValuable for AgalError {
 
   fn unary_operator(
     &self,
-    stack: RefValue<crate::runtime::Stack>,
-    env: crate::runtime::RefEnvironment,
+    stack: crate::runtime::RefStack,
     operator: &str,
   ) -> values::ResultAgalValue {
     todo!()
@@ -108,8 +108,7 @@ impl traits::AgalValuable for AgalError {
 
   fn get_object_property(
     &self,
-    stack: RefValue<crate::runtime::Stack>,
-    env: crate::runtime::RefEnvironment,
+    stack: crate::runtime::RefStack,
     key: &str,
   ) -> Result<values::DefaultRefAgalValue, super::AgalThrow> {
     todo!()
@@ -117,8 +116,7 @@ impl traits::AgalValuable for AgalError {
 
   fn set_object_property(
     &mut self,
-    stack: RefValue<crate::runtime::Stack>,
-    env: crate::runtime::RefEnvironment,
+    stack: crate::runtime::RefStack,
     key: &str,
     value: values::DefaultRefAgalValue,
   ) -> Result<values::DefaultRefAgalValue, super::AgalThrow> {
@@ -127,17 +125,15 @@ impl traits::AgalValuable for AgalError {
 
   fn get_instance_property(
     &self,
-    stack: RefValue<crate::runtime::Stack>,
-    env: crate::runtime::RefEnvironment,
+    stack: crate::runtime::RefStack,
     key: &str,
   ) -> Result<values::DefaultRefAgalValue, super::AgalThrow> {
     todo!()
   }
 
   async fn call(
-    &self,
-    stack: RefValue<crate::runtime::Stack>,
-    env: crate::runtime::RefEnvironment,
+    &mut self,
+    stack: crate::runtime::RefStack,
     this: values::DefaultRefAgalValue,
     args: Vec<values::DefaultRefAgalValue>,
     modules: RefValue<crate::Modules>,
@@ -147,18 +143,18 @@ impl traits::AgalValuable for AgalError {
 
   fn to_agal_number(
     &self,
-    stack: RefValue<crate::runtime::Stack>,
+    stack: crate::runtime::RefStack,
   ) -> Result<primitive::AgalNumber, super::AgalThrow> {
     todo!()
   }
-  
+
   fn equals(&self, other: &Self) -> bool {
-        todo!()
-    }
-  
+    todo!()
+  }
+
   fn less_than(&self, other: &Self) -> bool {
-        todo!()
-    }
+    todo!()
+  }
 }
 impl traits::ToAgalValue for AgalError {
   fn to_value(self) -> AgalValue {

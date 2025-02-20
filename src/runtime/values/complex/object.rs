@@ -18,7 +18,7 @@ use super::AgalComplex;
 type AgalHashMap = HashMap<String, values::DefaultRefAgalValue>;
 type RefAgalHashMap = Rc<RefCell<AgalHashMap>>;
 type RefAgalProto = values::RefAgalValue<super::AgalPrototype>;
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct AgalObject(RefAgalHashMap, Option<RefAgalProto>);
 
 impl AgalObject {
@@ -51,15 +51,13 @@ impl traits::AgalValuable for AgalObject {
   fn get_name(&self) -> String {
     "Objeto".to_string()
   }
-  fn to_agal_string(&self) -> Result<primitive::AgalString, internal::AgalThrow> {
+  fn to_agal_string(
+    &self,
+    stack: runtime::RefStack,
+  ) -> Result<primitive::AgalString, internal::AgalThrow> {
     Ok(primitive::AgalString::from_string("<Objeto>".to_string()))
   }
-  fn get_object_property(
-    &self,
-    stack: parser::util::RefValue<runtime::Stack>,
-    env: runtime::RefEnvironment,
-    key: &str,
-  ) -> values::ResultAgalValue {
+  fn get_object_property(&self, stack: runtime::RefStack, key: &str) -> values::ResultAgalValue {
     let hashmap = &mut *self.0.as_ref().borrow_mut();
     match hashmap.get(key) {
       Some(v) => Ok(v.clone()),
@@ -73,8 +71,7 @@ impl traits::AgalValuable for AgalObject {
   }
   fn set_object_property(
     &mut self,
-    stack: parser::util::RefValue<runtime::Stack>,
-    env: runtime::RefEnvironment,
+    stack: runtime::RefStack,
     key: &str,
     value: values::DefaultRefAgalValue,
   ) -> values::ResultAgalValue {
@@ -87,8 +84,7 @@ impl traits::AgalValuable for AgalObject {
   }
   fn get_instance_property(
     &self,
-    stack: parser::util::RefValue<runtime::Stack>,
-    env: runtime::RefEnvironment,
+    stack: runtime::RefStack,
     key: &str,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
     if let Some(v) = {
@@ -114,29 +110,28 @@ impl traits::AgalValuable for AgalObject {
 
   fn to_agal_byte(
     &self,
-    stack: parser::util::RefValue<runtime::Stack>,
+    stack: runtime::RefStack,
   ) -> Result<primitive::AgalByte, internal::AgalThrow> {
     todo!()
   }
 
   fn to_agal_boolean(
     &self,
-    stack: parser::util::RefValue<runtime::Stack>,
+    stack: runtime::RefStack,
   ) -> Result<primitive::AgalBoolean, internal::AgalThrow> {
     todo!()
   }
 
   fn to_agal_array(
     &self,
-    stack: parser::util::RefValue<runtime::Stack>,
+    stack: runtime::RefStack,
   ) -> Result<values::RefAgalValue<super::AgalArray>, internal::AgalThrow> {
     todo!()
   }
 
   fn binary_operation(
     &self,
-    stack: parser::util::RefValue<runtime::Stack>,
-    env: runtime::RefEnvironment,
+    stack: runtime::RefStack,
     operator: &str,
     right: values::DefaultRefAgalValue,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
@@ -145,26 +140,19 @@ impl traits::AgalValuable for AgalObject {
 
   fn unary_back_operator(
     &self,
-    stack: parser::util::RefValue<runtime::Stack>,
-    env: runtime::RefEnvironment,
+    stack: runtime::RefStack,
     operator: &str,
   ) -> values::ResultAgalValue {
     todo!()
   }
 
-  fn unary_operator(
-    &self,
-    stack: parser::util::RefValue<runtime::Stack>,
-    env: runtime::RefEnvironment,
-    operator: &str,
-  ) -> values::ResultAgalValue {
+  fn unary_operator(&self, stack: runtime::RefStack, operator: &str) -> values::ResultAgalValue {
     todo!()
   }
 
   async fn call(
-    &self,
-    stack: parser::util::RefValue<runtime::Stack>,
-    env: runtime::RefEnvironment,
+    &mut self,
+    stack: runtime::RefStack,
     this: values::DefaultRefAgalValue,
     args: Vec<values::DefaultRefAgalValue>,
     modules: parser::util::RefValue<crate::Modules>,
@@ -174,16 +162,16 @@ impl traits::AgalValuable for AgalObject {
 
   fn to_agal_number(
     &self,
-    stack: parser::util::RefValue<runtime::Stack>,
+    stack: runtime::RefStack,
   ) -> Result<primitive::AgalNumber, internal::AgalThrow> {
     todo!()
   }
-  
+
   fn equals(&self, other: &Self) -> bool {
-        todo!()
-    }
-  
+    todo!()
+  }
+
   fn less_than(&self, other: &Self) -> bool {
-        todo!()
-    }
+    todo!()
+  }
 }

@@ -2,6 +2,7 @@ use parser::util::RefValue;
 
 use crate::{runtime::values, Modules};
 mod fs;
+mod math;
 mod print;
 mod time;
 
@@ -26,6 +27,11 @@ pub fn get_module(key: &str, modules_manager: RefValue<Modules>) -> EvalResult {
   }
   if key == time::get_name(PREFIX_NATIVE_MODULES) {
     let value = time::get_module(PREFIX_NATIVE_MODULES);
+    modules_manager.borrow().add(key, value.clone());
+    return Ok(value);
+  }
+  if key == math::get_name(PREFIX_NATIVE_MODULES) {
+    let value = math::get_module(PREFIX_NATIVE_MODULES);
     modules_manager.borrow().add(key, value.clone());
     return Ok(value);
   }

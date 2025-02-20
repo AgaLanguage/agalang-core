@@ -8,33 +8,26 @@ use crate::{
       traits::{self, AgalValuable as _, ToAgalValue},
       AgalValue, ResultAgalValue,
     },
-    RefEnvironment, Stack,
+    RefEnvironment, RefStack, Stack,
   },
   Modules,
 };
 
 use super::AgalInternal;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct AgalLazy {
   node: NodeExpressionMedicator,
   value: Option<ResultAgalValue>,
-  stack: RefValue<Stack>,
-  env: RefEnvironment,
+  stack: RefStack,
   modules: RefValue<Modules>,
 }
 impl AgalLazy {
-  pub fn new(
-    node: NodeExpressionMedicator,
-    stack: RefValue<Stack>,
-    env: RefEnvironment,
-    modules: RefValue<Modules>,
-  ) -> Self {
+  pub fn new(node: NodeExpressionMedicator, stack: RefStack, modules: RefValue<Modules>) -> Self {
     AgalLazy {
       node,
       value: None,
       stack,
-      env,
       modules,
     }
   }
@@ -47,7 +40,6 @@ impl AgalLazy {
       interpreter(
         self.node.expression.clone(),
         self.stack.clone(),
-        self.env.clone(),
         self.modules.clone(),
       )
       .await,
@@ -61,7 +53,10 @@ impl traits::AgalValuable for AgalLazy {
   fn get_name(&self) -> String {
     "Vago".to_string()
   }
-  fn to_agal_string(&self) -> Result<primitive::AgalString, super::AgalThrow> {
+  fn to_agal_string(
+    &self,
+    stack: crate::runtime::RefStack,
+  ) -> Result<primitive::AgalString, super::AgalThrow> {
     Ok(primitive::AgalString::from_string(
       "<valor vago>".to_string(),
     ))
@@ -73,29 +68,28 @@ impl traits::AgalValuable for AgalLazy {
 
   fn to_agal_byte(
     &self,
-    stack: parser::util::RefValue<crate::runtime::Stack>,
+    stack: crate::runtime::RefStack,
   ) -> Result<primitive::AgalByte, super::AgalThrow> {
     todo!()
   }
 
   fn to_agal_boolean(
     &self,
-    stack: parser::util::RefValue<crate::runtime::Stack>,
+    stack: crate::runtime::RefStack,
   ) -> Result<primitive::AgalBoolean, super::AgalThrow> {
     todo!()
   }
 
   fn to_agal_array(
     &self,
-    stack: parser::util::RefValue<crate::runtime::Stack>,
+    stack: crate::runtime::RefStack,
   ) -> Result<values::RefAgalValue<values::complex::AgalArray>, super::AgalThrow> {
     todo!()
   }
 
   fn binary_operation(
     &self,
-    stack: parser::util::RefValue<crate::runtime::Stack>,
-    env: crate::runtime::RefEnvironment,
+    stack: crate::runtime::RefStack,
     operator: &str,
     right: values::DefaultRefAgalValue,
   ) -> Result<values::DefaultRefAgalValue, super::AgalThrow> {
@@ -104,8 +98,7 @@ impl traits::AgalValuable for AgalLazy {
 
   fn unary_back_operator(
     &self,
-    stack: parser::util::RefValue<crate::runtime::Stack>,
-    env: crate::runtime::RefEnvironment,
+    stack: crate::runtime::RefStack,
     operator: &str,
   ) -> values::ResultAgalValue {
     todo!()
@@ -113,8 +106,7 @@ impl traits::AgalValuable for AgalLazy {
 
   fn unary_operator(
     &self,
-    stack: parser::util::RefValue<crate::runtime::Stack>,
-    env: crate::runtime::RefEnvironment,
+    stack: crate::runtime::RefStack,
     operator: &str,
   ) -> values::ResultAgalValue {
     todo!()
@@ -122,8 +114,7 @@ impl traits::AgalValuable for AgalLazy {
 
   fn get_object_property(
     &self,
-    stack: parser::util::RefValue<crate::runtime::Stack>,
-    env: crate::runtime::RefEnvironment,
+    stack: crate::runtime::RefStack,
     key: &str,
   ) -> Result<values::DefaultRefAgalValue, super::AgalThrow> {
     todo!()
@@ -131,8 +122,7 @@ impl traits::AgalValuable for AgalLazy {
 
   fn set_object_property(
     &mut self,
-    stack: parser::util::RefValue<crate::runtime::Stack>,
-    env: crate::runtime::RefEnvironment,
+    stack: crate::runtime::RefStack,
     key: &str,
     value: values::DefaultRefAgalValue,
   ) -> Result<values::DefaultRefAgalValue, super::AgalThrow> {
@@ -141,17 +131,15 @@ impl traits::AgalValuable for AgalLazy {
 
   fn get_instance_property(
     &self,
-    stack: parser::util::RefValue<crate::runtime::Stack>,
-    env: crate::runtime::RefEnvironment,
+    stack: crate::runtime::RefStack,
     key: &str,
   ) -> Result<values::DefaultRefAgalValue, super::AgalThrow> {
     todo!()
   }
 
   async fn call(
-    &self,
-    stack: parser::util::RefValue<crate::runtime::Stack>,
-    env: crate::runtime::RefEnvironment,
+    &mut self,
+    stack: crate::runtime::RefStack,
     this: values::DefaultRefAgalValue,
     args: Vec<values::DefaultRefAgalValue>,
     modules: parser::util::RefValue<crate::Modules>,
@@ -161,18 +149,18 @@ impl traits::AgalValuable for AgalLazy {
 
   fn to_agal_number(
     &self,
-    stack: RefValue<crate::runtime::Stack>,
+    stack: crate::runtime::RefStack,
   ) -> Result<primitive::AgalNumber, super::AgalThrow> {
     todo!()
   }
-  
+
   fn equals(&self, other: &Self) -> bool {
-        todo!()
-    }
-  
+    todo!()
+  }
+
   fn less_than(&self, other: &Self) -> bool {
-        todo!()
-    }
+    todo!()
+  }
 }
 impl traits::ToAgalValue for AgalLazy {
   fn to_value(self) -> AgalValue {
