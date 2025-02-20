@@ -57,11 +57,7 @@ impl traits::AgalValuable for AgalObject {
   ) -> Result<primitive::AgalString, internal::AgalThrow> {
     Ok(primitive::AgalString::from_string("<Objeto>".to_string()))
   }
-  fn get_object_property(
-    &self,
-    stack: runtime::RefStack,
-    key: &str,
-  ) -> values::ResultAgalValue {
+  fn get_object_property(&self, stack: runtime::RefStack, key: &str) -> values::ResultAgalValue {
     let hashmap = &mut *self.0.as_ref().borrow_mut();
     match hashmap.get(key) {
       Some(v) => Ok(v.clone()),
@@ -150,11 +146,7 @@ impl traits::AgalValuable for AgalObject {
     todo!()
   }
 
-  fn unary_operator(
-    &self,
-    stack: runtime::RefStack,
-    operator: &str,
-  ) -> values::ResultAgalValue {
+  fn unary_operator(&self, stack: runtime::RefStack, operator: &str) -> values::ResultAgalValue {
     todo!()
   }
 

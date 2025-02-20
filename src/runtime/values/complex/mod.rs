@@ -57,10 +57,7 @@ impl traits::AgalValuable for AgalComplex {
       Self::Class(value) => value.to_agal_string(stack),
     }
   }
-  fn to_agal_console(
-    &self,
-    stack: RefStack,
-  ) -> Result<primitive::AgalString, internal::AgalThrow> {
+  fn to_agal_console(&self, stack: RefStack) -> Result<primitive::AgalString, internal::AgalThrow> {
     match self {
       Self::SuperInstance(value) => value.to_agal_console(stack),
       Self::Function(value) => value.to_agal_console(stack),

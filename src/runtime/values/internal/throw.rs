@@ -102,10 +102,7 @@ impl traits::AgalValuable for AgalThrow {
   fn to_agal_string(&self, stack: runtime::RefStack) -> Result<primitive::AgalString, AgalThrow> {
     Ok(primitive::AgalString::from_string(self.to_string()))
   }
-  fn to_agal_console(
-    &self,
-    stack: runtime::RefStack,
-  ) -> Result<primitive::AgalString, AgalThrow> {
+  fn to_agal_console(&self, stack: runtime::RefStack) -> Result<primitive::AgalString, AgalThrow> {
     self.to_agal_string(stack)
   }
 
@@ -151,11 +148,7 @@ impl traits::AgalValuable for AgalThrow {
     todo!()
   }
 
-  fn unary_operator(
-    &self,
-    stack: runtime::RefStack,
-    operator: &str,
-  ) -> values::ResultAgalValue {
+  fn unary_operator(&self, stack: runtime::RefStack, operator: &str) -> values::ResultAgalValue {
     todo!()
   }
 

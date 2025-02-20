@@ -69,10 +69,7 @@ impl traits::AgalValuable for AgalInternal {
       Self::NativeFunction(func) => func.to_agal_string(stack),
     }
   }
-  fn to_agal_console(
-    &self,
-    stack: runtime::RefStack,
-  ) -> Result<primitive::AgalString, AgalThrow> {
+  fn to_agal_console(&self, stack: runtime::RefStack) -> Result<primitive::AgalString, AgalThrow> {
     match self {
       Self::Lazy(lazy) => lazy.to_agal_console(stack),
       Self::Throw(throw) => throw.to_agal_console(stack),
@@ -175,11 +172,7 @@ impl traits::AgalValuable for AgalInternal {
     }
   }
 
-  fn unary_operator(
-    &self,
-    stack: runtime::RefStack,
-    operator: &str,
-  ) -> super::ResultAgalValue {
+  fn unary_operator(&self, stack: runtime::RefStack, operator: &str) -> super::ResultAgalValue {
     match self {
       Self::Error(e) => e.unary_operator(stack, operator),
       Self::Throw(t) => t.unary_operator(stack, operator),

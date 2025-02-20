@@ -254,11 +254,7 @@ impl traits::AgalValuable for AgalArray {
     }
   }
 
-  fn unary_operator(
-    &self,
-    stack: runtime::RefStack,
-    operator: &str,
-  ) -> values::ResultAgalValue {
+  fn unary_operator(&self, stack: runtime::RefStack, operator: &str) -> values::ResultAgalValue {
     match operator {
       "?" => self.to_agal_boolean(stack)?.to_result(),
       "!" => self.to_agal_boolean(stack)?.not().to_result(),

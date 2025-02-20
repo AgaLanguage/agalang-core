@@ -23,11 +23,7 @@ pub struct AgalLazy {
   modules: RefValue<Modules>,
 }
 impl AgalLazy {
-  pub fn new(
-    node: NodeExpressionMedicator,
-    stack: RefStack,
-    modules: RefValue<Modules>,
-  ) -> Self {
+  pub fn new(node: NodeExpressionMedicator, stack: RefStack, modules: RefValue<Modules>) -> Self {
     AgalLazy {
       node,
       value: None,
@@ -41,8 +37,12 @@ impl AgalLazy {
     }
     self.value = Some(AgalValue::Never.to_result());
     self.value = Some(
-      interpreter(self.node.expression.clone(), self.stack.clone(), self.modules.clone())
-        .await,
+      interpreter(
+        self.node.expression.clone(),
+        self.stack.clone(),
+        self.modules.clone(),
+      )
+      .await,
     );
 
     self.value.clone().unwrap()

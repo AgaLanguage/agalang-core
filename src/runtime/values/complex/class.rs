@@ -119,11 +119,7 @@ impl traits::AgalValuable for AgalPrototype {
     todo!()
   }
 
-  fn unary_operator(
-    &self,
-    stack: runtime::RefStack,
-    operator: &str,
-  ) -> values::ResultAgalValue {
+  fn unary_operator(&self, stack: runtime::RefStack, operator: &str) -> values::ResultAgalValue {
     todo!()
   }
 
@@ -320,11 +316,7 @@ impl traits::AgalValuable for AgalClass {
     todo!()
   }
 
-  fn unary_operator(
-    &self,
-    stack: runtime::RefStack,
-    operator: &str,
-  ) -> values::ResultAgalValue {
+  fn unary_operator(&self, stack: runtime::RefStack, operator: &str) -> values::ResultAgalValue {
     todo!()
   }
 

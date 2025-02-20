@@ -35,10 +35,7 @@ impl traits::AgalValuable for AgalChar {
   fn to_agal_string(&self, stack: runtime::RefStack) -> Result<AgalString, internal::AgalThrow> {
     Ok(AgalString(vec![*self]))
   }
-  fn to_agal_console(
-    &self,
-    stack: runtime::RefStack,
-  ) -> Result<AgalString, internal::AgalThrow> {
+  fn to_agal_console(&self, stack: runtime::RefStack) -> Result<AgalString, internal::AgalThrow> {
     let char = self.as_char();
     Ok(AgalString::from_string(colors::Color::BLUE.apply(
       &if char == '\'' {
@@ -194,16 +191,10 @@ impl traits::AgalValuable for AgalString {
   fn to_agal_string(&self, stack: runtime::RefStack) -> Result<AgalString, internal::AgalThrow> {
     Ok(self.clone())
   }
-  fn to_agal_console(
-    &self,
-    stack: runtime::RefStack,
-  ) -> Result<AgalString, internal::AgalThrow> {
+  fn to_agal_console(&self, stack: runtime::RefStack) -> Result<AgalString, internal::AgalThrow> {
     self.to_agal_string(stack)
   }
-  fn to_agal_value(
-    &self,
-    stack: runtime::RefStack,
-  ) -> Result<AgalString, internal::AgalThrow> {
+  fn to_agal_value(&self, stack: runtime::RefStack) -> Result<AgalString, internal::AgalThrow> {
     let string = self.try_to_string(stack)?;
     let string = if string.contains("'") && string.contains("\"") {
       format!("'{}'", string.replace("\'", "\\\'"))

@@ -161,10 +161,7 @@ impl traits::AgalValuable for AgalNumber {
       )),
     }
   }
-  fn to_agal_console(
-    &self,
-    stack: runtime::RefStack,
-  ) -> Result<AgalString, internal::AgalThrow> {
+  fn to_agal_console(&self, stack: runtime::RefStack) -> Result<AgalString, internal::AgalThrow> {
     Ok(self.to_agal_string(stack)?.set_color(colors::Color::YELLOW))
   }
   fn to_agal_boolean(

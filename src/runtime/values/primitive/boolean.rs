@@ -65,10 +65,7 @@ impl traits::AgalValuable for AgalBoolean {
       Self::True => TRUE_KEYWORD.to_string(),
     }))
   }
-  fn to_agal_console(
-    &self,
-    stack: runtime::RefStack,
-  ) -> Result<AgalString, internal::AgalThrow> {
+  fn to_agal_console(&self, stack: runtime::RefStack) -> Result<AgalString, internal::AgalThrow> {
     Ok(self.to_agal_string(stack)?.set_color(colors::Color::YELLOW))
   }
   fn to_agal_boolean(&self, stack: runtime::RefStack) -> Result<Self, internal::AgalThrow> {

@@ -158,11 +158,7 @@ impl traits::AgalValuable for AgalPrimitive {
     }
   }
 
-  fn unary_operator(
-    &self,
-    stack: runtime::RefStack,
-    operator: &str,
-  ) -> super::ResultAgalValue {
+  fn unary_operator(&self, stack: runtime::RefStack, operator: &str) -> super::ResultAgalValue {
     match self {
       Self::Boolean(b) => b.unary_operator(stack, operator),
       Self::Number(n) => n.unary_operator(stack, operator),

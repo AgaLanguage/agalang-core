@@ -45,10 +45,7 @@ impl traits::AgalValuable for AgalNativeFunction {
       self.name
     )))
   }
-  fn to_agal_console(
-    &self,
-    stack: RefStack,
-  ) -> Result<primitive::AgalString, super::AgalThrow> {
+  fn to_agal_console(&self, stack: RefStack) -> Result<primitive::AgalString, super::AgalThrow> {
     Ok(self.to_agal_string(stack)?.set_color(colors::Color::CYAN))
   }
   async fn call(
