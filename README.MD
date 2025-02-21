@@ -3,8 +3,8 @@
   - `!(value) == !?(value)` niega el valor booleano
   - `&(value)` transforma a inmutable
   - `+(value)` transforma a numero
-  - `-(value)` transforma a negativo
-  - `~(value)` quita presicion (redondea hacia abajo)
+  - `-(value)` transforma a numero negativo
+  - `~(value)` transforma a numero entero
   - `(value)?` si el valor es un error (lanzado) se transforma a nulo. Ejemplo: `1/0?` es nulo.
   - `(value1) && (value2)` regresa el primer valor falso o el ultimo verdadero
   - `(value1) || (value2)` regresa el primer valor verdadero o el ultimo falso

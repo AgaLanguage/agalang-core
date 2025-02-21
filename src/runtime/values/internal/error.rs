@@ -19,7 +19,6 @@ pub enum AgalError {
   Params {
     type_error: ErrorNames,
     message: String,
-    stack: RefStack,
   },
   Value(values::DefaultRefAgalValue),
 }
@@ -30,13 +29,12 @@ impl AgalError {
       Self::Params {
         type_error,
         message,
-        ..
       } => (type_error.clone(), ErrorTypes::StringError(message.clone())),
       Self::Value(value) => {
         let message = value.try_to_string(stack.clone());
         match message {
           Ok(message) => (ErrorNames::None, ErrorTypes::StringError(message)),
-          Err(throw) => throw.get_data(stack),
+          Err(throw) => throw.get_data(),
         }
       }
     }
@@ -84,25 +82,9 @@ impl traits::AgalValuable for AgalError {
   fn binary_operation(
     &self,
     stack: crate::runtime::RefStack,
-    operator: &str,
+    operator: parser::ast::NodeOperator,
     right: values::DefaultRefAgalValue,
   ) -> Result<values::DefaultRefAgalValue, super::AgalThrow> {
-    todo!()
-  }
-
-  fn unary_back_operator(
-    &self,
-    stack: crate::runtime::RefStack,
-    operator: &str,
-  ) -> values::ResultAgalValue {
-    todo!()
-  }
-
-  fn unary_operator(
-    &self,
-    stack: crate::runtime::RefStack,
-    operator: &str,
-  ) -> values::ResultAgalValue {
     todo!()
   }
 
@@ -132,7 +114,7 @@ impl traits::AgalValuable for AgalError {
   }
 
   async fn call(
-    &mut self,
+    &self,
     stack: crate::runtime::RefStack,
     this: values::DefaultRefAgalValue,
     args: Vec<values::DefaultRefAgalValue>,

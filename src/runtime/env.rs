@@ -94,7 +94,7 @@ impl Environment {
       constants: Rc::new(RefCell::new(HashSet::new())),
     }
   }
-  fn is_keyword(&self, ref name: &str) -> bool {
+  pub fn is_keyword(&self, ref name: &str) -> bool {
     KEYWORDS.contains(name)
   }
   pub fn define(
@@ -128,6 +128,9 @@ impl Environment {
       .insert(name.to_string(), value.clone());
     Ok(value)
   }
+  pub fn is_constant(&self, name: &str) -> bool {
+    self.constants.borrow().contains(name)
+  }
   pub fn assign(
     &mut self,
     stack: RefStack,
@@ -149,7 +152,7 @@ impl Environment {
         stack,
       });
     }
-    if self.constants.borrow_mut().contains(name) {
+    if self.is_constant(name) {
       return Err(internal::AgalThrow::Params {
         type_error: ErrorNames::EnvironmentError,
         message: "No se puede reasignar una constante".to_string(),
@@ -194,12 +197,6 @@ impl Environment {
 
 #[derive(Clone, Debug)]
 pub struct RefEnvironment(Rc<RefCell<Environment>>);
-
-impl Default for RefEnvironment {
-  fn default() -> Self {
-    Self::get_default()
-  }
-}
 
 impl RefEnvironment {
   pub fn get_default() -> RefEnvironment {
@@ -271,5 +268,11 @@ impl RefEnvironment {
     node: &Node,
   ) -> ResultAgalValue {
     self.0.borrow_mut().assign(stack, name, value, node)
+  }
+  pub fn is_constant(&self, name: &str) -> bool {
+    self.0.borrow().is_constant(name)
+  }
+  pub fn is_keyword(&self, ref name: &str) -> bool {
+    KEYWORDS.contains(name)
   }
 }

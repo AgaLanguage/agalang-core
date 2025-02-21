@@ -132,26 +132,14 @@ impl traits::AgalValuable for AgalObject {
   fn binary_operation(
     &self,
     stack: runtime::RefStack,
-    operator: &str,
+    operator: parser::ast::NodeOperator,
     right: values::DefaultRefAgalValue,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
     todo!()
   }
 
-  fn unary_back_operator(
-    &self,
-    stack: runtime::RefStack,
-    operator: &str,
-  ) -> values::ResultAgalValue {
-    todo!()
-  }
-
-  fn unary_operator(&self, stack: runtime::RefStack, operator: &str) -> values::ResultAgalValue {
-    todo!()
-  }
-
   async fn call(
-    &mut self,
+    &self,
     stack: runtime::RefStack,
     this: values::DefaultRefAgalValue,
     args: Vec<values::DefaultRefAgalValue>,

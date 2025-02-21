@@ -3,7 +3,7 @@ use crate::{
   runtime::{
     self,
     values::{
-      internal,
+      error_message, internal,
       traits::{self, AgalValuable as _, ToAgalValue as _},
       AgalValue,
     },
@@ -54,7 +54,7 @@ impl traits::AgalValuable for AgalByte {
   }
 
   fn get_keys(&self) -> Vec<String> {
-    todo!()
+    vec![]
   }
 
   fn to_agal_array(
@@ -62,32 +62,56 @@ impl traits::AgalValuable for AgalByte {
     stack: runtime::RefStack,
   ) -> Result<runtime::values::RefAgalValue<runtime::values::complex::AgalArray>, internal::AgalThrow>
   {
-    todo!()
+    internal::AgalThrow::Params {
+      type_error: parser::internal::ErrorNames::TypeError,
+      message: error_message::TO_AGAL_ARRAY.to_owned(),
+      stack,
+    }
+    .to_result()
   }
 
   fn binary_operation(
     &self,
     stack: runtime::RefStack,
-    operator: &str,
+    operator: parser::ast::NodeOperator,
     right: runtime::values::DefaultRefAgalValue,
   ) -> Result<runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
-    todo!()
-  }
-
-  fn unary_back_operator(
-    &self,
-    stack: runtime::RefStack,
-    operator: &str,
-  ) -> runtime::values::ResultAgalValue {
-    todo!()
-  }
-
-  fn unary_operator(
-    &self,
-    stack: runtime::RefStack,
-    operator: &str,
-  ) -> runtime::values::ResultAgalValue {
-    todo!()
+    let other = if let AgalValue::Primitive(p) = right.un_ref() {
+      p.un_ref()
+    } else {
+      return Err(internal::AgalThrow::Params {
+        type_error: parser::internal::ErrorNames::TypeError,
+        message: error_message::TO_AGAL_STRING.to_owned(),
+        stack,
+      });
+    };
+    match (operator, other) {
+      (parser::ast::NodeOperator::Equal, AgalPrimitive::Byte(other)) => {
+        super::AgalBoolean::new(self.equals(&other)).to_result()
+      }
+      (parser::ast::NodeOperator::NotEqual, AgalPrimitive::Byte(other)) => {
+        super::AgalBoolean::new(!self.equals(&other)).to_result()
+      }
+      (
+        parser::ast::NodeOperator::BitMoveLeft,
+        AgalPrimitive::Number(super::AgalNumber::Integer(int)),
+      ) => super::AgalByte::new(self.0 << int).to_result(),
+      (
+        parser::ast::NodeOperator::BitMoveLeft,
+        AgalPrimitive::Number(super::AgalNumber::Integer(int)),
+      ) => super::AgalByte::new(self.0 >> int).to_result(),
+      (parser::ast::NodeOperator::BitAnd, AgalPrimitive::Byte(other)) => {
+        super::AgalByte::new(self.0 & other.0).to_result()
+      }
+      (parser::ast::NodeOperator::BitOr, AgalPrimitive::Byte(other)) => {
+        super::AgalByte::new(self.0 | other.0).to_result()
+      }
+      _ => Err(internal::AgalThrow::Params {
+        type_error: parser::internal::ErrorNames::TypeError,
+        message: error_message::BINARY_OPERATION(self.clone().to_ref_value(), operator, right),
+        stack,
+      }),
+    }
   }
 
   fn get_object_property(
@@ -95,7 +119,12 @@ impl traits::AgalValuable for AgalByte {
     stack: runtime::RefStack,
     key: &str,
   ) -> Result<runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
-    todo!()
+    internal::AgalThrow::Params {
+      type_error: parser::internal::ErrorNames::TypeError,
+      message: error_message::GET_OBJECT_PROPERTY.to_owned(),
+      stack,
+    }
+    .to_result()
   }
 
   fn set_object_property(
@@ -104,7 +133,12 @@ impl traits::AgalValuable for AgalByte {
     key: &str,
     value: runtime::values::DefaultRefAgalValue,
   ) -> Result<runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
-    todo!()
+    internal::AgalThrow::Params {
+      type_error: parser::internal::ErrorNames::TypeError,
+      message: error_message::SET_OBJECT_PROPERTY.to_owned(),
+      stack,
+    }
+    .to_result()
   }
 
   fn get_instance_property(
@@ -116,20 +150,25 @@ impl traits::AgalValuable for AgalByte {
   }
 
   async fn call(
-    &mut self,
+    &self,
     stack: runtime::RefStack,
     this: runtime::values::DefaultRefAgalValue,
     args: Vec<runtime::values::DefaultRefAgalValue>,
     modules: parser::util::RefValue<crate::Modules>,
   ) -> Result<crate::runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
-    todo!()
+    internal::AgalThrow::Params {
+      type_error: parser::internal::ErrorNames::TypeError,
+      message: error_message::CALL.to_owned(),
+      stack,
+    }
+    .to_result()
   }
 
   fn to_agal_number(
     &self,
     stack: runtime::RefStack,
   ) -> Result<super::AgalNumber, internal::AgalThrow> {
-    todo!()
+    Ok(super::AgalNumber::from(self.0 as i32))
   }
 
   fn equals(&self, other: &Self) -> bool {

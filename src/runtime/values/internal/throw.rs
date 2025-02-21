@@ -14,6 +14,7 @@ use crate::{
       traits::{self, AgalValuable as _, ToAgalValue as _},
       AgalValue,
     },
+    RefStack,
   },
   Modules,
 };
@@ -30,7 +31,7 @@ pub enum AgalThrow {
   Value(values::DefaultRefAgalValue),
 }
 impl AgalThrow {
-  pub fn throw<T>(self) -> Result<T, Self> {
+  pub fn to_result<T>(self) -> Result<T, Self> {
     Err(self)
   }
   pub fn to_error(&self) -> super::AgalError {
@@ -38,16 +39,15 @@ impl AgalThrow {
       Self::Params {
         type_error,
         message,
-        stack,
+        ..
       } => super::AgalError::Params {
         type_error: type_error.clone(),
         message: message.clone(),
-        stack: stack.clone(),
       },
       Self::Value(value) => super::AgalError::Value(value.clone()),
     }
   }
-  pub fn get_data(&self, stack: runtime::RefStack) -> (ErrorNames, ErrorTypes) {
+  pub fn get_data(&self) -> (ErrorNames, ErrorTypes) {
     match self {
       Self::Params {
         type_error,
@@ -74,25 +74,8 @@ impl AgalThrow {
 
         (type_error.clone(), ErrorTypes::StringError(string))
       }
-      Self::Value(value) => {
-        let message = value.try_to_string(stack.clone());
-        match message {
-          Ok(message) => (ErrorNames::None, ErrorTypes::StringError(message)),
-          Err(throw) => throw.get_data(stack),
-        }
-      }
+      Self::Value(value) => (ErrorNames::None, ErrorTypes::StringError(value.to_string())),
     }
-  }
-}
-impl traits::ToAgalValue for AgalThrow {
-  fn to_value(self) -> AgalValue {
-    AgalInternal::Throw(self).to_value()
-  }
-  fn to_result(self) -> Result<values::DefaultRefAgalValue, AgalThrow>
-  where
-    Self: Sized,
-  {
-    self.throw()
   }
 }
 impl traits::AgalValuable for AgalThrow {
@@ -134,21 +117,9 @@ impl traits::AgalValuable for AgalThrow {
   fn binary_operation(
     &self,
     stack: runtime::RefStack,
-    operator: &str,
+    operator: parser::ast::NodeOperator,
     right: values::DefaultRefAgalValue,
   ) -> Result<values::DefaultRefAgalValue, super::AgalThrow> {
-    todo!()
-  }
-
-  fn unary_back_operator(
-    &self,
-    stack: runtime::RefStack,
-    operator: &str,
-  ) -> values::ResultAgalValue {
-    todo!()
-  }
-
-  fn unary_operator(&self, stack: runtime::RefStack, operator: &str) -> values::ResultAgalValue {
     todo!()
   }
 
@@ -178,7 +149,7 @@ impl traits::AgalValuable for AgalThrow {
   }
 
   async fn call(
-    &mut self,
+    &self,
     stack: runtime::RefStack,
     this: values::DefaultRefAgalValue,
     args: Vec<values::DefaultRefAgalValue>,
@@ -205,7 +176,7 @@ impl traits::AgalValuable for AgalThrow {
 
 impl ToString for AgalThrow {
   fn to_string(&self) -> String {
-    let (type_error, message) = self.get_data(Default::default());
+    let (type_error, message) = self.get_data();
     error_to_string(&type_error, message)
   }
 }

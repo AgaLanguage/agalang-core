@@ -49,7 +49,7 @@ impl traits::AgalValuable for AgalNativeFunction {
     Ok(self.to_agal_string(stack)?.set_color(colors::Color::CYAN))
   }
   async fn call(
-    &mut self,
+    &self,
     stack: RefStack,
     this: values::DefaultRefAgalValue,
     args: Vec<values::DefaultRefAgalValue>,
@@ -86,25 +86,9 @@ impl traits::AgalValuable for AgalNativeFunction {
   fn binary_operation(
     &self,
     stack: crate::runtime::RefStack,
-    operator: &str,
+    operator: parser::ast::NodeOperator,
     right: values::DefaultRefAgalValue,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
-    todo!()
-  }
-
-  fn unary_back_operator(
-    &self,
-    stack: crate::runtime::RefStack,
-    operator: &str,
-  ) -> values::ResultAgalValue {
-    todo!()
-  }
-
-  fn unary_operator(
-    &self,
-    stack: crate::runtime::RefStack,
-    operator: &str,
-  ) -> values::ResultAgalValue {
     todo!()
   }
 

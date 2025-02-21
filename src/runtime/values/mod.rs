@@ -15,7 +15,9 @@ pub mod primitive;
 pub mod traits;
 use primitive::AgalBoolean;
 use traits::{AgalValuable as _, ToAgalValue};
-#[derive(Debug, Default)]
+
+use super::RefStack;
+#[derive(Debug)]
 pub struct RefAgalValue<T: traits::AgalValuable + traits::ToAgalValue>(Rc<RefCell<T>>);
 impl<T: traits::AgalValuable + traits::ToAgalValue> RefAgalValue<T> {
   pub fn new(value: T) -> Self {
@@ -26,9 +28,6 @@ impl<T: traits::AgalValuable + traits::ToAgalValue> RefAgalValue<T> {
   }
   pub fn borrow_mut(&self) -> std::cell::RefMut<T> {
     self.0.borrow_mut()
-  }
-  pub fn replace(&self, value: T) {
-    *self.borrow_mut() = value;
   }
   pub fn ptr(&self) -> *const T {
     let b = &*self.borrow();
@@ -56,29 +55,6 @@ impl<T: traits::AgalValuable + traits::ToAgalValue + Clone> traits::ToAgalValue
 impl<T: traits::AgalValuable + traits::ToAgalValue + Clone> RefAgalValue<T> {
   pub fn un_ref(&self) -> T {
     self.borrow().clone()
-  }
-}
-impl RefAgalValue<AgalValue> {
-  pub fn is_return(&self) -> bool {
-    self.un_ref().is_return()
-  }
-  pub fn is_break(&self) -> bool {
-    self.un_ref().is_break()
-  }
-  pub fn is_continue(&self) -> bool {
-    self.un_ref().is_continue()
-  }
-  pub fn is_stop(&self) -> bool {
-    self.un_ref().is_stop()
-  }
-  pub fn is_never(&self) -> bool {
-    self.un_ref().is_never()
-  }
-  pub fn to_result(&self) -> Result<RefAgalValue<AgalValue>, internal::AgalThrow> {
-    self.un_ref().to_result()
-  }
-  pub fn into_return(&self) -> Option<DefaultRefAgalValue> {
-    self.un_ref().into_return()
   }
 }
 impl<T: traits::AgalValuable + traits::ToAgalValue> traits::AgalValuable for RefAgalValue<T> {
@@ -109,12 +85,6 @@ impl<T: traits::AgalValuable + traits::ToAgalValue> traits::AgalValuable for Ref
   ) -> Result<primitive::AgalString, internal::AgalThrow> {
     self.borrow().to_agal_console(stack)
   }
-  fn to_agal_value(
-    &self,
-    stack: super::RefStack,
-  ) -> Result<primitive::AgalString, internal::AgalThrow> {
-    self.borrow().to_agal_value(stack)
-  }
   fn get_instance_property(
     &self,
     stack: super::RefStack,
@@ -138,28 +108,22 @@ impl<T: traits::AgalValuable + traits::ToAgalValue> traits::AgalValuable for Ref
     self.borrow_mut().set_object_property(stack, key, value)
   }
   async fn call(
-    &mut self,
+    &self,
     stack: super::RefStack,
     this: DefaultRefAgalValue,
     args: Vec<DefaultRefAgalValue>,
     modules: util::RefValue<crate::Modules>,
   ) -> Result<crate::runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
-    self.borrow_mut().call(stack, this, args, modules).await
+    self.borrow().call(stack, this, args, modules).await
   }
 
   fn binary_operation(
     &self,
     stack: super::RefStack,
-    operator: &str,
+    operator: parser::ast::NodeOperator,
     right: DefaultRefAgalValue,
   ) -> Result<DefaultRefAgalValue, internal::AgalThrow> {
     self.borrow().binary_operation(stack, operator, right)
-  }
-  fn unary_operator(&self, stack: super::RefStack, operator: &str) -> ResultAgalValue {
-    self.borrow().unary_operator(stack, operator)
-  }
-  fn unary_back_operator(&self, stack: super::RefStack, operator: &str) -> ResultAgalValue {
-    self.borrow().unary_back_operator(stack, operator)
   }
   fn to_agal_array(
     &self,
@@ -188,10 +152,38 @@ impl<T: traits::AgalValuable + traits::ToAgalValue> traits::AgalValuable for Ref
 }
 impl<T: traits::AgalValuable + traits::ToAgalValue> ToString for RefAgalValue<T> {
   fn to_string(&self) -> String {
-    match self.try_to_string(Default::default()) {
+    match self.try_to_string(RefStack::get_default()) {
       Ok(s) => s,
       Err(e) => e.to_string(),
     }
+  }
+}
+impl RefAgalValue<AgalValue> {
+  pub fn is_return(&self) -> bool {
+    self.un_ref().is_return()
+  }
+  pub fn is_break(&self) -> bool {
+    self.un_ref().is_break()
+  }
+  pub fn is_continue(&self) -> bool {
+    self.un_ref().is_continue()
+  }
+  pub fn is_stop(&self) -> bool {
+    self.un_ref().is_stop()
+  }
+  pub fn is_never(&self) -> bool {
+    self.un_ref().is_never()
+  }
+  pub fn to_result(&self) -> Result<RefAgalValue<AgalValue>, internal::AgalThrow> {
+    self.un_ref().to_result()
+  }
+  pub fn into_return(&self) -> Option<DefaultRefAgalValue> {
+    self.un_ref().into_return()
+  }
+}
+impl Default for RefAgalValue<AgalValue> {
+  fn default() -> Self {
+    Self::new(AgalValue::default())
   }
 }
 
@@ -206,6 +198,7 @@ pub enum AgalValue {
   Never,
   Break,
   Null,
+  Console,
 }
 impl AgalValue {
   pub fn is_return(&self) -> bool {
@@ -275,6 +268,7 @@ impl traits::AgalValuable for AgalValue {
       Self::Export(_, v) => v.get_name(),
       Self::Continue => "<Palabra clave Continuar>".to_string(),
       Self::Break => "<Palabra clave Romper>".to_string(),
+      Self::Console => "<Palabra clave Consola>".to_string(),
     }
   }
   fn to_agal_string(
@@ -319,7 +313,8 @@ impl traits::AgalValuable for AgalValue {
       Self::Primitive(p) => p.to_agal_byte(stack),
       Self::Internal(i) => i.to_agal_byte(stack),
       Self::Export(_, v) => v.to_agal_byte(stack),
-      Self::Never | Self::Null | Self::Break | Self::Continue => Err(internal::AgalThrow::Params {
+      Self::Never | Self::Null => Ok(primitive::AgalByte::new(0)),
+      Self::Break | Self::Console | Self::Continue => Err(internal::AgalThrow::Params {
         type_error: parser::internal::ErrorNames::TypeError,
         message: error_message::TO_AGAL_BYTE.to_string(),
         stack,
@@ -335,7 +330,9 @@ impl traits::AgalValuable for AgalValue {
       Self::Primitive(p) => p.to_agal_boolean(stack),
       Self::Internal(i) => i.to_agal_boolean(stack),
       Self::Export(_, v) => v.to_agal_boolean(stack),
-      Self::Never | Self::Null | Self::Break | Self::Continue => Ok(primitive::AgalBoolean::False),
+      Self::Never | Self::Null | Self::Break | Self::Continue | Self::Console => {
+        Ok(primitive::AgalBoolean::False)
+      }
     }
   }
   fn to_agal_console(
@@ -353,26 +350,7 @@ impl traits::AgalValuable for AgalValue {
       Self::Never => Ok(primitive::AgalString::from_string(
         crate::colors::Color::GRAY.apply(super::NOTHING_KEYWORD),
       )),
-      Self::Break | Self::Continue => Err(internal::AgalThrow::Params {
-        type_error: parser::internal::ErrorNames::TypeError,
-        message: TO_AGAL_CONSOLE.to_string(),
-        stack,
-      }),
-    }
-  }
-  fn to_agal_value(
-    &self,
-    stack: super::RefStack,
-  ) -> Result<primitive::AgalString, internal::AgalThrow> {
-    match self {
-      Self::Complex(c) => c.to_agal_value(stack),
-      Self::Primitive(p) => p.to_agal_value(stack),
-      Self::Internal(i) => i.to_agal_value(stack),
-      Self::Export(_, v) => v.to_agal_value(stack),
-      Self::Never | Self::Null => Ok(primitive::AgalString::from_string(
-        super::NULL_KEYWORD.to_string(),
-      )),
-      Self::Break | Self::Continue => Err(internal::AgalThrow::Params {
+      Self::Break | Self::Continue | Self::Console => Err(internal::AgalThrow::Params {
         type_error: parser::internal::ErrorNames::TypeError,
         message: TO_AGAL_CONSOLE.to_string(),
         stack,
@@ -389,20 +367,22 @@ impl traits::AgalValuable for AgalValue {
       Self::Primitive(p) => p.get_instance_property(stack, key),
       Self::Internal(i) => i.get_instance_property(stack, key),
       Self::Export(_, v) => v.get_instance_property(stack, key),
-      Self::Never | Self::Null | Self::Break | Self::Continue => internal::AgalThrow::Params {
-        type_error: parser::internal::ErrorNames::TypeError,
-        message: format!(
-          "No se puede obtener la propiedad '{}' de {}",
-          key,
-          self.to_agal_string(stack.clone())?.to_string()
-        ),
-        stack,
+      Self::Never | Self::Null | Self::Break | Self::Continue | Self::Console => {
+        internal::AgalThrow::Params {
+          type_error: parser::internal::ErrorNames::TypeError,
+          message: format!(
+            "No se puede obtener la propiedad '{}' de {}",
+            key,
+            self.to_agal_string(stack.clone())?.to_string()
+          ),
+          stack,
+        }
+        .to_result()
       }
-      .to_result(),
     }
   }
   fn call(
-    &mut self,
+    &self,
     stack: super::RefStack,
     this: DefaultRefAgalValue,
     args: Vec<DefaultRefAgalValue>,
@@ -414,12 +394,14 @@ impl traits::AgalValuable for AgalValue {
         Self::Primitive(p) => p.call(stack, this, args, modules).await,
         Self::Internal(i) => i.call(stack, this, args, modules).await,
         Self::Export(_, v) => v.call(stack, this, args, modules).await,
-        Self::Never | Self::Null | Self::Break | Self::Continue => internal::AgalThrow::Params {
-          type_error: parser::internal::ErrorNames::TypeError,
-          message: error_message::CALL.to_string(),
-          stack,
+        Self::Never | Self::Null | Self::Break | Self::Continue | Self::Console => {
+          internal::AgalThrow::Params {
+            type_error: parser::internal::ErrorNames::TypeError,
+            message: error_message::CALL.to_string(),
+            stack,
+          }
+          .to_result()
         }
-        .to_result(),
       }
     })
   }
@@ -430,7 +412,7 @@ impl traits::AgalValuable for AgalValue {
       Self::Internal(i) => self.get_keys(),
       Self::Primitive(p) => self.get_keys(),
       Self::Export(_, v) => v.get_keys(),
-      Self::Never | Self::Null | Self::Break | Self::Continue => vec![],
+      Self::Never | Self::Null | Self::Break | Self::Continue | Self::Console => vec![],
     }
   }
 
@@ -443,76 +425,43 @@ impl traits::AgalValuable for AgalValue {
       Self::Primitive(p) => p.to_agal_array(stack),
       Self::Internal(i) => i.to_agal_array(stack),
       Self::Export(_, v) => v.to_agal_array(stack),
-      Self::Never | Self::Null | Self::Break | Self::Continue => Err(internal::AgalThrow::Params {
-        type_error: parser::internal::ErrorNames::TypeError,
-        message: error_message::TO_AGAL_ARRAY.to_string(),
-        stack,
-      }),
+      Self::Never | Self::Null | Self::Break | Self::Continue | Self::Console => {
+        Err(internal::AgalThrow::Params {
+          type_error: parser::internal::ErrorNames::TypeError,
+          message: error_message::TO_AGAL_ARRAY.to_string(),
+          stack,
+        })
+      }
     }
   }
 
   fn binary_operation(
     &self,
     stack: super::RefStack,
-    operator: &str,
+    operator: parser::ast::NodeOperator,
     right: DefaultRefAgalValue,
   ) -> Result<DefaultRefAgalValue, internal::AgalThrow> {
-    match (self, operator) {
-      (Self::Complex(c), _) => c.borrow().binary_operation(stack, operator, right),
-      (Self::Primitive(p), _) => p.borrow().binary_operation(stack, operator, right),
-      (Self::Internal(i), _) => i.borrow().binary_operation(stack, operator, right),
-      (Self::Null, "==") => match right.un_ref() {
-        Self::Null => AgalBoolean::True.to_result(),
-        _ => Ok(AgalBoolean::False.to_ref_value()),
-      },
-      (Self::Null, "!=") => match right.un_ref() {
-        Self::Null => AgalBoolean::False.to_result(),
-        _ => Ok(AgalBoolean::True.to_ref_value()),
-      },
-      (Self::Never, "==") => match right.un_ref() {
-        Self::Never => AgalBoolean::True.to_result(),
-        _ => Ok(AgalBoolean::False.to_ref_value()),
-      },
-      (Self::Never, "!=") => match right.un_ref() {
-        Self::Never => AgalBoolean::False.to_result(),
-        _ => Ok(AgalBoolean::True.to_ref_value()),
-      },
-      (Self::Never | Self::Null, "||" | "??") => Ok(right),
-      (Self::Never | Self::Null, "&&") => self.clone().to_result(),
-      (_, _) => AgalThrow::Params {
+    match (self, operator, &*right.clone().borrow()) {
+      (Self::Complex(c), _, _) => c.borrow().binary_operation(stack, operator, right),
+      (Self::Primitive(p), _, _) => p.borrow().binary_operation(stack, operator, right),
+      (Self::Internal(i), _, _) => i.borrow().binary_operation(stack, operator, right),
+      (Self::Null, parser::ast::NodeOperator::NotEqual, Self::Null)
+      | (Self::Null, parser::ast::NodeOperator::Equal, _)
+      | (Self::Never, parser::ast::NodeOperator::NotEqual, Self::Never)
+      | (Self::Never, parser::ast::NodeOperator::Equal, _) => AgalBoolean::False.to_result(),
+      (Self::Null, parser::ast::NodeOperator::Equal, Self::Null)
+      | (Self::Null, parser::ast::NodeOperator::NotEqual, _)
+      | (Self::Never, parser::ast::NodeOperator::Equal, Self::Never)
+      | (Self::Never, parser::ast::NodeOperator::NotEqual, _) => AgalBoolean::True.to_result(),
+      (
+        Self::Never | Self::Null,
+        parser::ast::NodeOperator::Or | parser::ast::NodeOperator::Nullish,
+        _,
+      ) => Ok(right),
+      (Self::Never | Self::Null, parser::ast::NodeOperator::And, _) => self.clone().to_result(),
+      (_, _, _) => AgalThrow::Params {
         type_error: ErrorNames::TypeError,
         message: error_message::BINARY_OPERATION(self.clone().as_ref(), operator, right),
-        stack,
-      }
-      .to_result(),
-    }
-  }
-
-  fn unary_back_operator(&self, stack: super::RefStack, operator: &str) -> ResultAgalValue {
-    match (self, operator) {
-      (Self::Complex(c), _) => c.borrow().unary_back_operator(stack, operator),
-      (Self::Primitive(p), _) => p.borrow().unary_back_operator(stack, operator),
-      (Self::Internal(i), _) => i.borrow().unary_back_operator(stack, operator),
-      (Self::Never | Self::Null, "?") => Self::Never.to_result(),
-      (_, _) => AgalThrow::Params {
-        type_error: ErrorNames::TypeError,
-        message: error_message::UNARY_BACK_OPERATOR.to_owned(),
-        stack,
-      }
-      .to_result(),
-    }
-  }
-
-  fn unary_operator(&self, stack: super::RefStack, operator: &str) -> ResultAgalValue {
-    match (self, operator) {
-      (Self::Complex(c), _) => c.borrow().unary_operator(stack, operator),
-      (Self::Primitive(p), _) => p.borrow().unary_operator(stack, operator),
-      (Self::Internal(i), _) => i.borrow().unary_operator(stack, operator),
-      (Self::Never | Self::Null, "?") => AgalBoolean::False.to_result(),
-      (Self::Never | Self::Null, "!") => AgalBoolean::True.to_result(),
-      (_, _) => AgalThrow::Params {
-        type_error: ErrorNames::TypeError,
-        message: error_message::UNARY_OPERATOR.to_owned(),
         stack,
       }
       .to_result(),

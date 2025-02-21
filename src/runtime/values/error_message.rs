@@ -27,7 +27,7 @@ pub const INVALID_OPERATOR: &str = "Operador invalido";
 
 pub fn BINARY_OPERATION(
   left: DefaultRefAgalValue,
-  operator: &str,
+  operator: parser::ast::NodeOperator,
   right: DefaultRefAgalValue,
 ) -> String {
   format!(

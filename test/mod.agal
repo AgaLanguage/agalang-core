@@ -1,2 +1,0 @@
-importar '../test.agal' como test;
-exportar nombre test;

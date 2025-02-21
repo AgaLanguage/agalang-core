@@ -50,10 +50,7 @@ pub fn full_eval(
 }
 
 async fn eval(code: String, path: &str, stack: RefStack, modules_manager: &Modules) -> EvalResult {
-  let program = {
-    let mut parser = frontend::Parser::new(code, &path);
-    parser.produce_ast()
-  };
+  let program = frontend::Parser::new(code, &path).produce_ast();
   let program = match program {
     Ok(value) => value,
     Err(err) => {
@@ -75,7 +72,7 @@ async fn eval(code: String, path: &str, stack: RefStack, modules_manager: &Modul
   let value = &*value.borrow();
   match value {
     Err(throw) => {
-      let (type_err, err) = throw.get_data(new_stack);
+      let (type_err, err) = throw.get_data();
       let data = internal::errors::error_to_string(&type_err, err);
       internal::print_error(data);
       Err(())

@@ -15,7 +15,7 @@ use super::{
       AgalArray, AgalClass, AgalClassProperty, AgalComplex, AgalFunction, AgalObject,
       AgalPromiseData,
     },
-    internal::{self, AgalThrow},
+    internal::{self, AgalImmutable, AgalThrow},
     primitive,
     traits::{AgalValuable as _, ToAgalValue as _},
     AgalValue, ResultAgalValue,
@@ -116,9 +116,10 @@ pub fn interpreter(
         Ok(value)
       }
       Node::Binary(binary) => {
+        let operator = binary.operator;
         let left = interpreter(binary.left.clone(), stack.clone(), modules.clone()).await?;
         let right = interpreter(binary.right.clone(), stack.clone(), modules.clone()).await?;
-        left.binary_operation(stack.clone(), &binary.operator, right)
+        left.binary_operation(stack.clone(), operator, right)
       }
       Node::Block(block) => {
         let mut result = AgalValue::Never.as_ref();
@@ -139,7 +140,7 @@ pub fn interpreter(
           let key = if !member.computed && member.member.is_identifier() {
             member.member.get_identifier().unwrap().name.clone()
           } else {
-            // No deberia ser posible llegar a este punto
+            // Ya es valido object::["key"]
             interpreter(member.member.clone(), stack.clone(), modules.clone())
               .await?
               .try_to_string(stack.clone())?
@@ -160,7 +161,7 @@ pub fn interpreter(
           .call(stack.clone(), this, args, modules.clone())
           .await?;
         if ret.is_return() {
-          ret.into_return().unwrap_or(AgalValue::Never.to_ref_value())
+          ret.into_return().unwrap_or_default()
         } else if ret.is_stop() {
           AgalValue::Never.to_ref_value()
         } else {
@@ -222,6 +223,55 @@ pub fn interpreter(
         stack
           .env()
           .define(class_stack, &class.name, class_value, true, &node)
+      }
+      Node::Console(parser::ast::NodeConsole::Full {
+        identifier, value, ..
+      }) => {
+        let env = stack.env();
+        let valid_variable =
+          env.has(identifier) && !(env.is_constant(identifier) || env.is_keyword(identifier));
+        if !valid_variable {
+          return internal::AgalThrow::Params {
+            type_error: ErrorNames::EnvironmentError,
+            message: format!("No se puede asignar a la variable \"{}\"", identifier),
+            stack,
+          }
+          .to_result();
+        }
+        let value = interpreter(value.clone(), stack.clone(), modules.clone()).await?;
+        let value = value.to_agal_string(stack.clone())?.to_string();
+        print!("{value}");
+        use std::io::Write as _;
+        std::io::stdout().flush();
+        let buf = &mut String::new();
+        std::io::stdin().read_line(buf);
+        let value = primitive::AgalString::from_string(buf.to_string()).to_ref_value();
+        stack.env().assign(stack, &identifier, value, &node)
+      }
+      Node::Console(parser::ast::NodeConsole::Output { value, .. }) => {
+        let value = interpreter(value.clone(), stack.clone(), modules.clone()).await?;
+        let value = value.to_agal_string(stack.clone())?.to_string();
+        print!("{value}");
+        use std::io::Write as _;
+        std::io::stdout().flush();
+        Ok(AgalValue::Never.as_ref())
+      }
+      Node::Console(parser::ast::NodeConsole::Input { identifier, .. }) => {
+        let env = stack.env();
+        let valid_variable =
+          env.has(identifier) && !(env.is_constant(identifier) || env.is_keyword(identifier));
+        if !valid_variable {
+          return internal::AgalThrow::Params {
+            type_error: ErrorNames::EnvironmentError,
+            message: format!("No se puede asignar a la variable \"{}\"", identifier),
+            stack,
+          }
+          .to_result();
+        }
+        let buf = &mut String::new();
+        std::io::stdin().read_line(buf);
+        let value = primitive::AgalString::from_string(buf.to_string()).to_ref_value();
+        stack.env().assign(stack, &identifier, value, &node)
       }
       Node::DoWhile(do_while) => {
         let mut value = AgalValue::Never.as_ref();
@@ -421,7 +471,7 @@ pub fn interpreter(
             message: format!("No se encontro el modulo \"{}\"", import.path),
             stack,
           }
-          .throw();
+          .to_result();
         }
         let module = module.unwrap();
         if let Some(n) = import.name.clone() {
@@ -454,7 +504,7 @@ pub fn interpreter(
       }
       Node::Name(name) => stack.env().get(stack, &name.name, &node),
       Node::None => AgalValue::Never.to_result(),
-      Node::Number(num) => if num.base == 10 {
+      Node::Number(num) => if num.base == 10 && num.value.contains('.') {
         let d = str::parse::<f32>(&num.value).unwrap();
         primitive::AgalNumber::Decimal(d)
       } else {
@@ -557,12 +607,51 @@ pub fn interpreter(
         }
         .to_result()
       }
-      Node::UnaryBack(unary) => interpreter(unary.operand.clone(), stack.clone(), modules)
-        .await?
-        .unary_back_operator(stack, &unary.operator),
-      Node::UnaryFront(unary) => interpreter(unary.operand.clone(), stack.clone(), modules)
-        .await?
-        .unary_operator(stack, &unary.operator),
+      Node::UnaryBack(unary) => {
+        let value = interpreter(unary.operand.clone(), stack.clone(), modules).await;
+        if unary.operator == parser::ast::NodeOperator::QuestionMark {
+          match &value {
+            Ok(_) => value,
+            Err(throw) => AgalValue::Null.to_result(),
+          }
+        } else {
+          AgalThrow::Params {
+            type_error: ErrorNames::SyntaxError,
+            message: format!(
+              "No se puede usar el operador '{}' para una operacion unitaria trasera",
+              unary.operator
+            ),
+            stack,
+          }
+          .to_result()
+        }
+      }
+      Node::UnaryFront(unary) => {
+        let value = interpreter(unary.operand.clone(), stack.clone(), modules).await?;
+        if unary.operator == parser::ast::NodeOperator::QuestionMark {
+          value.to_agal_boolean(stack)?.to_result()
+        } else if unary.operator == parser::ast::NodeOperator::Not {
+          value.to_agal_boolean(stack)?.not().to_result()
+        } else if unary.operator == parser::ast::NodeOperator::BitAnd {
+          AgalImmutable::new(value).to_result()
+        } else if unary.operator == parser::ast::NodeOperator::Plus {
+          value.to_agal_number(stack)?.to_result()
+        } else if unary.operator == parser::ast::NodeOperator::Minus {
+          value.to_agal_number(stack)?.neg().to_result()
+        } else if unary.operator == parser::ast::NodeOperator::Approximate {
+          value.to_agal_number(stack)?.floor().to_result()
+        } else {
+          AgalThrow::Params {
+            type_error: ErrorNames::SyntaxError,
+            message: format!(
+              "No se puede usar el operador '{}' para una operacion unitaria frontal",
+              unary.operator
+            ),
+            stack,
+          }
+          .to_result()
+        }
+      }
       Node::VarDecl(var) => match &var.value {
         Some(value) => {
           let value = interpreter(value.clone(), stack.clone(), modules).await?;

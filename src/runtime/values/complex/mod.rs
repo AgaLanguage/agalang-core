@@ -111,7 +111,7 @@ impl traits::AgalValuable for AgalComplex {
     }
   }
   async fn call(
-    &mut self,
+    &self,
     stack: RefStack,
     this: super::DefaultRefAgalValue,
     args: Vec<super::DefaultRefAgalValue>,
@@ -183,7 +183,7 @@ impl traits::AgalValuable for AgalComplex {
   fn binary_operation(
     &self,
     stack: crate::runtime::RefStack,
-    operator: &str,
+    operator: parser::ast::NodeOperator,
     right: super::DefaultRefAgalValue,
   ) -> Result<super::DefaultRefAgalValue, internal::AgalThrow> {
     match self {
@@ -193,36 +193,6 @@ impl traits::AgalValuable for AgalComplex {
       Self::Object(value) => value.binary_operation(stack, operator, right),
       Self::Array(value) => value.binary_operation(stack, operator, right),
       Self::Class(value) => value.binary_operation(stack, operator, right),
-    }
-  }
-
-  fn unary_back_operator(
-    &self,
-    stack: crate::runtime::RefStack,
-    operator: &str,
-  ) -> super::ResultAgalValue {
-    match self {
-      Self::SuperInstance(value) => value.unary_back_operator(stack, operator),
-      Self::Function(value) => value.unary_back_operator(stack, operator),
-      Self::Promise(value) => value.unary_back_operator(stack, operator),
-      Self::Object(value) => value.unary_back_operator(stack, operator),
-      Self::Array(value) => value.unary_back_operator(stack, operator),
-      Self::Class(value) => value.unary_back_operator(stack, operator),
-    }
-  }
-
-  fn unary_operator(
-    &self,
-    stack: crate::runtime::RefStack,
-    operator: &str,
-  ) -> super::ResultAgalValue {
-    match self {
-      Self::SuperInstance(value) => value.unary_operator(stack, operator),
-      Self::Function(value) => value.unary_operator(stack, operator),
-      Self::Promise(value) => value.unary_operator(stack, operator),
-      Self::Object(value) => value.unary_operator(stack, operator),
-      Self::Array(value) => value.unary_operator(stack, operator),
-      Self::Class(value) => value.unary_operator(stack, operator),
     }
   }
 

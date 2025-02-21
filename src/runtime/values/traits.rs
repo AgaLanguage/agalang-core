@@ -63,12 +63,6 @@ pub trait AgalValuable {
         .set_color(crate::colors::Color::MAGENTA),
     )
   }
-  fn to_agal_value(
-    &self,
-    stack: runtime::RefStack,
-  ) -> Result<primitive::AgalString, internal::AgalThrow> {
-    self.to_agal_console(stack)
-  }
   fn to_agal_array(
     &self,
     stack: runtime::RefStack,
@@ -76,11 +70,9 @@ pub trait AgalValuable {
   fn binary_operation(
     &self,
     stack: runtime::RefStack,
-    operator: &str,
+    operator: parser::ast::NodeOperator,
     right: DefaultRefAgalValue,
   ) -> Result<DefaultRefAgalValue, internal::AgalThrow>;
-  fn unary_back_operator(&self, stack: runtime::RefStack, operator: &str) -> ResultAgalValue;
-  fn unary_operator(&self, stack: runtime::RefStack, operator: &str) -> ResultAgalValue;
   fn get_object_property(
     &self,
     stack: runtime::RefStack,
@@ -98,7 +90,7 @@ pub trait AgalValuable {
     key: &str,
   ) -> Result<DefaultRefAgalValue, internal::AgalThrow>;
   async fn call(
-    &mut self,
+    &self,
     stack: runtime::RefStack,
     this: DefaultRefAgalValue,
     args: Vec<DefaultRefAgalValue>,

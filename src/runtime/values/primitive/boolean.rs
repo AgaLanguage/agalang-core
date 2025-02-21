@@ -73,11 +73,16 @@ impl traits::AgalValuable for AgalBoolean {
   }
 
   fn get_keys(&self) -> Vec<String> {
-    todo!()
+    vec![]
   }
 
   fn to_agal_byte(&self, stack: runtime::RefStack) -> Result<super::AgalByte, internal::AgalThrow> {
-    todo!()
+    internal::AgalThrow::Params {
+      type_error: parser::internal::ErrorNames::TypeError,
+      message: error_message::TO_AGAL_BYTE.to_owned(),
+      stack,
+    }
+    .to_result()
   }
 
   fn to_agal_array(
@@ -85,13 +90,18 @@ impl traits::AgalValuable for AgalBoolean {
     stack: runtime::RefStack,
   ) -> Result<runtime::values::RefAgalValue<runtime::values::complex::AgalArray>, internal::AgalThrow>
   {
-    todo!()
+    internal::AgalThrow::Params {
+      type_error: parser::internal::ErrorNames::TypeError,
+      message: error_message::TO_AGAL_ARRAY.to_owned(),
+      stack,
+    }
+    .to_result()
   }
 
   fn binary_operation(
     &self,
     stack: runtime::RefStack,
-    operator: &str,
+    operator: parser::ast::NodeOperator,
     right: runtime::values::DefaultRefAgalValue,
   ) -> Result<runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
     let x = right.clone();
@@ -106,8 +116,14 @@ impl traits::AgalValuable for AgalBoolean {
       });
     };
     match (prim, operator) {
-      (AgalPrimitive::Boolean(b), "&&") => self.and(b).to_result(),
-      (AgalPrimitive::Boolean(b), "||") => self.or(b).to_result(),
+      (AgalPrimitive::Boolean(b), parser::ast::NodeOperator::And) => self.and(b).to_result(),
+      (AgalPrimitive::Boolean(b), parser::ast::NodeOperator::Or) => self.or(b).to_result(),
+      (AgalPrimitive::Boolean(b), parser::ast::NodeOperator::Equal) => {
+        AgalBoolean::new(self.equals(&b)).to_result()
+      }
+      (AgalPrimitive::Boolean(b), parser::ast::NodeOperator::NotEqual) => {
+        AgalBoolean::new(!self.equals(&b)).to_result()
+      }
       _ => Err(AgalThrow::Params {
         type_error: parser::internal::ErrorNames::TypeError,
         message: error_message::BINARY_OPERATION(self.to_ref_value(), operator, right.clone()),
@@ -116,28 +132,17 @@ impl traits::AgalValuable for AgalBoolean {
     }
   }
 
-  fn unary_back_operator(
-    &self,
-    stack: runtime::RefStack,
-    operator: &str,
-  ) -> runtime::values::ResultAgalValue {
-    todo!()
-  }
-
-  fn unary_operator(
-    &self,
-    stack: runtime::RefStack,
-    operator: &str,
-  ) -> runtime::values::ResultAgalValue {
-    todo!()
-  }
-
   fn get_object_property(
     &self,
     stack: runtime::RefStack,
     key: &str,
   ) -> Result<runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
-    todo!()
+    internal::AgalThrow::Params {
+      type_error: parser::internal::ErrorNames::TypeError,
+      message: error_message::GET_OBJECT_PROPERTY.to_owned(),
+      stack,
+    }
+    .to_result()
   }
 
   fn set_object_property(
@@ -146,7 +151,12 @@ impl traits::AgalValuable for AgalBoolean {
     key: &str,
     value: runtime::values::DefaultRefAgalValue,
   ) -> Result<runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
-    todo!()
+    internal::AgalThrow::Params {
+      type_error: parser::internal::ErrorNames::TypeError,
+      message: error_message::SET_OBJECT_PROPERTY.to_owned(),
+      stack,
+    }
+    .to_result()
   }
 
   fn get_instance_property(
@@ -158,20 +168,25 @@ impl traits::AgalValuable for AgalBoolean {
   }
 
   async fn call(
-    &mut self,
+    &self,
     stack: runtime::RefStack,
     this: runtime::values::DefaultRefAgalValue,
     args: Vec<runtime::values::DefaultRefAgalValue>,
     modules: parser::util::RefValue<crate::Modules>,
   ) -> Result<crate::runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
-    todo!()
+    internal::AgalThrow::Params {
+      type_error: parser::internal::ErrorNames::TypeError,
+      message: error_message::CALL.to_owned(),
+      stack,
+    }
+    .to_result()
   }
 
   fn to_agal_number(
     &self,
     stack: runtime::RefStack,
   ) -> Result<super::AgalNumber, internal::AgalThrow> {
-    todo!()
+    Ok(super::AgalNumber::from(self.as_bool() as i32))
   }
 
   fn equals(&self, other: &Self) -> bool {

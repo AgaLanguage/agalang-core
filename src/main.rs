@@ -81,7 +81,7 @@ async fn main() -> ExitCode {
     return ExitCode::FAILURE;
   }
   let filename = filename.unwrap();
-  let stack = runtime::RefStack::default();
+  let stack = runtime::RefStack::get_default();
 
   let program = runtime::full_eval(filename, stack, modules_manager.to_ref()).await;
   if program.is_err() {

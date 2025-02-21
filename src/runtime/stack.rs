@@ -3,9 +3,12 @@ use std::{cell::RefCell, collections::VecDeque, rc::Rc};
 use parser::ast::{BNode, Node};
 
 use super::RefEnvironment;
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct RefStack(Rc<RefCell<Stack>>);
 impl RefStack {
+  pub fn get_default() -> Self {
+    Stack::new(RefEnvironment::get_default()).to_ref()
+  }
   pub fn crate_child(&self, in_class: bool, value: BNode) -> Self {
     Stack {
       env: self.env().crate_child(in_class),
@@ -14,9 +17,11 @@ impl RefStack {
     }
     .to_ref()
   }
+  pub fn with_env(&self, env: RefEnvironment) -> Self {
+    self.0.borrow().with_env(env).to_ref()
+  }
   pub fn next(self, value: BNode) -> Self {
-    self.0.borrow_mut().next(value);
-    self
+    self.0.borrow_mut().next(value).to_ref()
   }
   pub fn pop(self) -> Option<Self> {
     self.0.borrow_mut().pop()
@@ -57,7 +62,7 @@ impl IntoIterator for &RefStack {
   }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct Stack {
   node: BNode,
   env: RefEnvironment,
@@ -85,6 +90,13 @@ impl Stack {
   pub fn get_global(&self) -> Self {
     Self {
       env: self.env.get_global(),
+      prev: Some(self.clone().to_ref()),
+      node: self.node.clone(),
+    }
+  }
+  pub fn with_env(&self, env: RefEnvironment) -> Self {
+    Self {
+      env,
       prev: Some(self.clone().to_ref()),
       node: self.node.clone(),
     }

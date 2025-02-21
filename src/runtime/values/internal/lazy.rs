@@ -90,25 +90,9 @@ impl traits::AgalValuable for AgalLazy {
   fn binary_operation(
     &self,
     stack: crate::runtime::RefStack,
-    operator: &str,
+    operator: parser::ast::NodeOperator,
     right: values::DefaultRefAgalValue,
   ) -> Result<values::DefaultRefAgalValue, super::AgalThrow> {
-    todo!()
-  }
-
-  fn unary_back_operator(
-    &self,
-    stack: crate::runtime::RefStack,
-    operator: &str,
-  ) -> values::ResultAgalValue {
-    todo!()
-  }
-
-  fn unary_operator(
-    &self,
-    stack: crate::runtime::RefStack,
-    operator: &str,
-  ) -> values::ResultAgalValue {
     todo!()
   }
 
@@ -138,7 +122,7 @@ impl traits::AgalValuable for AgalLazy {
   }
 
   async fn call(
-    &mut self,
+    &self,
     stack: crate::runtime::RefStack,
     this: values::DefaultRefAgalValue,
     args: Vec<values::DefaultRefAgalValue>,

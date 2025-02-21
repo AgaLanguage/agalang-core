@@ -25,7 +25,6 @@ type Resolver = dyn FnOnce(values::DefaultRefAgalValue);
 type Callback = Box<dyn FnOnce(Resolver, Resolver)>;
 
 type ResultFuture = Result<values::DefaultRefAgalValue, internal::AgalThrow>;
-
 pub enum AgalPromiseData {
   Unresolved(Pin<Box<dyn Future<Output = ResultFuture> + 'static>>),
   Resolved(ResultFuture),
@@ -44,6 +43,11 @@ impl IntoFuture for AgalPromiseData {
       Self::Unresolved(inner) => inner,
       Self::Resolved(value) => Box::pin(async move { value }),
     }
+  }
+}
+impl Default for AgalPromiseData {
+  fn default() -> Self {
+    Self::Resolved(AgalValue::Never.to_result())
   }
 }
 
@@ -106,25 +110,9 @@ impl traits::AgalValuable for AgalPromise {
   fn binary_operation(
     &self,
     stack: crate::runtime::RefStack,
-    operator: &str,
+    operator: parser::ast::NodeOperator,
     right: values::DefaultRefAgalValue,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
-    todo!()
-  }
-
-  fn unary_back_operator(
-    &self,
-    stack: crate::runtime::RefStack,
-    operator: &str,
-  ) -> values::ResultAgalValue {
-    todo!()
-  }
-
-  fn unary_operator(
-    &self,
-    stack: crate::runtime::RefStack,
-    operator: &str,
-  ) -> values::ResultAgalValue {
     todo!()
   }
 
@@ -154,7 +142,7 @@ impl traits::AgalValuable for AgalPromise {
   }
 
   async fn call(
-    &mut self,
+    &self,
     stack: crate::runtime::RefStack,
     this: values::DefaultRefAgalValue,
     args: Vec<values::DefaultRefAgalValue>,

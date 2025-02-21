@@ -143,7 +143,7 @@ impl traits::AgalValuable for AgalArray {
       message: error_message::TO_AGAL_BYTE.to_string(),
       stack,
     }
-    .throw()
+    .to_result()
   }
 
   fn to_agal_boolean(
@@ -167,7 +167,7 @@ impl traits::AgalValuable for AgalArray {
   fn binary_operation(
     &self,
     stack: runtime::RefStack,
-    operator: &str,
+    operator: parser::ast::NodeOperator,
     right: values::DefaultRefAgalValue,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
     let other = if let AgalValue::Complex(c) = right.un_ref() {
@@ -183,40 +183,40 @@ impl traits::AgalValuable for AgalArray {
         ),
         stack,
       }
-      .throw();
+      .to_result();
     };
     match (other.clone(), operator) {
-      (AgalComplex::Array(a), "+") => {
+      (AgalComplex::Array(a), parser::ast::NodeOperator::Plus) => {
         let vec = self.to_vec();
         let other_vec = a.un_ref().to_vec();
         let result = vec![vec.borrow().clone(), other_vec.borrow().clone()].concat();
         AgalArray::new(result).to_result()
       }
-      (AgalComplex::Array(a), ">=") => {
+      (AgalComplex::Array(a), parser::ast::NodeOperator::GreaterThanOrEqual) => {
         let ref l = a.un_ref();
         AgalBoolean::new(l.less_than(self) || self.equals(l)).to_result()
       }
-      (AgalComplex::Array(a), "<=") => {
+      (AgalComplex::Array(a), parser::ast::NodeOperator::LessThanOrEqual) => {
         let ref l = a.un_ref();
         AgalBoolean::new(self.less_than(l) || self.equals(l)).to_result()
       }
-      (AgalComplex::Array(a), ">") => {
+      (AgalComplex::Array(a), parser::ast::NodeOperator::GreaterThan) => {
         let ref l = a.un_ref();
         AgalBoolean::new(l.less_than(self)).to_result()
       }
-      (AgalComplex::Array(a), "<") => {
+      (AgalComplex::Array(a), parser::ast::NodeOperator::LessThan) => {
         let ref l = a.un_ref();
         AgalBoolean::new(self.less_than(l)).to_result()
       }
-      (_, "??") => self.clone().to_result(),
-      (_, "||") => {
+      (_, parser::ast::NodeOperator::Nullish) => self.clone().to_result(),
+      (_, parser::ast::NodeOperator::Or) => {
         if self.to_agal_boolean(stack)?.as_bool() == true {
           self.clone().to_result()
         } else {
           other.to_result()
         }
       }
-      (_, "&&") => {
+      (_, parser::ast::NodeOperator::And) => {
         if self.to_agal_boolean(stack)?.as_bool() == false {
           self.clone().to_result()
         } else {
@@ -233,38 +233,7 @@ impl traits::AgalValuable for AgalArray {
         ),
         stack,
       }
-      .throw(),
-    }
-  }
-
-  fn unary_back_operator(
-    &self,
-    stack: runtime::RefStack,
-    operator: &str,
-  ) -> values::ResultAgalValue {
-    if operator == "?" {
-      self.clone().to_result()
-    } else {
-      internal::AgalThrow::Params {
-        type_error: parser::internal::ErrorNames::TypeError,
-        message: format!("No se puede aplicar '{}{}'", self.get_name(), operator),
-        stack,
-      }
-      .throw()
-    }
-  }
-
-  fn unary_operator(&self, stack: runtime::RefStack, operator: &str) -> values::ResultAgalValue {
-    match operator {
-      "?" => self.to_agal_boolean(stack)?.to_result(),
-      "!" => self.to_agal_boolean(stack)?.not().to_result(),
-      "+" => self.to_agal_number(stack)?.to_result(),
-      _ => internal::AgalThrow::Params {
-        type_error: parser::internal::ErrorNames::TypeError,
-        message: format!("No se puede aplicar '{}{}'", operator, self.get_name()),
-        stack,
-      }
-      .throw(),
+      .to_result(),
     }
   }
 
@@ -331,12 +300,12 @@ impl traits::AgalValuable for AgalArray {
         ),
         stack,
       }
-      .throw()
+      .to_result()
     }
   }
 
   async fn call(
-    &mut self,
+    &self,
     stack: runtime::RefStack,
     this: values::DefaultRefAgalValue,
     args: Vec<values::DefaultRefAgalValue>,
@@ -347,7 +316,7 @@ impl traits::AgalValuable for AgalArray {
       message: error_message::CALL.to_string(),
       stack,
     }
-    .throw()
+    .to_result()
   }
 
   fn to_agal_number(
@@ -359,7 +328,19 @@ impl traits::AgalValuable for AgalArray {
   }
 
   fn equals(&self, other: &Self) -> bool {
-    todo!()
+    let vec = self.to_vec();
+    let vec = vec.borrow();
+    let other_vec = other.to_vec();
+    let other_vec = other_vec.borrow();
+    if vec.len() != other_vec.len() {
+      return false;
+    }
+    for (a, b) in vec.iter().zip(other_vec.iter()) {
+      if !a.equals(b) {
+        return false;
+      }
+    }
+    true
   }
 
   fn less_than(&self, other: &Self) -> bool {

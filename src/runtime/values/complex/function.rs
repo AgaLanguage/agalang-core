@@ -77,13 +77,14 @@ impl traits::AgalValuable for AgalFunction {
     Ok(self.to_agal_string(stack)?.set_color(colors::Color::CYAN))
   }
   async fn call(
-    &mut self,
+    &self,
     stack: runtime::RefStack,
     this: crate::runtime::values::DefaultRefAgalValue,
     args: Vec<crate::runtime::values::DefaultRefAgalValue>,
     modules: RefValue<crate::Modules>,
   ) -> Result<crate::runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
     let mut new_env = self.env.crate_child(false);
+    let stack = stack.with_env(new_env.clone());
     new_env.set(crate::runtime::env::THIS_KEYWORD, this);
     for (i, arg) in self.args.clone().enumerate() {
       let value = if i < args.len() {
@@ -135,25 +136,9 @@ impl traits::AgalValuable for AgalFunction {
   fn binary_operation(
     &self,
     stack: runtime::RefStack,
-    operator: &str,
+    operator: parser::ast::NodeOperator,
     right: runtime::values::DefaultRefAgalValue,
   ) -> Result<runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
-    todo!()
-  }
-
-  fn unary_back_operator(
-    &self,
-    stack: runtime::RefStack,
-    operator: &str,
-  ) -> runtime::values::ResultAgalValue {
-    todo!()
-  }
-
-  fn unary_operator(
-    &self,
-    stack: runtime::RefStack,
-    operator: &str,
-  ) -> runtime::values::ResultAgalValue {
     todo!()
   }
 
