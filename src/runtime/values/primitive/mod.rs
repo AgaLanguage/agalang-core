@@ -1,6 +1,4 @@
-use parser::util;
-
-use crate::runtime;
+use crate::{libraries, runtime};
 
 use super::{
   internal,
@@ -165,13 +163,14 @@ impl traits::AgalValuable for AgalPrimitive {
     &self,
     stack: runtime::RefStack,
     key: &str,
+    modules: libraries::RefModules
   ) -> Result<super::DefaultRefAgalValue, internal::AgalThrow> {
     match self {
-      Self::Boolean(b) => b.get_instance_property(stack, key),
-      Self::Number(n) => n.get_instance_property(stack, key),
-      Self::String(s) => s.get_instance_property(stack, key),
-      Self::Char(c) => c.get_instance_property(stack, key),
-      Self::Byte(b) => b.get_instance_property(stack, key),
+      Self::Boolean(b) => b.get_instance_property(stack, key,modules),
+      Self::Number(n) => n.get_instance_property(stack, key,modules),
+      Self::String(s) => s.get_instance_property(stack, key,modules),
+      Self::Char(c) => c.get_instance_property(stack, key,modules),
+      Self::Byte(b) => b.get_instance_property(stack, key,modules),
     }
   }
 
@@ -180,7 +179,7 @@ impl traits::AgalValuable for AgalPrimitive {
     stack: runtime::RefStack,
     this: super::DefaultRefAgalValue,
     args: Vec<super::DefaultRefAgalValue>,
-    modules: util::RefValue<crate::Modules>,
+    modules: libraries::RefModules,
   ) -> Result<crate::runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
     match self {
       Self::Boolean(b) => b.call(stack, this, args, modules).await,

@@ -1,4 +1,4 @@
-use crate::runtime::values::{traits, DefaultRefAgalValue};
+use crate::{libraries, runtime::values::{traits, DefaultRefAgalValue}};
 
 #[derive(Debug, Clone)]
 pub struct AgalImmutable(DefaultRefAgalValue);
@@ -99,8 +99,9 @@ impl traits::AgalValuable for AgalImmutable {
     &self,
     stack: crate::runtime::RefStack,
     key: &str,
+    modules: libraries::RefModules
   ) -> Result<DefaultRefAgalValue, super::AgalThrow> {
-    self.0.get_instance_property(stack, key)
+    self.0.get_instance_property(stack, key, modules)
   }
 
   async fn call(
@@ -108,7 +109,7 @@ impl traits::AgalValuable for AgalImmutable {
     stack: crate::runtime::RefStack,
     this: DefaultRefAgalValue,
     args: Vec<DefaultRefAgalValue>,
-    modules: parser::util::RefValue<crate::Modules>,
+    modules: libraries::RefModules,
   ) -> Result<crate::runtime::values::DefaultRefAgalValue, super::AgalThrow> {
     self.0.call(stack, this, args, modules).await
   }

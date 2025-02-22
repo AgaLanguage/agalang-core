@@ -2,8 +2,7 @@ use parser::util::RefValue;
 use std::ops::{Add, Div, Mul, Rem, Sub};
 
 use crate::{
-  colors,
-  runtime::{
+  colors, libraries, runtime::{
     self, stack,
     values::{
       error_message, internal,
@@ -11,7 +10,7 @@ use crate::{
       AgalValue,
     },
     Stack,
-  },
+  }
 };
 
 use super::{string::AgalString, AgalBoolean, AgalPrimitive};
@@ -294,20 +293,28 @@ impl traits::AgalValuable for AgalNumber {
     &self,
     stack: runtime::RefStack,
     key: &str,
+    modules: libraries::RefModules
   ) -> Result<runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
-    internal::AgalThrow::Params {
-      type_error: parser::internal::ErrorNames::TypeError,
-      message: "".to_owned(),
-      stack,
+    match key {
+      "aCadena" => modules.get_module(":proto/Numero").ok_or_else(||internal::AgalThrow::Params {
+        type_error: parser::internal::ErrorNames::TypeError,
+        message: error_message::GET_INSTANCE_PROPERTY.to_owned(),
+        stack: stack.clone(),
+      })?.get_instance_property(stack, key, modules),
+      _ => internal::AgalThrow::Params {
+        type_error: parser::internal::ErrorNames::TypeError,
+        message: error_message::GET_INSTANCE_PROPERTY.to_owned(),
+        stack,
+      }
+      .to_result()
     }
-    .to_result()
   }
   async fn call(
     &self,
     stack: runtime::RefStack,
     this: runtime::values::DefaultRefAgalValue,
     args: Vec<runtime::values::DefaultRefAgalValue>,
-    modules: parser::util::RefValue<crate::Modules>,
+    modules: libraries::RefModules,
   ) -> Result<runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
     if (args.len() != 1) {
       return internal::AgalThrow::Params {

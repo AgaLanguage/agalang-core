@@ -1,9 +1,7 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
-use parser::util::{OpRefValue, RefValue};
-
 use crate::{
-  colors,
+  colors, libraries,
   runtime::{
     self,
     values::{
@@ -12,7 +10,6 @@ use crate::{
       AgalValue,
     },
   },
-  Modules,
 };
 
 use super::AgalComplex;
@@ -132,6 +129,7 @@ impl traits::AgalValuable for AgalPrototype {
     &self,
     stack: runtime::RefStack,
     key: &str,
+    modules: libraries::RefModules,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
     todo!()
   }
@@ -141,7 +139,7 @@ impl traits::AgalValuable for AgalPrototype {
     stack: runtime::RefStack,
     this: values::DefaultRefAgalValue,
     args: Vec<values::DefaultRefAgalValue>,
-    modules: RefValue<Modules>,
+    modules: libraries::RefModules,
   ) -> Result<crate::runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
     todo!()
   }
@@ -212,7 +210,7 @@ impl AgalClass {
     env: runtime::RefEnvironment,
     this: values::RefAgalValue<super::AgalObject>,
     args: Vec<values::DefaultRefAgalValue>,
-    modules_manager: RefValue<Modules>,
+    modules_manager: libraries::RefModules,
   ) -> values::DefaultRefAgalValue {
     if let Some(class) = &self.extend_of {
       let value = class.un_ref();
@@ -317,6 +315,7 @@ impl traits::AgalValuable for AgalClass {
     &self,
     stack: runtime::RefStack,
     key: &str,
+    modules: libraries::RefModules,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
     todo!()
   }
@@ -326,7 +325,7 @@ impl traits::AgalValuable for AgalClass {
     stack: runtime::RefStack,
     this: values::DefaultRefAgalValue,
     args: Vec<values::DefaultRefAgalValue>,
-    modules: RefValue<Modules>,
+    modules: libraries::RefModules,
   ) -> Result<crate::runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
     todo!()
   }

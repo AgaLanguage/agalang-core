@@ -10,14 +10,13 @@ use std::{
 };
 
 use futures_util::FutureExt as _;
-use parser::util::RefValue;
 use tokio::task::JoinHandle;
 
-use crate::runtime::values::{
+use crate::{libraries, runtime::values::{
   self, internal, primitive,
   traits::{self, AgalValuable as _, ToAgalValue as _},
   AgalValue,
-};
+}};
 
 use super::AgalComplex;
 
@@ -137,6 +136,7 @@ impl traits::AgalValuable for AgalPromise {
     &self,
     stack: crate::runtime::RefStack,
     key: &str,
+    modules: libraries::RefModules
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
     todo!()
   }
@@ -146,8 +146,8 @@ impl traits::AgalValuable for AgalPromise {
     stack: crate::runtime::RefStack,
     this: values::DefaultRefAgalValue,
     args: Vec<values::DefaultRefAgalValue>,
-    modules: RefValue<crate::Modules>,
-  ) -> Result<crate::runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
+    modules: libraries::RefModules,
+  ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
     todo!()
   }
 

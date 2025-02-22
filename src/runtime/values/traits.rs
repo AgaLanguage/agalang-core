@@ -1,6 +1,4 @@
-use parser::util::RefValue;
-
-use crate::{runtime, Modules};
+use crate::{libraries, runtime};
 
 use super::{
   complex::AgalArray, internal, primitive, AgalValue, DefaultRefAgalValue, RefAgalValue,
@@ -88,13 +86,14 @@ pub trait AgalValuable {
     &self,
     stack: runtime::RefStack,
     key: &str,
+    modules: libraries::RefModules,
   ) -> Result<DefaultRefAgalValue, internal::AgalThrow>;
   async fn call(
     &self,
     stack: runtime::RefStack,
     this: DefaultRefAgalValue,
     args: Vec<DefaultRefAgalValue>,
-    modules: RefValue<Modules>,
+    modules: libraries::RefModules,
   ) -> Result<crate::runtime::values::DefaultRefAgalValue, internal::AgalThrow>;
   /// self == other
   fn equals(&self, other: &Self) -> bool;

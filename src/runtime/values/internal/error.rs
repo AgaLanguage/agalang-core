@@ -1,16 +1,16 @@
 use parser::{
   internal::{error_to_string, ErrorNames, ErrorTypes},
-  util::RefValue,
+  util::{self, RefValue},
 };
 
-use crate::runtime::{
+use crate::{libraries, runtime::{
   stack::{self, RefStack},
   values::{
     self, primitive,
     traits::{self, AgalValuable as _, ToAgalValue as _},
     AgalValue,
   },
-};
+}};
 
 use super::AgalInternal;
 
@@ -109,6 +109,7 @@ impl traits::AgalValuable for AgalError {
     &self,
     stack: crate::runtime::RefStack,
     key: &str,
+    modules: libraries::RefModules
   ) -> Result<values::DefaultRefAgalValue, super::AgalThrow> {
     todo!()
   }
@@ -118,7 +119,7 @@ impl traits::AgalValuable for AgalError {
     stack: crate::runtime::RefStack,
     this: values::DefaultRefAgalValue,
     args: Vec<values::DefaultRefAgalValue>,
-    modules: RefValue<crate::Modules>,
+    modules: libraries::RefModules,
   ) -> Result<crate::runtime::values::DefaultRefAgalValue, super::AgalThrow> {
     todo!()
   }

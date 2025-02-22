@@ -3,11 +3,12 @@ use super::{
   traits::{self, AgalValuable as _, ToAgalValue as _},
   AgalValue,
 };
-use crate::runtime::{self, values::internal};
+use crate::{libraries, runtime::{self, values::internal}};
 
 mod native_function;
 pub use native_function::*;
 mod throw;
+use parser::util;
 pub use throw::*;
 mod error;
 pub use error::*;
@@ -76,7 +77,7 @@ impl traits::AgalValuable for AgalInternal {
     stack: runtime::RefStack,
     this: super::DefaultRefAgalValue,
     args: Vec<super::DefaultRefAgalValue>,
-    modules: parser::util::RefValue<crate::Modules>,
+    modules: libraries::RefModules,
   ) -> Result<super::DefaultRefAgalValue, internal::AgalThrow> {
     match self {
       Self::Lazy(lazy) => lazy.call(stack, this, args, modules).await,
@@ -184,13 +185,14 @@ impl traits::AgalValuable for AgalInternal {
     &self,
     stack: runtime::RefStack,
     key: &str,
+    modules: libraries::RefModules
   ) -> Result<super::DefaultRefAgalValue, internal::AgalThrow> {
     match self {
-      Self::Error(e) => e.get_instance_property(stack, key),
-      Self::Lazy(l) => l.get_instance_property(stack, key),
-      Self::Return(r) => r.get_instance_property(stack, key),
-      Self::NativeFunction(f) => f.get_instance_property(stack, key),
-      Self::Immutable(i) => i.get_instance_property(stack, key),
+      Self::Error(e) => e.get_instance_property(stack, key, modules),
+      Self::Lazy(l) => l.get_instance_property(stack, key, modules),
+      Self::Return(r) => r.get_instance_property(stack, key, modules),
+      Self::NativeFunction(f) => f.get_instance_property(stack, key, modules),
+      Self::Immutable(i) => i.get_instance_property(stack, key, modules),
     }
   }
 

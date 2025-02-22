@@ -1,7 +1,7 @@
-use parser::{ast::NodeExpressionMedicator, util::RefValue};
+use parser::ast;
 
 use crate::{
-  runtime::{
+  libraries, runtime::{
     interpreter,
     values::{
       self, primitive,
@@ -9,21 +9,20 @@ use crate::{
       AgalValue, ResultAgalValue,
     },
     RefEnvironment, RefStack, Stack,
-  },
-  Modules,
+  }
 };
 
 use super::AgalInternal;
 
 #[derive(Clone, Debug)]
 pub struct AgalLazy {
-  node: NodeExpressionMedicator,
+  node: ast::NodeExpressionMedicator,
   value: Option<ResultAgalValue>,
   stack: RefStack,
-  modules: RefValue<Modules>,
+  modules: libraries::RefModules,
 }
 impl AgalLazy {
-  pub fn new(node: NodeExpressionMedicator, stack: RefStack, modules: RefValue<Modules>) -> Self {
+  pub fn new(node: ast::NodeExpressionMedicator, stack: RefStack, modules: libraries::RefModules) -> Self {
     AgalLazy {
       node,
       value: None,
@@ -117,6 +116,7 @@ impl traits::AgalValuable for AgalLazy {
     &self,
     stack: crate::runtime::RefStack,
     key: &str,
+    modules: libraries::RefModules
   ) -> Result<values::DefaultRefAgalValue, super::AgalThrow> {
     todo!()
   }
@@ -126,7 +126,7 @@ impl traits::AgalValuable for AgalLazy {
     stack: crate::runtime::RefStack,
     this: values::DefaultRefAgalValue,
     args: Vec<values::DefaultRefAgalValue>,
-    modules: parser::util::RefValue<crate::Modules>,
+    modules: libraries::RefModules,
   ) -> Result<crate::runtime::values::DefaultRefAgalValue, super::AgalThrow> {
     todo!()
   }

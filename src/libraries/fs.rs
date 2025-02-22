@@ -17,7 +17,6 @@ use crate::{
       AgalValue,
     },
   },
-  Modules,
 };
 fn get_path(
   stack: runtime::RefStack,

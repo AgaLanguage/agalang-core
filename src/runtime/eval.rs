@@ -5,9 +5,10 @@ use parser::internal;
 use parser::util::List;
 use parser::{self as frontend, util::RefValue};
 
+use crate::libraries;
 use crate::{
   runtime::{self, env::RefEnvironment},
-  Modules, ToResult,
+  ToResult,
 };
 
 use super::interpreter;
@@ -16,7 +17,7 @@ use super::{
   values::{internal::AgalInternal, AgalValue, DefaultRefAgalValue},
 };
 
-type EvalResult = Result<DefaultRefAgalValue, ()>;
+type EvalResult = Option<DefaultRefAgalValue>;
 
 fn code(path: &str) -> Option<String> {
   let contents = std::fs::read_to_string(path);
@@ -34,22 +35,21 @@ fn code(path: &str) -> Option<String> {
 pub fn full_eval(
   path: String,
   stack: RefStack,
-  modules: RefValue<Modules>,
+  modules_manager: libraries::RefModules,
 ) -> std::pin::Pin<Box<dyn std::future::Future<Output = EvalResult>>> {
   Box::pin(async move {
-    let modules_manager = &*modules.as_ref().borrow();
     if modules_manager.has(&path) {
-      return Ok(modules_manager.get(&path));
+      return modules_manager.try_get(&path);
     }
-    let contents = code(&path).to_result()?;
+    let contents = code(&path)?;
 
-    let value = eval(contents, &path, stack, &modules_manager.clone()).await?;
+    let value = eval(contents, &path, stack, modules_manager.clone()).await?;
     modules_manager.add(&path, value.clone());
-    Ok(value)
+    Some(value)
   })
 }
 
-async fn eval(code: String, path: &str, stack: RefStack, modules_manager: &Modules) -> EvalResult {
+async fn eval(code: String, path: &str, stack: RefStack, modules_manager: libraries::RefModules) -> EvalResult {
   let program = frontend::Parser::new(code, &path).produce_ast();
   let program = match program {
     Ok(value) => value,
@@ -57,7 +57,7 @@ async fn eval(code: String, path: &str, stack: RefStack, modules_manager: &Modul
       let type_err = internal::errors::ErrorNames::SyntaxError;
       let data = internal::errors::error_to_string(&type_err, parser::node_error(&err));
       internal::print_error(data);
-      return Err(());
+      return None;
     }
   };
   //println!("{}", json(&program));
@@ -65,8 +65,8 @@ async fn eval(code: String, path: &str, stack: RefStack, modules_manager: &Modul
   let new_stack = stack.crate_child(false, box_node.clone());
   let value = interpreter(
     box_node,
-    new_stack.clone(),
-    modules_manager.clone().to_ref(),
+    new_stack,
+    modules_manager,
   )
   .await;
   let value = &*value.borrow();
@@ -75,9 +75,9 @@ async fn eval(code: String, path: &str, stack: RefStack, modules_manager: &Modul
       let (type_err, err) = throw.get_data();
       let data = internal::errors::error_to_string(&type_err, err);
       internal::print_error(data);
-      Err(())
+      None
     }
-    Ok(value) => Ok(value.clone()),
+    Ok(value) => Some(value.clone()),
   }
 }
 /*

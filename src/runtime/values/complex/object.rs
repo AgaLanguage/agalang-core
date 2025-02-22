@@ -4,14 +4,14 @@ use std::{
   rc::Rc,
 };
 
-use crate::runtime::{
+use crate::{libraries, runtime::{
   self,
   values::{
     self, error_message, internal, primitive,
     traits::{self, AgalValuable as _, ToAgalValue as _},
     AgalValue,
   },
-};
+}};
 
 use super::AgalComplex;
 
@@ -86,6 +86,7 @@ impl traits::AgalValuable for AgalObject {
     &self,
     stack: runtime::RefStack,
     key: &str,
+    modules: libraries::RefModules
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
     if let Some(v) = {
       if let Some(v) = self.get_prototype() {
@@ -143,8 +144,8 @@ impl traits::AgalValuable for AgalObject {
     stack: runtime::RefStack,
     this: values::DefaultRefAgalValue,
     args: Vec<values::DefaultRefAgalValue>,
-    modules: parser::util::RefValue<crate::Modules>,
-  ) -> Result<crate::runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
+    modules: libraries::RefModules,
+  ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
     todo!()
   }
 

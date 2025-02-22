@@ -1,7 +1,9 @@
 use std::{cell::RefCell, rc::Rc};
 
+use parser::util;
+
 use crate::{
-  runtime::{
+  libraries, runtime::{
     self,
     values::{
       self, error_message,
@@ -10,21 +12,19 @@ use crate::{
       traits::{self, AgalValuable, ToAgalValue as _},
       AgalValue,
     },
-  },
-  OnError, ToResult,
+  }, OnError, ToResult
 };
-use parser::util::RefValue;
 
 use super::AgalComplex;
 
 #[derive(Clone, Debug)]
-pub struct AgalArray(RefValue<Vec<values::DefaultRefAgalValue>>);
+pub struct AgalArray(util::RefValue<Vec<values::DefaultRefAgalValue>>);
 
 impl AgalArray {
   fn new(vec: Vec<values::DefaultRefAgalValue>) -> Self {
     Self(Rc::new(RefCell::new(vec)))
   }
-  pub fn to_vec(&self) -> RefValue<Vec<values::DefaultRefAgalValue>> {
+  pub fn to_vec(&self) -> util::RefValue<Vec<values::DefaultRefAgalValue>> {
     self.0.clone()
   }
   pub fn to_buffer(&self, stack: runtime::RefStack) -> Result<Vec<u8>, internal::AgalThrow> {
@@ -286,6 +286,7 @@ impl traits::AgalValuable for AgalArray {
     &self,
     stack: runtime::RefStack,
     key: &str,
+    modules: libraries::RefModules
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
     if key == "longitud" {
       let length = self.to_vec().borrow().len();
@@ -309,7 +310,7 @@ impl traits::AgalValuable for AgalArray {
     stack: runtime::RefStack,
     this: values::DefaultRefAgalValue,
     args: Vec<values::DefaultRefAgalValue>,
-    modules: RefValue<crate::Modules>,
+    modules: libraries::RefModules,
   ) -> Result<crate::runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
     AgalThrow::Params {
       type_error: parser::internal::ErrorNames::TypeError,

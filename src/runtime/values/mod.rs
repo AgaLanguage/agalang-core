@@ -2,10 +2,7 @@ use std::{cell::RefCell, future::Future, pin::Pin, rc::Rc};
 
 use error_message::TO_AGAL_CONSOLE;
 use internal::AgalThrow;
-use parser::{
-  internal::ErrorNames,
-  util::{self, RefValue},
-};
+use parser::internal::ErrorNames;
 
 mod error_message;
 
@@ -15,6 +12,8 @@ pub mod primitive;
 pub mod traits;
 use primitive::AgalBoolean;
 use traits::{AgalValuable as _, ToAgalValue};
+
+use crate::libraries;
 
 use super::RefStack;
 #[derive(Debug)]
@@ -89,8 +88,9 @@ impl<T: traits::AgalValuable + traits::ToAgalValue> traits::AgalValuable for Ref
     &self,
     stack: super::RefStack,
     key: &str,
+    modules: libraries::RefModules,
   ) -> Result<DefaultRefAgalValue, internal::AgalThrow> {
-    self.borrow().get_instance_property(stack, key)
+    self.borrow().get_instance_property(stack, key, modules)
   }
   fn get_object_property(
     &self,
@@ -112,7 +112,7 @@ impl<T: traits::AgalValuable + traits::ToAgalValue> traits::AgalValuable for Ref
     stack: super::RefStack,
     this: DefaultRefAgalValue,
     args: Vec<DefaultRefAgalValue>,
-    modules: util::RefValue<crate::Modules>,
+    modules: libraries::RefModules,
   ) -> Result<crate::runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
     self.borrow().call(stack, this, args, modules).await
   }
@@ -361,12 +361,13 @@ impl traits::AgalValuable for AgalValue {
     &self,
     stack: super::RefStack,
     key: &str,
+    modules: libraries::RefModules,
   ) -> Result<DefaultRefAgalValue, internal::AgalThrow> {
     match self {
-      Self::Complex(c) => c.get_instance_property(stack, key),
-      Self::Primitive(p) => p.get_instance_property(stack, key),
-      Self::Internal(i) => i.get_instance_property(stack, key),
-      Self::Export(_, v) => v.get_instance_property(stack, key),
+      Self::Complex(c) => c.get_instance_property(stack, key, modules),
+      Self::Primitive(p) => p.get_instance_property(stack, key, modules),
+      Self::Internal(i) => i.get_instance_property(stack, key, modules),
+      Self::Export(_, v) => v.get_instance_property(stack, key, modules),
       Self::Never | Self::Null | Self::Break | Self::Continue | Self::Console => {
         internal::AgalThrow::Params {
           type_error: parser::internal::ErrorNames::TypeError,
@@ -386,7 +387,7 @@ impl traits::AgalValuable for AgalValue {
     stack: super::RefStack,
     this: DefaultRefAgalValue,
     args: Vec<DefaultRefAgalValue>,
-    modules: util::RefValue<crate::Modules>,
+    modules: libraries::RefModules,
   ) -> Pin<Box<dyn Future<Output = Result<DefaultRefAgalValue, internal::AgalThrow>> + '_>> {
     Box::pin(async move {
       match self {

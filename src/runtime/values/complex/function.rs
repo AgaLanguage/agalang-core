@@ -1,26 +1,21 @@
-use parser::{
-  ast::{NodeBlock, NodeIdentifier},
-  util::{List, RefValue},
-  KeywordsType,
-};
+use parser::{ast, util};
 
 use crate::{
-  colors,
-  runtime::{
+  colors, libraries, runtime::{
     self, interpreter,
     values::{
       internal, primitive,
       traits::{self, AgalValuable, ToAgalValue},
     },
-  },
+  }
 };
 
 #[derive(Clone, Debug)]
 pub struct AgalFunction {
   name: String,
   is_async: bool,
-  args: List<NodeIdentifier>,
-  body: NodeBlock,
+  args: util::List<ast::NodeIdentifier>,
+  body: ast::NodeBlock,
   env: runtime::RefEnvironment,
 }
 
@@ -28,8 +23,8 @@ impl AgalFunction {
   pub fn new(
     name: String,
     is_async: bool,
-    args: List<NodeIdentifier>,
-    body: NodeBlock,
+    args: util::List<ast::NodeIdentifier>,
+    body: ast::NodeBlock,
     env: runtime::RefEnvironment,
   ) -> Self {
     Self {
@@ -61,11 +56,11 @@ impl traits::AgalValuable for AgalFunction {
       if self.is_async {
         format!(
           "{} {}",
-          KeywordsType::Async.as_str(),
-          KeywordsType::Function.as_str()
+          parser::KeywordsType::Async.as_str(),
+          parser::KeywordsType::Function.as_str()
         )
       } else {
-        KeywordsType::Function.to_string()
+        parser::KeywordsType::Function.to_string()
       },
       self.name
     )))
@@ -81,7 +76,7 @@ impl traits::AgalValuable for AgalFunction {
     stack: runtime::RefStack,
     this: crate::runtime::values::DefaultRefAgalValue,
     args: Vec<crate::runtime::values::DefaultRefAgalValue>,
-    modules: RefValue<crate::Modules>,
+    modules: libraries::RefModules,
   ) -> Result<crate::runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
     let mut new_env = self.env.crate_child(false);
     let stack = stack.with_env(new_env.clone());
@@ -163,6 +158,7 @@ impl traits::AgalValuable for AgalFunction {
     &self,
     stack: runtime::RefStack,
     key: &str,
+    modules: libraries::RefModules
   ) -> Result<runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
     todo!()
   }

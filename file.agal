@@ -1,3 +1,6 @@
-def tmp;
-"Escribe: \n" >> csl >> tmp;
-csl << "Escribiste: " + tmp;
+importa ':proto' como PT;
+importa ':consola' como Consola;
+
+Consola::pintar(0n16|f::aCadena());
+Consola::pintar(PT::Numero::aCadena(0by10));
+Consola::pintar(PT::Numero::aCadena == 0n16|f::aCadena);

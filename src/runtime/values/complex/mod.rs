@@ -1,8 +1,5 @@
-use parser::util::RefValue;
-
 use crate::{
-  runtime::{env::RefEnvironment, stack::RefStack},
-  Modules,
+  libraries, runtime::{env::RefEnvironment, stack::RefStack}
 };
 
 use super::{
@@ -100,14 +97,15 @@ impl traits::AgalValuable for AgalComplex {
     &self,
     stack: RefStack,
     key: &str,
+    modules: libraries::RefModules
   ) -> Result<super::DefaultRefAgalValue, internal::AgalThrow> {
     match self {
-      Self::SuperInstance(value) => value.get_instance_property(stack, key),
-      Self::Function(value) => value.get_instance_property(stack, key),
-      Self::Promise(value) => value.get_instance_property(stack, key),
-      Self::Object(value) => value.get_instance_property(stack, key),
-      Self::Array(value) => value.get_instance_property(stack, key),
-      Self::Class(value) => value.get_instance_property(stack, key),
+      Self::SuperInstance(value) => value.get_instance_property(stack, key,modules),
+      Self::Function(value) => value.get_instance_property(stack, key,modules),
+      Self::Promise(value) => value.get_instance_property(stack, key,modules),
+      Self::Object(value) => value.get_instance_property(stack, key,modules),
+      Self::Array(value) => value.get_instance_property(stack, key,modules),
+      Self::Class(value) => value.get_instance_property(stack, key,modules),
     }
   }
   async fn call(
@@ -115,7 +113,7 @@ impl traits::AgalValuable for AgalComplex {
     stack: RefStack,
     this: super::DefaultRefAgalValue,
     args: Vec<super::DefaultRefAgalValue>,
-    modules: RefValue<Modules>,
+    modules: libraries::RefModules,
   ) -> Result<super::DefaultRefAgalValue, internal::AgalThrow> {
     match self {
       Self::SuperInstance(value) => value.call(stack, this, args, modules).await,

@@ -1,13 +1,12 @@
 use crate::{
-  colors,
-  runtime::{
+  colors, libraries, runtime::{
     self,
     values::{
       error_message, internal,
       traits::{self, AgalValuable as _, ToAgalValue as _},
       AgalValue,
     },
-  },
+  }
 };
 
 use super::{string::AgalString, AgalPrimitive};
@@ -145,6 +144,7 @@ impl traits::AgalValuable for AgalByte {
     &self,
     stack: runtime::RefStack,
     key: &str,
+    modules: libraries::RefModules
   ) -> Result<runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
     todo!()
   }
@@ -154,7 +154,7 @@ impl traits::AgalValuable for AgalByte {
     stack: runtime::RefStack,
     this: runtime::values::DefaultRefAgalValue,
     args: Vec<runtime::values::DefaultRefAgalValue>,
-    modules: parser::util::RefValue<crate::Modules>,
+    modules: libraries::RefModules,
   ) -> Result<crate::runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
     internal::AgalThrow::Params {
       type_error: parser::internal::ErrorNames::TypeError,

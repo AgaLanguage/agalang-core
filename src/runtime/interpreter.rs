@@ -6,7 +6,7 @@ use parser::{
   util::RefValue,
 };
 
-use crate::{path::absolute_path, Modules};
+use crate::{libraries, path::absolute_path};
 
 use super::{
   full_eval,
@@ -26,7 +26,7 @@ use super::{
 pub fn interpreter(
   node: BNode,
   stack: RefStack,
-  modules: RefValue<Modules>,
+  modules: libraries::RefModules,
 ) -> Pin<Box<dyn Future<Output = ResultAgalValue>>> {
   Box::pin(async move {
     let pre_stack = stack;
@@ -145,7 +145,7 @@ pub fn interpreter(
               .await?
               .try_to_string(stack.clone())?
           };
-          let callee = this.clone().get_instance_property(stack.clone(), &key)?;
+          let callee = this.clone().get_instance_property(stack.clone(), &key, modules.clone())?;
           (callee, this)
         } else {
           let callee = interpreter(callee.clone(), stack.clone(), modules.clone()).await?;
@@ -462,18 +462,14 @@ pub fn interpreter(
             let filename = absolute_path(&filename);
             full_eval(filename, stack.get_global(), modules).await
           } else {
-            Err(())
+            None
           }
         };
-        if let Err(e) = module {
-          return AgalThrow::Params {
-            type_error: ErrorNames::PathError,
-            message: format!("No se encontro el modulo \"{}\"", import.path),
-            stack,
-          }
-          .to_result();
-        }
-        let module = module.unwrap();
+        let module = module.ok_or_else(||AgalThrow::Params {
+          type_error: ErrorNames::PathError,
+          message: format!("No se encontro el modulo \"{}\"", import.path),
+          stack: stack.clone(),
+        })?;
         if let Some(n) = import.name.clone() {
           stack.env().define(stack, &n, module, true, &node);
         }
@@ -489,12 +485,12 @@ pub fn interpreter(
         let mut object = interpreter(member.object.clone(), stack.clone(), modules.clone()).await?;
         if member.instance && !member.computed && member.member.is_identifier() {
           let key = member.member.get_identifier().unwrap().name.clone();
-          object.get_instance_property(stack, &key)
+          object.get_instance_property(stack, &key, modules)
         } else {
           let key = if !member.computed && member.member.is_identifier() {
             member.member.get_identifier().unwrap().name.clone()
           } else {
-            interpreter(member.member.clone(), stack.clone(), modules.clone())
+            interpreter(member.member.clone(), stack.clone(), modules)
               .await?
               .to_agal_string(stack.clone())?
               .to_string()

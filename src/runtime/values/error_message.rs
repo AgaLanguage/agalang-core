@@ -6,6 +6,7 @@ use super::DefaultRefAgalValue;
 
 pub const SET_OBJECT_PROPERTY: &str = "No se pudo poner un valor";
 pub const GET_OBJECT_PROPERTY: &str = "No se puede obtener la propiedad";
+pub const GET_INSTANCE_PROPERTY: &str = "No se puede obtener la propiedad de instancia";
 
 pub const INVALID_INSTANCE_PROPERTIES: &str = "No tengo esa propiedad de instancia";
 

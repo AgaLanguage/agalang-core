@@ -1,13 +1,9 @@
 use std::{cell::RefCell, rc::Rc};
 
-use parser::{
-  ast::Node,
-  internal::{error_to_string, ErrorNames, ErrorTypes},
-  util::RefValue,
-};
+use parser::{ast, internal};
 
 use crate::{
-  runtime::{
+  libraries, runtime::{
     self,
     values::{
       self, primitive,
@@ -15,8 +11,7 @@ use crate::{
       AgalValue,
     },
     RefStack,
-  },
-  Modules,
+  }
 };
 
 use super::AgalInternal;
@@ -24,7 +19,7 @@ use super::AgalInternal;
 #[derive(Clone, Debug)]
 pub enum AgalThrow {
   Params {
-    type_error: ErrorNames,
+    type_error: internal::ErrorNames,
     message: String,
     stack: runtime::RefStack,
   },
@@ -47,7 +42,7 @@ impl AgalThrow {
       Self::Value(value) => super::AgalError::Value(value.clone()),
     }
   }
-  pub fn get_data(&self) -> (ErrorNames, ErrorTypes) {
+  pub fn get_data(&self) -> (internal::ErrorNames, internal::ErrorTypes) {
     match self {
       Self::Params {
         type_error,
@@ -57,7 +52,7 @@ impl AgalThrow {
         let mut string = String::new();
         string.push_str(message);
         for frame in stack {
-          if let Node::Block(_) = frame.as_ref() {
+          if let ast::Node::Block(_) = frame.as_ref() {
             continue;
           }
           let location = frame.get_location();
@@ -72,9 +67,9 @@ impl AgalThrow {
           });
         }
 
-        (type_error.clone(), ErrorTypes::StringError(string))
+        (type_error.clone(), internal::ErrorTypes::StringError(string))
       }
-      Self::Value(value) => (ErrorNames::None, ErrorTypes::StringError(value.to_string())),
+      Self::Value(value) => (internal::ErrorNames::None, internal::ErrorTypes::StringError(value.to_string())),
     }
   }
 }
@@ -144,6 +139,7 @@ impl traits::AgalValuable for AgalThrow {
     &self,
     stack: runtime::RefStack,
     key: &str,
+    modules: libraries::RefModules
   ) -> Result<values::DefaultRefAgalValue, super::AgalThrow> {
     todo!()
   }
@@ -153,7 +149,7 @@ impl traits::AgalValuable for AgalThrow {
     stack: runtime::RefStack,
     this: values::DefaultRefAgalValue,
     args: Vec<values::DefaultRefAgalValue>,
-    modules: RefValue<Modules>,
+    modules: libraries::RefModules,
   ) -> Result<crate::runtime::values::DefaultRefAgalValue, super::AgalThrow> {
     todo!()
   }
@@ -177,6 +173,6 @@ impl traits::AgalValuable for AgalThrow {
 impl ToString for AgalThrow {
   fn to_string(&self) -> String {
     let (type_error, message) = self.get_data();
-    error_to_string(&type_error, message)
+    internal::error_to_string(&type_error, message)
   }
 }

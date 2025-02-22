@@ -4,11 +4,10 @@ use super::{
   AgalBoolean, AgalPrimitive, AgalValue,
 };
 use crate::{
-  colors,
-  runtime::{
+  colors, libraries, runtime::{
     self,
     values::{complex::AgalArray, error_message, internal::AgalThrow, traits::ToAgalValue},
-  },
+  }
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -154,6 +153,7 @@ impl traits::AgalValuable for AgalChar {
     &self,
     stack: runtime::RefStack,
     key: &str,
+    modules: libraries::RefModules
   ) -> Result<runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
     todo!()
   }
@@ -163,7 +163,7 @@ impl traits::AgalValuable for AgalChar {
     stack: runtime::RefStack,
     this: runtime::values::DefaultRefAgalValue,
     args: Vec<runtime::values::DefaultRefAgalValue>,
-    modules: parser::util::RefValue<crate::Modules>,
+    modules: libraries::RefModules,
   ) -> Result<crate::runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
     internal::AgalThrow::Params {
       type_error: parser::internal::ErrorNames::TypeError,
@@ -355,6 +355,7 @@ impl traits::AgalValuable for AgalString {
     &self,
     stack: runtime::RefStack,
     key: &str,
+    modules: libraries::RefModules
   ) -> Result<runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
     todo!()
   }
@@ -364,7 +365,7 @@ impl traits::AgalValuable for AgalString {
     stack: runtime::RefStack,
     this: runtime::values::DefaultRefAgalValue,
     args: Vec<runtime::values::DefaultRefAgalValue>,
-    modules: parser::util::RefValue<crate::Modules>,
+    modules: libraries::RefModules,
   ) -> Result<crate::runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
     AgalThrow::Params {
       type_error: parser::internal::ErrorNames::TypeError,

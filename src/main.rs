@@ -8,7 +8,6 @@ use std::{
   cell::RefCell, collections::HashMap, process::ExitCode, rc::Rc, thread::sleep, time::Duration,
 };
 
-use parser::util::RefValue;
 use runtime::values::DefaultRefAgalValue;
 
 trait ToResult<T> {
@@ -44,38 +43,9 @@ impl<T, E, V> OnError<T, E> for Result<T, V> {
   }
 }
 
-#[derive(Clone, Debug)]
-struct Modules {
-  map: Rc<RefCell<HashMap<String, DefaultRefAgalValue>>>,
-}
-impl Modules {
-  fn new() -> Self {
-    Modules {
-      map: Rc::new(RefCell::new(HashMap::new())),
-    }
-  }
-  fn has(&self, key: &str) -> bool {
-    self.map.borrow().contains_key(key)
-  }
-  fn get(&self, key: &str) -> DefaultRefAgalValue {
-    let v = self.map.borrow();
-    v.get(key).unwrap().clone()
-  }
-  fn add(&self, key: &str, value: DefaultRefAgalValue) {
-    if self.has(key) {
-      return;
-    }
-    let mut v = self.map.borrow_mut();
-    v.insert(key.to_string(), value);
-  }
-  fn to_ref(self) -> RefValue<Self> {
-    Rc::new(RefCell::new(self))
-  }
-}
-
 #[tokio::main]
 async fn main() -> ExitCode {
-  let modules_manager = Modules::new();
+  let modules_manager = libraries::RefModules::new();
   let filename = file();
   if filename.is_none() {
     return ExitCode::FAILURE;
@@ -83,8 +53,8 @@ async fn main() -> ExitCode {
   let filename = filename.unwrap();
   let stack = runtime::RefStack::get_default();
 
-  let program = runtime::full_eval(filename, stack, modules_manager.to_ref()).await;
-  if program.is_err() {
+  let program = runtime::full_eval(filename, stack, modules_manager).await;
+  if program.is_none() {
     return ExitCode::FAILURE;
   }
   return ExitCode::SUCCESS;
