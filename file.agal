@@ -1,6 +1,7 @@
-importa ':proto' como PT;
+importa ':proto' como PT; #al cargar proto se carga automaticamente proto/Numero para no repetir
 importa ':consola' como Consola;
-
-Consola::pintar(0n16|f::aCadena());
+importa ':proto/Numero' como Numero;
+Consola::pintar(01000.0100::aCadena());
 Consola::pintar(PT::Numero::aCadena(0by10));
-Consola::pintar(PT::Numero::aCadena == 0n16|f::aCadena);
+Consola::pintar(PT::Numero::aCadena == Numero::aCadena);
+Consola::pintar(PT::Numero::aCadena == 0n16|10::aCadena);

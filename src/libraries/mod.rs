@@ -30,6 +30,7 @@ impl Modules {
     if self.has(key) {
       return self.get(key).unwrap_or_else(|| value);
     }
+    println!("module {key} loaded!");
     let mut v = self.0.borrow_mut();
     v.insert(key.to_string(), value.clone());
     value
@@ -71,7 +72,6 @@ pub fn get_module(key: &str, modules_manager: RefModules) -> EvalResult {
     let v = modules_manager.get(key);
     return Some(v);
   }
-  println!("module {key} loaded!");
   if key == print::get_name(PREFIX_NATIVE_MODULES) {
     let value = print::get_module(PREFIX_NATIVE_MODULES);
     modules_manager.add(key, value.clone());
