@@ -1,6 +1,7 @@
 use std::{
   borrow::BorrowMut,
   cell::RefCell,
+  fmt::format,
   future::{self, Future, IntoFuture},
   ops::{Deref, DerefMut},
   pin::Pin,
@@ -9,14 +10,19 @@ use std::{
   task::{Context, Poll},
 };
 
-use futures_util::FutureExt as _;
 use tokio::task::JoinHandle;
 
-use crate::{libraries, runtime::values::{
-  self, internal, primitive,
-  traits::{self, AgalValuable as _, ToAgalValue as _},
-  AgalValue,
-}};
+use crate::{
+  libraries,
+  runtime::{
+    self,
+    values::{
+      self, internal, primitive,
+      traits::{self, AgalValuable, ToAgalValue as _},
+      AgalValue,
+    },
+  },
+};
 
 use super::AgalComplex;
 
@@ -72,97 +78,40 @@ impl traits::ToAgalValue for AgalPromise {
 }
 impl traits::AgalValuable for AgalPromise {
   fn get_name(&self) -> String {
-    "Promesa".to_string()
-  }
-  fn to_agal_string(
-    &self,
-    stack: crate::runtime::RefStack,
-  ) -> Result<primitive::AgalString, internal::AgalThrow> {
-    Ok(primitive::AgalString::from_string("Promise".to_string()))
-  }
-
-  fn get_keys(&self) -> Vec<String> {
-    todo!()
-  }
-
-  fn to_agal_byte(
-    &self,
-    stack: crate::runtime::RefStack,
-  ) -> Result<primitive::AgalByte, internal::AgalThrow> {
-    todo!()
+    match &self.data {
+      AgalPromiseData::Unresolved(_) => "Promesa".to_string(),
+      AgalPromiseData::Resolved(value) => format!(
+        "{}",
+        match value {
+          Ok(value) => value.get_name(),
+          Err(value) => value.get_name(),
+        }
+      ),
+    }
   }
 
   fn to_agal_boolean(
     &self,
-    stack: crate::runtime::RefStack,
+    stack: runtime::RefStack,
+    modules: libraries::RefModules,
   ) -> Result<primitive::AgalBoolean, internal::AgalThrow> {
-    todo!()
-  }
-
-  fn to_agal_array(
-    &self,
-    stack: crate::runtime::RefStack,
-  ) -> Result<values::RefAgalValue<super::AgalArray>, internal::AgalThrow> {
-    todo!()
-  }
-
-  fn binary_operation(
-    &self,
-    stack: crate::runtime::RefStack,
-    operator: parser::ast::NodeOperator,
-    right: values::DefaultRefAgalValue,
-  ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
-    todo!()
-  }
-
-  fn get_object_property(
-    &self,
-    stack: crate::runtime::RefStack,
-    key: &str,
-  ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
-    todo!()
-  }
-
-  fn set_object_property(
-    &mut self,
-    stack: crate::runtime::RefStack,
-    key: &str,
-    value: values::DefaultRefAgalValue,
-  ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
-    todo!()
+    Ok(primitive::AgalBoolean::True)
   }
 
   fn get_instance_property(
     &self,
     stack: crate::runtime::RefStack,
     key: &str,
-    modules: libraries::RefModules
-  ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
-    todo!()
-  }
-
-  async fn call(
-    &self,
-    stack: crate::runtime::RefStack,
-    this: values::DefaultRefAgalValue,
-    args: Vec<values::DefaultRefAgalValue>,
     modules: libraries::RefModules,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
     todo!()
   }
 
-  fn to_agal_number(
-    &self,
-    stack: crate::runtime::RefStack,
-  ) -> Result<primitive::AgalNumber, internal::AgalThrow> {
-    todo!()
-  }
-
   fn equals(&self, other: &Self) -> bool {
-    todo!()
+    false
   }
 
   fn less_than(&self, other: &Self) -> bool {
-    todo!()
+    false
   }
 }

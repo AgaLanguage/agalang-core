@@ -6,9 +6,8 @@ use std::{
   rc::Rc,
 };
 
-use parser::{internal::ErrorNames, util};
-
 use crate::{
+  parser,
   runtime::{
     self,
     values::{
@@ -18,12 +17,15 @@ use crate::{
     },
   },
 };
+
+use super::RefModules;
 fn get_path(
   stack: runtime::RefStack,
   this: values::DefaultRefAgalValue,
+  modules: RefModules,
 ) -> Result<primitive::AgalString, internal::AgalThrow> {
   let string = this.get_object_property(stack.clone(), "@ruta");
-  string?.borrow().to_agal_string(stack)
+  string?.borrow().to_agal_string(stack, modules)
 }
 
 pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
@@ -41,8 +43,8 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
           is_static: false,
           value: internal::AgalNativeFunction {
             name: format!("{path_name}::es_archivo"),
-            func: Rc::new(|_, stack, _, this| {
-              let string = get_path(stack.clone(), this)?;
+            func: Rc::new(|_, stack, modules, this| {
+              let string = get_path(stack.clone(), this, modules)?;
               let binding = string.to_string();
               let path = std::path::Path::new(&binding);
               primitive::AgalBoolean::new(path.is_file()).to_result()
@@ -58,8 +60,8 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
           is_static: false,
           value: internal::AgalNativeFunction {
             name: format!("{path_name}::es_carpeta"),
-            func: Rc::new(|_, stack, _, this| {
-              let string = get_path(stack, this)?;
+            func: Rc::new(|_, stack, modules, this| {
+              let string = get_path(stack, this, modules)?;
               let binding = string.to_string();
               let path = std::path::Path::new(&binding);
               primitive::AgalBoolean::new(path.is_dir()).to_result()
@@ -75,7 +77,7 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
           is_static: false,
           value: internal::AgalNativeFunction {
             name: format!("{path_name}::nombre"),
-            func: Rc::new(|_, stack, _, this| get_path(stack, this)?.to_result()),
+            func: Rc::new(|_, stack, modules, this| get_path(stack, this, modules)?.to_result()),
           }
           .to_ref_value(),
         },
@@ -87,8 +89,8 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
           is_static: false,
           value: internal::AgalNativeFunction {
             name: format!("{path_name}::obtener_padre"),
-            func: Rc::new(|_, stack, _, this| {
-              let string = get_path(stack, this)?;
+            func: Rc::new(|_, stack, modules, this| {
+              let string = get_path(stack, this, modules)?;
               let binding = string.to_string();
               let path = std::path::Path::new(&binding);
               let parent = path.parent().unwrap();
@@ -111,17 +113,17 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
       is_static: true,
       value: internal::AgalNativeFunction {
         name: format!("{module_name}::leer_archivo"),
-        func: Rc::new(|arguments, stack, modules_manager, this| {
+        func: Rc::new(|arguments, stack, modules, this| {
           let path: Option<&values::DefaultRefAgalValue> = arguments.get(0);
           if !path.is_some() {
             return internal::AgalThrow::Params {
-              type_error: ErrorNames::TypeError,
+              type_error: parser::ErrorNames::TypeError,
               message: "Falta el argumento path".to_string(),
               stack,
             }
             .to_result();
           }
-          let path = path.unwrap().try_to_string(stack.clone())?;
+          let path = path.unwrap().try_to_string(stack.clone(), modules)?;
           let mut file = std::fs::File::open(path);
           if let Ok(file) = &mut file {
             let mut buffer_writer = Vec::new();
@@ -130,7 +132,7 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
             return complex::AgalArray::from(buffer).to_result();
           }
           internal::AgalThrow::Params {
-            type_error: parser::internal::ErrorNames::PathError,
+            type_error: parser::ErrorNames::PathError,
             message: "No se pudo abrir el archivo".to_string(),
             stack,
           }
@@ -147,12 +149,12 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
       is_static: true,
       value: internal::AgalNativeFunction {
         name: format!("{module_name}::leer_carpeta"),
-        func: Rc::new(|arguments, stack, modules_manager, this| {
+        func: Rc::new(|arguments, stack, modules, this| {
           let path: Option<&values::DefaultRefAgalValue> = arguments.get(0);
           if !path.is_some() {
             return AgalValue::Never.to_result();
           }
-          let path = path.unwrap().try_to_string(stack.clone())?;
+          let path = path.unwrap().try_to_string(stack.clone(), modules)?;
           let mut dir = std::fs::read_dir(path);
           if let Ok(dir) = &mut dir {
             let mut files = Vec::new();
@@ -169,7 +171,7 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
             return complex::AgalArray::from(files).to_result();
           }
           internal::AgalThrow::Params {
-            type_error: parser::internal::ErrorNames::PathError,
+            type_error: parser::ErrorNames::PathError,
             message: "No se pudo abrir el archivo".to_string(),
             stack,
           }
@@ -186,27 +188,20 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
       is_static: true,
       value: internal::AgalNativeFunction {
         name: format!("{module_name}::obtener_ruta"),
-        func: Rc::new(move |arguments, stack, modules_manager, this| {
+        func: Rc::new(move |arguments, stack, modules, this| {
           let p: Option<&values::DefaultRefAgalValue> = arguments.get(0);
           if !p.is_some() {
             return AgalValue::Never.to_result();
           }
-          let value = p.unwrap().to_agal_string(stack.clone())?;
-          complex::AgalPromise::new(Box::pin({
-            let mut path = path.clone();
-            async move {
-              let mut path = path
-                .call(stack.clone(), this, vec![], modules_manager)
-                .await?;
+          let value = p.unwrap().to_agal_string(stack.clone(), modules.clone())?;
+          let mut path = path.clone();
+          let mut path = path.call(stack.clone(), this, vec![], modules)?;
 
-              let p = value.to_string();
-              let p = crate::path::absolute_path(&p);
-              let value = primitive::AgalString::from_string(p);
-              path.set_object_property(stack, "@ruta", value.to_ref_value());
-              path.to_result()
-            }
-          }))
-          .to_result()
+          let p = value.to_string();
+          let p = crate::path::absolute_path(&p);
+          let value = primitive::AgalString::from_string(p);
+          path.set_object_property(stack, "@ruta", value.to_ref_value());
+          path.to_result()
         }),
       }
       .to_ref_value(),
@@ -219,16 +214,18 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
       is_static: true,
       value: internal::AgalNativeFunction {
         name: format!("{module_name}::escribir_archivo"),
-        func: Rc::new(|arguments, stack, modules_manager, this| {
+        func: Rc::new(|arguments, stack, modules, this| {
           let path: Option<&values::DefaultRefAgalValue> = arguments.get(0);
           if !path.is_some() {
             return AgalValue::Never.to_result();
           }
-          let path = path.unwrap().try_to_string(stack.clone())?;
+          let path = path
+            .unwrap()
+            .try_to_string(stack.clone(), modules.clone())?;
           let exists = Path::new(&path).exists();
           if !exists {
             return internal::AgalThrow::Params {
-              type_error: parser::internal::ErrorNames::PathError,
+              type_error: parser::ErrorNames::PathError,
               message: "El archivo no existe".to_string(),
               stack,
             }
@@ -237,7 +234,7 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
           let file = fs::OpenOptions::new().write(true).truncate(true).open(path);
           if let Err(error) = &file {
             return internal::AgalThrow::Params {
-              type_error: parser::internal::ErrorNames::PathError,
+              type_error: parser::ErrorNames::PathError,
               message: error.to_string(),
               stack,
             }
@@ -247,19 +244,21 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
           let content: Option<&values::DefaultRefAgalValue> = arguments.get(1);
           if !content.is_some() {
             return internal::AgalThrow::Params {
-              type_error: parser::internal::ErrorNames::PathError,
+              type_error: parser::ErrorNames::PathError,
               message: "Se nesesita contenido para escribir en el archivo".to_string(),
               stack,
             }
             .to_result();
           }
-          let binding = content.unwrap().to_agal_array(stack.clone())?;
+          let binding = content
+            .unwrap()
+            .to_agal_array(stack.clone(), modules.clone())?;
           let content = &*binding.borrow();
-          let mut buf: &[u8] = &content.to_buffer(stack.clone())?;
+          let mut buf: &[u8] = &content.to_buffer(stack.clone(), modules)?;
           let f = file.write_all(buf);
           if let Err(error) = f {
             return internal::AgalThrow::Params {
-              type_error: parser::internal::ErrorNames::PathError,
+              type_error: parser::ErrorNames::PathError,
               message: error.to_string(),
               stack,
             }
@@ -278,16 +277,16 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
       is_static: true,
       value: internal::AgalNativeFunction {
         name: format!("{module_name}::crear_archivo"),
-        func: Rc::new(|arguments, stack, modules_manager, this| {
+        func: Rc::new(|arguments, stack, modules, this| {
           let path: Option<&values::DefaultRefAgalValue> = arguments.get(0);
           if !path.is_some() {
             return AgalValue::Never.to_result();
           }
-          let path = path.unwrap().try_to_string(stack.clone())?;
+          let path = path.unwrap().try_to_string(stack.clone(), modules)?;
           let exists = Path::new(&path).exists();
           if exists {
             return internal::AgalThrow::Params {
-              type_error: parser::internal::ErrorNames::PathError,
+              type_error: parser::ErrorNames::PathError,
               message: "La ruta no esta disponible".to_string(),
               stack,
             }
@@ -296,7 +295,7 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
           let file = fs::File::create(path);
           if let Err(error) = file {
             internal::AgalThrow::Params {
-              type_error: parser::internal::ErrorNames::PathError,
+              type_error: parser::ErrorNames::PathError,
               message: error.to_string(),
               stack,
             }
@@ -316,16 +315,16 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
       is_static: true,
       value: internal::AgalNativeFunction {
         name: format!("{module_name}::crear_carpeta"),
-        func: Rc::new(|arguments, stack, modules_manager, this| {
+        func: Rc::new(|arguments, stack, modules, this| {
           let path: Option<&values::DefaultRefAgalValue> = arguments.get(0);
           if !path.is_some() {
             return AgalValue::Never.to_result();
           }
-          let path = path.unwrap().try_to_string(stack.clone())?;
+          let path = path.unwrap().try_to_string(stack.clone(), modules)?;
           let exists = Path::new(&path).exists();
           if exists {
             return internal::AgalThrow::Params {
-              type_error: parser::internal::ErrorNames::PathError,
+              type_error: parser::ErrorNames::PathError,
               message: "La ruta no esta disponible".to_string(),
               stack,
             }
@@ -334,7 +333,7 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
           let file = fs::create_dir_all(path);
           if let Err(error) = file {
             internal::AgalThrow::Params {
-              type_error: parser::internal::ErrorNames::PathError,
+              type_error: parser::ErrorNames::PathError,
               message: error.to_string(),
               stack,
             }

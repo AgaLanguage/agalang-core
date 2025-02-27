@@ -1,9 +1,7 @@
 use std::{cell::RefCell, rc::Rc};
 
-use parser::util;
-
 use crate::{
-  libraries, runtime::{
+  functions_names, libraries, parser, runtime::{
     self,
     values::{
       self, error_message,
@@ -12,26 +10,30 @@ use crate::{
       traits::{self, AgalValuable, ToAgalValue as _},
       AgalValue,
     },
-  }, OnError, ToResult
+  }, util::OnError as _
 };
 
 use super::AgalComplex;
 
 #[derive(Clone, Debug)]
-pub struct AgalArray(util::RefValue<Vec<values::DefaultRefAgalValue>>);
+pub struct AgalArray(Rc<RefCell<Vec<values::DefaultRefAgalValue>>>);
 
 impl AgalArray {
   fn new(vec: Vec<values::DefaultRefAgalValue>) -> Self {
     Self(Rc::new(RefCell::new(vec)))
   }
-  pub fn to_vec(&self) -> util::RefValue<Vec<values::DefaultRefAgalValue>> {
+  pub fn to_vec(&self) -> Rc<RefCell<Vec<values::DefaultRefAgalValue>>> {
     self.0.clone()
   }
-  pub fn to_buffer(&self, stack: runtime::RefStack) -> Result<Vec<u8>, internal::AgalThrow> {
+  pub fn to_buffer(
+    &self,
+    stack: runtime::RefStack,
+    modules: libraries::RefModules,
+  ) -> Result<Vec<u8>, internal::AgalThrow> {
     let mut buffer = vec![];
     let vec = &*self.0.as_ref().borrow();
     for value in vec {
-      let byte = value.to_agal_byte(stack.clone());
+      let byte = value.to_agal_byte(stack.clone(), modules.clone());
       if let Err(value) = byte {
         return Err(value);
       }
@@ -48,7 +50,7 @@ impl AgalArray {
     if index >= borrowed.len() {
       borrowed.extend(
         std::iter::repeat(values::AgalValue::Never.to_ref_value())
-          .take(index - borrowed.clone().len()),
+          .take((index + 1) - borrowed.clone().len()),
       );
     }
     borrowed[index] = value;
@@ -95,12 +97,13 @@ impl traits::AgalValuable for AgalArray {
   fn to_agal_string(
     &self,
     stack: runtime::RefStack,
+    modules: libraries::RefModules,
   ) -> Result<primitive::AgalString, internal::AgalThrow> {
     let mut result = String::new();
     let vec = self.to_vec();
     let vec = &*vec.borrow();
     for (i, value) in vec.iter().enumerate() {
-      let str = value.try_to_string(stack.clone())?;
+      let str = value.try_to_string(stack.clone(), modules.clone())?;
       result.push_str(&str);
       if i < vec.len() - 1 {
         result.push_str(", ");
@@ -111,6 +114,7 @@ impl traits::AgalValuable for AgalArray {
   fn to_agal_console(
     &self,
     stack: runtime::RefStack,
+    modules: libraries::RefModules,
   ) -> Result<primitive::AgalString, internal::AgalThrow> {
     let mut result = String::new();
     let vec = self.to_vec();
@@ -118,7 +122,7 @@ impl traits::AgalValuable for AgalArray {
     result.push_str("[");
     for (i, value) in vec.iter().enumerate() {
       let str = value
-        .to_agal_console(stack.clone())?
+        .to_agal_console(stack.clone(), modules.clone())?
         .add_prev(" ")
         .to_string();
       result.push_str(&str);
@@ -134,21 +138,10 @@ impl traits::AgalValuable for AgalArray {
     (0..self.0.borrow().len()).map(|i| format!("{i}")).collect()
   }
 
-  fn to_agal_byte(
-    &self,
-    stack: runtime::RefStack,
-  ) -> Result<primitive::AgalByte, internal::AgalThrow> {
-    AgalThrow::Params {
-      type_error: parser::internal::ErrorNames::TypeError,
-      message: error_message::TO_AGAL_BYTE.to_string(),
-      stack,
-    }
-    .to_result()
-  }
-
   fn to_agal_boolean(
     &self,
     stack: runtime::RefStack,
+    modules: libraries::RefModules,
   ) -> Result<primitive::AgalBoolean, internal::AgalThrow> {
     Ok(if (self.0.borrow().len() == 0) {
       primitive::AgalBoolean::False
@@ -160,6 +153,7 @@ impl traits::AgalValuable for AgalArray {
   fn to_agal_array(
     &self,
     stack: runtime::RefStack,
+    modules: libraries::RefModules,
   ) -> Result<values::RefAgalValue<AgalArray>, internal::AgalThrow> {
     Ok(self.clone().as_ref())
   }
@@ -167,14 +161,15 @@ impl traits::AgalValuable for AgalArray {
   fn binary_operation(
     &self,
     stack: runtime::RefStack,
-    operator: parser::ast::NodeOperator,
+    operator: parser::NodeOperator,
     right: values::DefaultRefAgalValue,
+    modules: libraries::RefModules,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
     let other = if let AgalValue::Complex(c) = right.un_ref() {
       c.un_ref()
     } else {
       return internal::AgalThrow::Params {
-        type_error: parser::internal::ErrorNames::TypeError,
+        type_error: parser::ErrorNames::TypeError,
         message: format!(
           "No se puede operar '{} {} {}'",
           self.get_name(),
@@ -186,45 +181,45 @@ impl traits::AgalValuable for AgalArray {
       .to_result();
     };
     match (other.clone(), operator) {
-      (AgalComplex::Array(a), parser::ast::NodeOperator::Plus) => {
+      (AgalComplex::Array(a), parser::NodeOperator::Plus) => {
         let vec = self.to_vec();
         let other_vec = a.un_ref().to_vec();
         let result = vec![vec.borrow().clone(), other_vec.borrow().clone()].concat();
         AgalArray::new(result).to_result()
       }
-      (AgalComplex::Array(a), parser::ast::NodeOperator::GreaterThanOrEqual) => {
+      (AgalComplex::Array(a), parser::NodeOperator::GreaterThanOrEqual) => {
         let ref l = a.un_ref();
         AgalBoolean::new(l.less_than(self) || self.equals(l)).to_result()
       }
-      (AgalComplex::Array(a), parser::ast::NodeOperator::LessThanOrEqual) => {
+      (AgalComplex::Array(a), parser::NodeOperator::LessThanOrEqual) => {
         let ref l = a.un_ref();
         AgalBoolean::new(self.less_than(l) || self.equals(l)).to_result()
       }
-      (AgalComplex::Array(a), parser::ast::NodeOperator::GreaterThan) => {
+      (AgalComplex::Array(a), parser::NodeOperator::GreaterThan) => {
         let ref l = a.un_ref();
         AgalBoolean::new(l.less_than(self)).to_result()
       }
-      (AgalComplex::Array(a), parser::ast::NodeOperator::LessThan) => {
+      (AgalComplex::Array(a), parser::NodeOperator::LessThan) => {
         let ref l = a.un_ref();
         AgalBoolean::new(self.less_than(l)).to_result()
       }
-      (_, parser::ast::NodeOperator::Nullish) => self.clone().to_result(),
-      (_, parser::ast::NodeOperator::Or) => {
-        if self.to_agal_boolean(stack)?.as_bool() == true {
+      (_, parser::NodeOperator::Nullish) => self.clone().to_result(),
+      (_, parser::NodeOperator::Or) => {
+        if self.to_agal_boolean(stack, modules)?.as_bool() == true {
           self.clone().to_result()
         } else {
           other.to_result()
         }
       }
-      (_, parser::ast::NodeOperator::And) => {
-        if self.to_agal_boolean(stack)?.as_bool() == false {
+      (_, parser::NodeOperator::And) => {
+        if self.to_agal_boolean(stack, modules)?.as_bool() == false {
           self.clone().to_result()
         } else {
           other.to_result()
         }
       }
       (_, _) => internal::AgalThrow::Params {
-        type_error: parser::internal::ErrorNames::TypeError,
+        type_error: parser::ErrorNames::TypeError,
         message: format!(
           "No se puede operar '{} {} {}'",
           self.get_name(),
@@ -242,8 +237,8 @@ impl traits::AgalValuable for AgalArray {
     stack: runtime::RefStack,
     key: &str,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
-    let is_number = usize::from_str_radix(key, 10).on_error(AgalThrow::Params {
-      type_error: parser::internal::ErrorNames::TypeError,
+    let is_number = usize::from_str_radix(key, 10).on_error(|_| AgalThrow::Params {
+      type_error: parser::ErrorNames::TypeError,
       message: error_message::TO_AGAL_NUMBER.to_string(),
       stack: stack.clone(),
     })?;
@@ -251,8 +246,8 @@ impl traits::AgalValuable for AgalArray {
       .to_vec()
       .borrow()
       .get(is_number)
-      .on_error(AgalThrow::Params {
-        type_error: parser::internal::ErrorNames::TypeError,
+      .on_error(|_| AgalThrow::Params {
+        type_error: parser::ErrorNames::TypeError,
         message: format!("'{}' no es un indice valido", is_number),
         stack,
       })?
@@ -266,8 +261,8 @@ impl traits::AgalValuable for AgalArray {
     key: &str,
     value: values::DefaultRefAgalValue,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
-    let index = usize::from_str_radix(key, 10).on_error(AgalThrow::Params {
-      type_error: parser::internal::ErrorNames::TypeError,
+    let index = usize::from_str_radix(key, 10).on_error(|_| AgalThrow::Params {
+      type_error: parser::ErrorNames::TypeError,
       message: error_message::TO_AGAL_NUMBER.to_string(),
       stack: stack.clone(),
     })?;
@@ -286,14 +281,23 @@ impl traits::AgalValuable for AgalArray {
     &self,
     stack: runtime::RefStack,
     key: &str,
-    modules: libraries::RefModules
+    modules: libraries::RefModules,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
-    if key == "longitud" {
-      let length = self.to_vec().borrow().len();
-      AgalNumber::Integer(length as i32).to_result()
-    } else {
-      internal::AgalThrow::Params {
-        type_error: parser::internal::ErrorNames::TypeError,
+    match key {
+      functions_names::TO_AGAL_STRING => modules
+        .get_module(":proto/Lista")
+        .ok_or_else(|| internal::AgalThrow::Params {
+          type_error: parser::ErrorNames::TypeError,
+          message: error_message::GET_INSTANCE_PROPERTY.to_owned(),
+          stack: stack.clone(),
+        })?
+        .get_instance_property(stack, key, modules),
+      "longitud" => {
+        let length = self.to_vec().borrow().len();
+        AgalNumber::Integer(length as i32).to_result()
+      }
+      _ => internal::AgalThrow::Params {
+        type_error: parser::ErrorNames::TypeError,
         message: format!(
           "No se puede acceder a la propiedad '{}' de {}",
           key,
@@ -301,28 +305,14 @@ impl traits::AgalValuable for AgalArray {
         ),
         stack,
       }
-      .to_result()
+      .to_result(),
     }
-  }
-
-  async fn call(
-    &self,
-    stack: runtime::RefStack,
-    this: values::DefaultRefAgalValue,
-    args: Vec<values::DefaultRefAgalValue>,
-    modules: libraries::RefModules,
-  ) -> Result<crate::runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
-    AgalThrow::Params {
-      type_error: parser::internal::ErrorNames::TypeError,
-      message: error_message::CALL.to_string(),
-      stack,
-    }
-    .to_result()
   }
 
   fn to_agal_number(
     &self,
     stack: runtime::RefStack,
+    modules: libraries::RefModules,
   ) -> Result<primitive::AgalNumber, internal::AgalThrow> {
     let len = self.to_vec().borrow().len();
     Ok(primitive::AgalNumber::Integer(len as i32))

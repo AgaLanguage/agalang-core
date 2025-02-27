@@ -1,14 +1,15 @@
 use super::{
   internal,
   traits::{self, AgalValuable as _, ToAgalValue as _},
-  AgalBoolean, AgalPrimitive, AgalValue,
+  AgalPrimitive, AgalValue,
 };
 use crate::{
-  colors, libraries, runtime::{
+  functions_names, libraries, parser, runtime::{
     self,
-    values::{complex::AgalArray, error_message, internal::AgalThrow, traits::ToAgalValue},
-  }
+    values::{self, complex, error_message},
+  }, util
 };
+pub const STRING_REPLACE: &str = "remplaza";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct AgalChar(char);
@@ -31,12 +32,20 @@ impl traits::AgalValuable for AgalChar {
   fn get_name(&self) -> String {
     "Caracter".to_string()
   }
-  fn to_agal_string(&self, stack: runtime::RefStack) -> Result<AgalString, internal::AgalThrow> {
+  fn to_agal_string(
+    &self,
+    stack: runtime::RefStack,
+    modules: libraries::RefModules,
+  ) -> Result<AgalString, internal::AgalThrow> {
     Ok(AgalString(vec![*self]))
   }
-  fn to_agal_console(&self, stack: runtime::RefStack) -> Result<AgalString, internal::AgalThrow> {
+  fn to_agal_console(
+    &self,
+    stack: runtime::RefStack,
+    modules: libraries::RefModules,
+  ) -> Result<AgalString, internal::AgalThrow> {
     let char = self.as_char();
-    Ok(AgalString::from_string(colors::Color::BLUE.apply(
+    Ok(AgalString::from_string(util::Color::BLUE.apply(
       &if char == '\'' {
         "\\'".to_string()
       } else {
@@ -45,18 +54,15 @@ impl traits::AgalValuable for AgalChar {
     )))
   }
 
-  fn get_keys(&self) -> Vec<String> {
-    vec![]
-  }
-
   fn to_agal_number(
     &self,
     stack: runtime::RefStack,
+    modules: libraries::RefModules,
   ) -> Result<super::AgalNumber, internal::AgalThrow> {
     match self.as_char().to_digit(10) {
       Some(digit) => Ok(super::AgalNumber::from(digit as i32)),
       None => internal::AgalThrow::Params {
-        type_error: parser::internal::ErrorNames::TypeError,
+        type_error: parser::ErrorNames::TypeError,
         message: error_message::TO_AGAL_NUMBER.to_owned(),
         stack,
       }
@@ -64,113 +70,67 @@ impl traits::AgalValuable for AgalChar {
     }
   }
 
-  fn to_agal_byte(&self, stack: runtime::RefStack) -> Result<super::AgalByte, internal::AgalThrow> {
-    internal::AgalThrow::Params {
-      type_error: parser::internal::ErrorNames::TypeError,
-      message: error_message::TO_AGAL_BYTE.to_owned(),
-      stack,
-    }
-    .to_result()
-  }
-
   fn to_agal_boolean(
     &self,
     stack: runtime::RefStack,
+    modules: libraries::RefModules,
   ) -> Result<super::AgalBoolean, internal::AgalThrow> {
     Ok(super::AgalBoolean::True)
-  }
-
-  fn to_agal_array(
-    &self,
-    stack: runtime::RefStack,
-  ) -> Result<runtime::values::RefAgalValue<AgalArray>, internal::AgalThrow> {
-    internal::AgalThrow::Params {
-      type_error: parser::internal::ErrorNames::TypeError,
-      message: error_message::TO_AGAL_ARRAY.to_owned(),
-      stack,
-    }
-    .to_result()
   }
 
   fn binary_operation(
     &self,
     stack: runtime::RefStack,
-    operator: parser::ast::NodeOperator,
-    right: runtime::values::DefaultRefAgalValue,
-  ) -> Result<runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
+    operator: parser::NodeOperator,
+    right: values::DefaultRefAgalValue,
+    modules: libraries::RefModules,
+  ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
     let other = if let AgalValue::Primitive(p) = right.un_ref() {
       p.un_ref()
     } else {
-      return Err(AgalThrow::Params {
-        type_error: parser::internal::ErrorNames::TypeError,
+      return Err(internal::AgalThrow::Params {
+        type_error: parser::ErrorNames::TypeError,
         message: error_message::TO_AGAL_STRING.to_owned(),
         stack,
       });
     };
     match (operator, other) {
-      (parser::ast::NodeOperator::Equal, AgalPrimitive::Char(other)) => {
-        AgalBoolean::new(self.equals(&other)).to_result()
+      (parser::NodeOperator::Equal, AgalPrimitive::Char(other)) => {
+        super::AgalBoolean::new(self.equals(&other)).to_result()
       }
-      (parser::ast::NodeOperator::NotEqual, AgalPrimitive::Char(other)) => {
-        AgalBoolean::new(!self.equals(&other)).to_result()
+      (parser::NodeOperator::NotEqual, AgalPrimitive::Char(other)) => {
+        super::AgalBoolean::new(!self.equals(&other)).to_result()
       }
-      _ => Err(AgalThrow::Params {
-        type_error: parser::internal::ErrorNames::TypeError,
-        message: error_message::BINARY_OPERATION(self.clone().to_ref_value(), operator, right),
+      _ => Err(internal::AgalThrow::Params {
+        type_error: parser::ErrorNames::TypeError,
+        message: error_message::BINARY_OPERATION(self.get_name(), operator, right.get_name()),
         stack,
       }),
     }
-  }
-
-  fn get_object_property(
-    &self,
-    stack: runtime::RefStack,
-    key: &str,
-  ) -> Result<runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
-    internal::AgalThrow::Params {
-      type_error: parser::internal::ErrorNames::TypeError,
-      message: error_message::GET_OBJECT_PROPERTY.to_owned(),
-      stack,
-    }
-    .to_result()
-  }
-
-  fn set_object_property(
-    &mut self,
-    stack: runtime::RefStack,
-    key: &str,
-    value: runtime::values::DefaultRefAgalValue,
-  ) -> Result<runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
-    internal::AgalThrow::Params {
-      type_error: parser::internal::ErrorNames::TypeError,
-      message: error_message::SET_OBJECT_PROPERTY.to_owned(),
-      stack,
-    }
-    .to_result()
   }
 
   fn get_instance_property(
     &self,
     stack: runtime::RefStack,
     key: &str,
-    modules: libraries::RefModules
-  ) -> Result<runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
-    todo!()
-  }
-
-  async fn call(
-    &self,
-    stack: runtime::RefStack,
-    this: runtime::values::DefaultRefAgalValue,
-    args: Vec<runtime::values::DefaultRefAgalValue>,
     modules: libraries::RefModules,
-  ) -> Result<crate::runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
-    internal::AgalThrow::Params {
-      type_error: parser::internal::ErrorNames::TypeError,
-      message: error_message::CALL.to_owned(),
-      stack,
+  ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
+    match key {
+      functions_names::TO_AGAL_STRING => modules
+        .get_module(":proto/Cadena")
+        .ok_or_else(|| internal::AgalThrow::Params {
+          type_error: parser::ErrorNames::TypeError,
+          message: error_message::GET_INSTANCE_PROPERTY.to_owned(),
+          stack: stack.clone(),
+        })?
+        .get_instance_property(stack, key, modules),
+      _ => internal::AgalThrow::Params {
+        type_error: parser::ErrorNames::TypeError,
+        message: error_message::GET_INSTANCE_PROPERTY.to_owned(),
+        stack,
+      }
+      .to_result(),
     }
-    .to_result()
   }
 
   fn equals(&self, other: &Self) -> bool {
@@ -210,8 +170,8 @@ impl AgalString {
     new.extend(post.chars().map(|c| AgalChar::new(c)));
     Self(new)
   }
-  pub fn set_color(&self, color: colors::Color) -> Self {
-    self.add_sides(color.as_str(), colors::Color::RESET.as_str())
+  pub fn set_color(&self, color: util::Color) -> Self {
+    self.add_sides(color.as_str(), util::Color::RESET.as_str())
   }
 }
 impl traits::ToAgalValue for AgalString {
@@ -223,14 +183,31 @@ impl traits::AgalValuable for AgalString {
   fn get_name(&self) -> String {
     "Cadena".to_string()
   }
-  fn try_to_string(&self, stack: runtime::RefStack) -> Result<String, internal::AgalThrow> {
+  fn try_to_string(
+    &self,
+    stack: runtime::RefStack,
+    modules: libraries::RefModules,
+  ) -> Result<String, internal::AgalThrow> {
     Ok(self.to_string())
   }
-  fn to_agal_string(&self, stack: runtime::RefStack) -> Result<AgalString, internal::AgalThrow> {
+  fn to_agal_string(
+    &self,
+    stack: runtime::RefStack,
+    modules: libraries::RefModules,
+  ) -> Result<AgalString, internal::AgalThrow> {
     Ok(self.clone())
   }
-  fn to_agal_console(&self, stack: runtime::RefStack) -> Result<AgalString, internal::AgalThrow> {
-    let string = self.try_to_string(stack)?;
+  fn to_agal_console(
+    &self,
+    stack: runtime::RefStack,
+    modules: libraries::RefModules,
+  ) -> Result<AgalString, internal::AgalThrow> {
+    let string = self
+      .try_to_string(stack, modules)?
+      .replace("\n", "\\n")
+      .replace("\r", "\\r")
+      .replace("\t", "\\t")
+      .replace("\0", "\\0");
     let string = if string.contains("'") && string.contains("\"") {
       format!("'{}'", string.replace("\'", "\\\'"))
     } else if string.contains("'") {
@@ -238,27 +215,19 @@ impl traits::AgalValuable for AgalString {
     } else {
       format!("'{}'", string)
     };
-    Ok(AgalString::from_string(colors::Color::BLUE.apply(&string)))
+    Ok(AgalString::from_string(util::Color::BLUE.apply(&string)))
   }
   fn to_agal_boolean(
     &self,
     stack: runtime::RefStack,
-  ) -> Result<super::boolean::AgalBoolean, internal::AgalThrow> {
-    Ok(super::boolean::AgalBoolean::new(!self.0.is_empty()))
-  }
-  fn get_keys(&self) -> Vec<String> {
-    vec![]
-  }
-  fn to_agal_byte(&self, stack: runtime::RefStack) -> Result<super::AgalByte, internal::AgalThrow> {
-    Err(AgalThrow::Params {
-      type_error: parser::internal::ErrorNames::TypeError,
-      message: error_message::TO_AGAL_BYTE.to_owned(),
-      stack,
-    })
+    modules: libraries::RefModules,
+  ) -> Result<super::AgalBoolean, internal::AgalThrow> {
+    Ok(super::AgalBoolean::new(!self.0.is_empty()))
   }
   fn to_agal_number(
     &self,
     stack: runtime::RefStack,
+    modules: libraries::RefModules,
   ) -> Result<super::AgalNumber, internal::AgalThrow> {
     let clean_string = self.to_string();
     let clean_string = clean_string.trim_end_matches('0').trim_end_matches('.');
@@ -275,8 +244,8 @@ impl traits::AgalValuable for AgalString {
         Err(_) => None,
       }
     };
-    value.ok_or_else(|| AgalThrow::Params {
-      type_error: parser::internal::ErrorNames::TypeError,
+    value.ok_or_else(|| internal::AgalThrow::Params {
+      type_error: parser::ErrorNames::TypeError,
       message: error_message::TO_AGAL_NUMBER.to_owned(),
       stack,
     })
@@ -284,95 +253,69 @@ impl traits::AgalValuable for AgalString {
   fn to_agal_array(
     &self,
     stack: runtime::RefStack,
-  ) -> Result<runtime::values::RefAgalValue<runtime::values::complex::AgalArray>, internal::AgalThrow>
-  {
-    Ok(AgalArray::from(self).as_ref())
+    modules: libraries::RefModules,
+  ) -> Result<values::RefAgalValue<complex::AgalArray>, internal::AgalThrow> {
+    Ok(complex::AgalArray::from(self).as_ref())
   }
   fn binary_operation(
     &self,
     stack: runtime::RefStack,
-    operator: parser::ast::NodeOperator,
-    right: runtime::values::DefaultRefAgalValue,
-  ) -> Result<runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
+    operator: parser::NodeOperator,
+    right: values::DefaultRefAgalValue,
+    modules: libraries::RefModules,
+  ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
     let other = if let AgalValue::Primitive(p) = right.un_ref() {
       p.un_ref()
     } else {
-      return Err(AgalThrow::Params {
-        type_error: parser::internal::ErrorNames::TypeError,
+      return Err(internal::AgalThrow::Params {
+        type_error: parser::ErrorNames::TypeError,
         message: error_message::TO_AGAL_STRING.to_owned(),
         stack,
       });
     };
     match (operator, other) {
-      (parser::ast::NodeOperator::Plus, AgalPrimitive::String(other)) => {
+      (parser::NodeOperator::Plus, AgalPrimitive::String(other)) => {
         self.add_post(&other.to_string()).to_result()
       }
-      (parser::ast::NodeOperator::Multiply, AgalPrimitive::Number(other)) => {
+      (parser::NodeOperator::Multiply, AgalPrimitive::Number(other)) => {
         AgalString::from_string(self.to_string().repeat(other.to_usize(stack)?)).to_result()
       }
-      (parser::ast::NodeOperator::Equal, AgalPrimitive::String(other)) => {
-        AgalBoolean::new(self.equals(&other)).to_result()
+      (parser::NodeOperator::Equal, AgalPrimitive::String(other)) => {
+        super::AgalBoolean::new(self.equals(&other)).to_result()
       }
-      (parser::ast::NodeOperator::NotEqual, AgalPrimitive::String(other)) => {
-        AgalBoolean::new(!self.equals(&other)).to_result()
+      (parser::NodeOperator::NotEqual, AgalPrimitive::String(other)) => {
+        super::AgalBoolean::new(!self.equals(&other)).to_result()
       }
-      _ => Err(AgalThrow::Params {
-        type_error: parser::internal::ErrorNames::TypeError,
-        message: error_message::BINARY_OPERATION(self.clone().to_ref_value(), operator, right),
+      _ => Err(internal::AgalThrow::Params {
+        type_error: parser::ErrorNames::TypeError,
+        message: error_message::BINARY_OPERATION(self.get_name(), operator, right.get_name()),
         stack,
       }),
     }
-  }
-
-  fn get_object_property(
-    &self,
-    stack: runtime::RefStack,
-    key: &str,
-  ) -> Result<runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
-    internal::AgalThrow::Params {
-      type_error: parser::internal::ErrorNames::TypeError,
-      message: error_message::GET_OBJECT_PROPERTY.to_owned(),
-      stack,
-    }
-    .to_result()
-  }
-
-  fn set_object_property(
-    &mut self,
-    stack: runtime::RefStack,
-    key: &str,
-    value: runtime::values::DefaultRefAgalValue,
-  ) -> Result<runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
-    internal::AgalThrow::Params {
-      type_error: parser::internal::ErrorNames::TypeError,
-      message: error_message::SET_OBJECT_PROPERTY.to_owned(),
-      stack,
-    }
-    .to_result()
   }
 
   fn get_instance_property(
     &self,
     stack: runtime::RefStack,
     key: &str,
-    modules: libraries::RefModules
-  ) -> Result<runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
-    todo!()
-  }
-
-  async fn call(
-    &self,
-    stack: runtime::RefStack,
-    this: runtime::values::DefaultRefAgalValue,
-    args: Vec<runtime::values::DefaultRefAgalValue>,
     modules: libraries::RefModules,
-  ) -> Result<crate::runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
-    AgalThrow::Params {
-      type_error: parser::internal::ErrorNames::TypeError,
-      message: error_message::CALL.to_string(),
-      stack,
+  ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
+    match key {
+      functions_names::TO_AGAL_STRING | STRING_REPLACE => modules
+        .get_module(":proto/Cadena")
+        .ok_or_else(|| internal::AgalThrow::Params {
+          type_error: parser::ErrorNames::TypeError,
+          message: error_message::GET_INSTANCE_PROPERTY.to_owned(),
+          stack: stack.clone(),
+        })?
+        .get_instance_property(stack, key, modules),
+      _ => internal::AgalThrow::Params {
+        type_error: parser::ErrorNames::TypeError,
+        message: error_message::GET_INSTANCE_PROPERTY.to_owned(),
+        stack,
+      }
+      .to_result(),
     }
-    .to_result()
   }
 
   fn equals(&self, other: &Self) -> bool {

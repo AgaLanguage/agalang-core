@@ -1,7 +1,14 @@
-importa ':proto' como PT; #al cargar proto se carga automaticamente proto/Numero para no repetir
+#importa ':proto' como PT; #al cargar proto se carga automaticamente proto/Numero para no repetir
 importa ':consola' como Consola;
-importa ':proto/Numero' como Numero;
-Consola::pintar(01000.0100::aCadena());
-Consola::pintar(PT::Numero::aCadena(0by10));
-Consola::pintar(PT::Numero::aCadena == Numero::aCadena);
-Consola::pintar(PT::Numero::aCadena == 0n16|10::aCadena);
+
+def lista = [];
+def x;
+'escribe el primer elemento: ' >> csl >> x;
+lista[0] = x::remplaza('\r\n','');
+'escribe el segundo elemento: ' >> csl >> x;
+lista[1] = x::remplaza('\r\n','');
+'escribe el tercer elemento: ' >> csl >> x;
+lista[2] = x::remplaza('\r\n','');
+
+csl << lista::__cad__() + '\n';
+Consola::pintar(lista);

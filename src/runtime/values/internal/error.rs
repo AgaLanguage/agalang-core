@@ -1,42 +1,41 @@
-use parser::{
-  internal::{error_to_string, ErrorNames, ErrorTypes},
-  util::{self, RefValue},
-};
-
-use crate::{libraries, runtime::{
-  stack::{self, RefStack},
-  values::{
-    self, primitive,
-    traits::{self, AgalValuable as _, ToAgalValue as _},
-    AgalValue,
+use crate::{
+  libraries, parser,
+  runtime::{
+    self,
+    stack::{self, RefStack},
+    values::{
+      self, error_message, primitive,
+      traits::{self, AgalValuable as _, ToAgalValue as _},
+      AgalValue,
+    },
   },
-}};
+};
 
 use super::AgalInternal;
 
 #[derive(Clone, Debug)]
 pub enum AgalError {
   Params {
-    type_error: ErrorNames,
+    type_error: parser::ErrorNames,
     message: String,
   },
   Value(values::DefaultRefAgalValue),
 }
 
 impl AgalError {
-  pub fn get_data(&self, stack: crate::runtime::RefStack) -> (ErrorNames, ErrorTypes) {
+  pub fn get_data(&self) -> (parser::ErrorNames, parser::ErrorTypes) {
     match self {
       Self::Params {
         type_error,
         message,
-      } => (type_error.clone(), ErrorTypes::StringError(message.clone())),
-      Self::Value(value) => {
-        let message = value.try_to_string(stack.clone());
-        match message {
-          Ok(message) => (ErrorNames::None, ErrorTypes::StringError(message)),
-          Err(throw) => throw.get_data(),
-        }
-      }
+      } => (
+        type_error.clone(),
+        parser::ErrorTypes::StringError(message.clone()),
+      ),
+      Self::Value(value) => (
+        parser::ErrorNames::None,
+        parser::ErrorTypes::StringError(value.as_string()),
+      ),
     }
   }
 }
@@ -47,96 +46,46 @@ impl traits::AgalValuable for AgalError {
   }
   fn to_agal_string(
     &self,
-    stack: crate::runtime::RefStack,
+    stack: runtime::RefStack,
+    modules: libraries::RefModules,
   ) -> Result<primitive::AgalString, super::throw::AgalThrow> {
-    let (type_error, message) = self.get_data(stack);
-    let message = error_to_string(&type_error, message);
+    let (type_error, message) = self.get_data();
+    let message = parser::error_to_string(&type_error, message);
     Ok(primitive::AgalString::from_string(message))
-  }
-
-  fn get_keys(&self) -> Vec<String> {
-    todo!()
-  }
-
-  fn to_agal_byte(
-    &self,
-    stack: crate::runtime::RefStack,
-  ) -> Result<primitive::AgalByte, super::AgalThrow> {
-    todo!()
   }
 
   fn to_agal_boolean(
     &self,
-    stack: crate::runtime::RefStack,
+    stack: runtime::RefStack,
+    modules: libraries::RefModules,
   ) -> Result<primitive::AgalBoolean, super::AgalThrow> {
-    todo!()
-  }
-
-  fn to_agal_array(
-    &self,
-    stack: crate::runtime::RefStack,
-  ) -> Result<values::RefAgalValue<values::complex::AgalArray>, super::AgalThrow> {
-    todo!()
-  }
-
-  fn binary_operation(
-    &self,
-    stack: crate::runtime::RefStack,
-    operator: parser::ast::NodeOperator,
-    right: values::DefaultRefAgalValue,
-  ) -> Result<values::DefaultRefAgalValue, super::AgalThrow> {
-    todo!()
-  }
-
-  fn get_object_property(
-    &self,
-    stack: crate::runtime::RefStack,
-    key: &str,
-  ) -> Result<values::DefaultRefAgalValue, super::AgalThrow> {
-    todo!()
-  }
-
-  fn set_object_property(
-    &mut self,
-    stack: crate::runtime::RefStack,
-    key: &str,
-    value: values::DefaultRefAgalValue,
-  ) -> Result<values::DefaultRefAgalValue, super::AgalThrow> {
-    todo!()
+    Ok(primitive::AgalBoolean::True)
   }
 
   fn get_instance_property(
     &self,
     stack: crate::runtime::RefStack,
     key: &str,
-    modules: libraries::RefModules
-  ) -> Result<values::DefaultRefAgalValue, super::AgalThrow> {
-    todo!()
-  }
-
-  async fn call(
-    &self,
-    stack: crate::runtime::RefStack,
-    this: values::DefaultRefAgalValue,
-    args: Vec<values::DefaultRefAgalValue>,
     modules: libraries::RefModules,
-  ) -> Result<crate::runtime::values::DefaultRefAgalValue, super::AgalThrow> {
-    todo!()
-  }
-
-  fn to_agal_number(
-    &self,
-    stack: crate::runtime::RefStack,
-  ) -> Result<primitive::AgalNumber, super::AgalThrow> {
-    todo!()
+  ) -> Result<values::DefaultRefAgalValue, super::AgalThrow> {
+    match key {
+      "tipo" => primitive::AgalString::from_string(format!("{}", self.get_data().0)).to_result(),
+      "mensaje" => primitive::AgalString::from_string(format!("{}", self.get_data().1)).to_result(),
+      _ => super::AgalThrow::Params {
+        type_error: parser::ErrorNames::TypeError,
+        message: error_message::GET_INSTANCE_PROPERTY.into(),
+        stack,
+      }
+      .to_result(),
+    }
   }
 
   fn equals(&self, other: &Self) -> bool {
-    todo!()
+    false
   }
 
   fn less_than(&self, other: &Self) -> bool {
-    todo!()
+    false
   }
 }
 impl traits::ToAgalValue for AgalError {

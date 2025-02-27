@@ -1,17 +1,11 @@
 use std::{borrow::Borrow, path::Path, rc::Rc};
 
-use parser::ast::{Node, NodeBlock, NodeIdentifier, NodeProperty};
-use parser::internal;
-use parser::util::List;
-use parser::{self as frontend, util::RefValue};
-
-use crate::libraries;
 use crate::{
+  libraries, parser,
   runtime::{self, env::RefEnvironment},
-  ToResult,
 };
 
-use super::interpreter;
+use super::{async_interpreter, interpreter};
 use super::{
   stack::RefStack,
   values::{internal::AgalInternal, AgalValue, DefaultRefAgalValue},
@@ -24,9 +18,9 @@ fn code(path: &str) -> Option<String> {
   match contents {
     Ok(contents) => Some(contents),
     Err(err) => {
-      let ref type_err = internal::ErrorNames::PathError;
-      let err = internal::ErrorTypes::IoError(err);
-      internal::show_error(type_err, err);
+      let ref type_err = parser::ErrorNames::PathError;
+      let err = parser::ErrorTypes::IoError(err);
+      parser::show_error(type_err, err);
       None
     }
   }
@@ -49,32 +43,32 @@ pub fn full_eval(
   })
 }
 
-async fn eval(code: String, path: &str, stack: RefStack, modules_manager: libraries::RefModules) -> EvalResult {
-  let program = frontend::Parser::new(code, &path).produce_ast();
+async fn eval(
+  code: String,
+  path: &str,
+  stack: RefStack,
+  modules_manager: libraries::RefModules,
+) -> EvalResult {
+  let program = parser::Parser::new(code, &path).produce_ast();
   let program = match program {
     Ok(value) => value,
     Err(err) => {
-      let type_err = internal::errors::ErrorNames::SyntaxError;
-      let data = internal::errors::error_to_string(&type_err, parser::node_error(&err));
-      internal::print_error(data);
+      let type_err = parser::ErrorNames::SyntaxError;
+      let data = parser::error_to_string(&type_err, parser::node_error(&err));
+      parser::print_error(data);
       return None;
     }
   };
   //println!("{}", json(&program));
   let box_node = program.to_box();
   let new_stack = stack.crate_child(false, box_node.clone());
-  let value = interpreter(
-    box_node,
-    new_stack,
-    modules_manager,
-  )
-  .await;
+  let value = async_interpreter(box_node, new_stack, modules_manager).await;
   let value = &*value.borrow();
   match value {
     Err(throw) => {
       let (type_err, err) = throw.get_data();
-      let data = internal::errors::error_to_string(&type_err, err);
-      internal::print_error(data);
+      let data = parser::error_to_string(&type_err, err);
+      parser::print_error(data);
       None
     }
     Ok(value) => Some(value.clone()),

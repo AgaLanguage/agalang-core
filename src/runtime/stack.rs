@@ -1,6 +1,6 @@
-use std::{cell::RefCell, collections::VecDeque, rc::Rc};
+use std::{cell::RefCell, rc::Rc};
 
-use parser::ast::{BNode, Node};
+use crate::parser;
 
 use super::RefEnvironment;
 #[derive(Clone, Debug)]
@@ -9,7 +9,7 @@ impl RefStack {
   pub fn get_default() -> Self {
     Stack::new(RefEnvironment::get_default()).to_ref()
   }
-  pub fn crate_child(&self, in_class: bool, value: BNode) -> Self {
+  pub fn crate_child(&self, in_class: bool, value: parser::BNode) -> Self {
     Stack {
       env: self.env().crate_child(in_class),
       prev: Some(self.clone()),
@@ -20,13 +20,13 @@ impl RefStack {
   pub fn with_env(&self, env: RefEnvironment) -> Self {
     self.0.borrow().with_env(env).to_ref()
   }
-  pub fn next(self, value: BNode) -> Self {
+  pub fn next(self, value: parser::BNode) -> Self {
     self.0.borrow_mut().next(value).to_ref()
   }
   pub fn pop(self) -> Option<Self> {
     self.0.borrow_mut().pop()
   }
-  pub fn current(&self) -> BNode {
+  pub fn current(&self) -> parser::BNode {
     self.0.borrow().current()
   }
   pub fn env(&self) -> RefEnvironment {
@@ -42,7 +42,7 @@ impl RefStack {
   }
 }
 impl IntoIterator for RefStack {
-  type Item = BNode;
+  type Item = parser::BNode;
   type IntoIter = std::vec::IntoIter<Self::Item>;
   fn into_iter(self) -> Self::IntoIter {
     let mut stack = vec![];
@@ -55,7 +55,7 @@ impl IntoIterator for RefStack {
   }
 }
 impl IntoIterator for &RefStack {
-  type Item = BNode;
+  type Item = parser::BNode;
   type IntoIter = std::vec::IntoIter<Self::Item>;
   fn into_iter(self) -> Self::IntoIter {
     self.clone().into_iter()
@@ -64,7 +64,7 @@ impl IntoIterator for &RefStack {
 
 #[derive(Clone, Debug)]
 pub struct Stack {
-  node: BNode,
+  node: parser::BNode,
   env: RefEnvironment,
   prev: Option<RefStack>,
 }
@@ -80,7 +80,7 @@ impl Stack {
   pub fn to_ref(self) -> RefStack {
     RefStack(Rc::new(RefCell::new(self)))
   }
-  pub fn crate_child(&self, in_class: bool, value: BNode) -> Self {
+  pub fn crate_child(&self, in_class: bool, value: parser::BNode) -> Self {
     Self {
       env: self.env.crate_child(in_class),
       prev: Some(self.clone().to_ref()),
@@ -101,7 +101,7 @@ impl Stack {
       node: self.node.clone(),
     }
   }
-  pub fn next(&self, value: BNode) -> Self {
+  pub fn next(&self, value: parser::BNode) -> Self {
     if (self.node == value) {
       return self.clone();
     }
@@ -114,7 +114,7 @@ impl Stack {
   pub fn pop(&self) -> Option<RefStack> {
     self.prev.clone()
   }
-  pub fn current(&self) -> BNode {
+  pub fn current(&self) -> parser::BNode {
     self.node.clone().to_box()
   }
   pub fn env(&self) -> RefEnvironment {
@@ -122,14 +122,14 @@ impl Stack {
   }
 }
 impl IntoIterator for Stack {
-  type Item = BNode;
+  type Item = parser::BNode;
   type IntoIter = std::vec::IntoIter<Self::Item>;
   fn into_iter(self) -> Self::IntoIter {
     self.to_ref().into_iter()
   }
 }
 impl IntoIterator for &Stack {
-  type Item = BNode;
+  type Item = parser::BNode;
   type IntoIter = std::vec::IntoIter<Self::Item>;
   fn into_iter(self) -> Self::IntoIter {
     self.clone().to_ref().into_iter()

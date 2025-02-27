@@ -1,6 +1,4 @@
-use crate::{
-  libraries, runtime::{env::RefEnvironment, stack::RefStack}
-};
+use crate::{libraries, runtime};
 
 use super::{
   internal, primitive,
@@ -44,29 +42,37 @@ impl traits::AgalValuable for AgalComplex {
       Self::Class(value) => value.get_name(),
     }
   }
-  fn to_agal_string(&self, stack: RefStack) -> Result<primitive::AgalString, internal::AgalThrow> {
+  fn to_agal_string(
+    &self,
+    stack: runtime::RefStack,
+    modules: libraries::RefModules,
+  ) -> Result<primitive::AgalString, internal::AgalThrow> {
     match self {
-      Self::SuperInstance(value) => value.to_agal_string(stack),
-      Self::Function(value) => value.to_agal_string(stack),
-      Self::Promise(value) => value.to_agal_string(stack),
-      Self::Object(value) => value.to_agal_string(stack),
-      Self::Array(value) => value.to_agal_string(stack),
-      Self::Class(value) => value.to_agal_string(stack),
+      Self::SuperInstance(value) => value.to_agal_string(stack, modules),
+      Self::Function(value) => value.to_agal_string(stack, modules),
+      Self::Promise(value) => value.to_agal_string(stack, modules),
+      Self::Object(value) => value.to_agal_string(stack, modules),
+      Self::Array(value) => value.to_agal_string(stack, modules),
+      Self::Class(value) => value.to_agal_string(stack, modules),
     }
   }
-  fn to_agal_console(&self, stack: RefStack) -> Result<primitive::AgalString, internal::AgalThrow> {
+  fn to_agal_console(
+    &self,
+    stack: runtime::RefStack,
+    modules: libraries::RefModules,
+  ) -> Result<primitive::AgalString, internal::AgalThrow> {
     match self {
-      Self::SuperInstance(value) => value.to_agal_console(stack),
-      Self::Function(value) => value.to_agal_console(stack),
-      Self::Promise(value) => value.to_agal_console(stack),
-      Self::Object(value) => value.to_agal_console(stack),
-      Self::Array(value) => value.to_agal_console(stack),
-      Self::Class(value) => value.to_agal_console(stack),
+      Self::SuperInstance(value) => value.to_agal_console(stack, modules),
+      Self::Function(value) => value.to_agal_console(stack, modules),
+      Self::Promise(value) => value.to_agal_console(stack, modules),
+      Self::Object(value) => value.to_agal_console(stack, modules),
+      Self::Array(value) => value.to_agal_console(stack, modules),
+      Self::Class(value) => value.to_agal_console(stack, modules),
     }
   }
   fn get_object_property(
     &self,
-    stack: RefStack,
+    stack: runtime::RefStack,
     key: &str,
   ) -> Result<super::DefaultRefAgalValue, internal::AgalThrow> {
     match self {
@@ -80,7 +86,7 @@ impl traits::AgalValuable for AgalComplex {
   }
   fn set_object_property(
     &mut self,
-    stack: RefStack,
+    stack: runtime::RefStack,
     key: &str,
     value: super::DefaultRefAgalValue,
   ) -> Result<super::DefaultRefAgalValue, internal::AgalThrow> {
@@ -95,33 +101,33 @@ impl traits::AgalValuable for AgalComplex {
   }
   fn get_instance_property(
     &self,
-    stack: RefStack,
+    stack: runtime::RefStack,
     key: &str,
-    modules: libraries::RefModules
+    modules: libraries::RefModules,
   ) -> Result<super::DefaultRefAgalValue, internal::AgalThrow> {
     match self {
-      Self::SuperInstance(value) => value.get_instance_property(stack, key,modules),
-      Self::Function(value) => value.get_instance_property(stack, key,modules),
-      Self::Promise(value) => value.get_instance_property(stack, key,modules),
-      Self::Object(value) => value.get_instance_property(stack, key,modules),
-      Self::Array(value) => value.get_instance_property(stack, key,modules),
-      Self::Class(value) => value.get_instance_property(stack, key,modules),
+      Self::SuperInstance(value) => value.get_instance_property(stack, key, modules),
+      Self::Function(value) => value.get_instance_property(stack, key, modules),
+      Self::Promise(value) => value.get_instance_property(stack, key, modules),
+      Self::Object(value) => value.get_instance_property(stack, key, modules),
+      Self::Array(value) => value.get_instance_property(stack, key, modules),
+      Self::Class(value) => value.get_instance_property(stack, key, modules),
     }
   }
-  async fn call(
+  fn call(
     &self,
-    stack: RefStack,
+    stack: runtime::RefStack,
     this: super::DefaultRefAgalValue,
     args: Vec<super::DefaultRefAgalValue>,
     modules: libraries::RefModules,
   ) -> Result<super::DefaultRefAgalValue, internal::AgalThrow> {
     match self {
-      Self::SuperInstance(value) => value.call(stack, this, args, modules).await,
-      Self::Function(value) => value.call(stack, this, args, modules).await,
-      Self::Promise(value) => value.call(stack, this, args, modules).await,
-      Self::Object(value) => value.call(stack, this, args, modules).await,
-      Self::Array(value) => value.call(stack, this, args, modules).await,
-      Self::Class(value) => value.call(stack, this, args, modules).await,
+      Self::SuperInstance(value) => value.call(stack, this, args, modules),
+      Self::Function(value) => value.call(stack, this, args, modules),
+      Self::Promise(value) => value.call(stack, this, args, modules),
+      Self::Object(value) => value.call(stack, this, args, modules),
+      Self::Array(value) => value.call(stack, this, args, modules),
+      Self::Class(value) => value.call(stack, this, args, modules),
     }
   }
 
@@ -138,73 +144,78 @@ impl traits::AgalValuable for AgalComplex {
 
   fn to_agal_byte(
     &self,
-    stack: crate::runtime::RefStack,
+    stack: runtime::RefStack,
+    modules: libraries::RefModules,
   ) -> Result<primitive::AgalByte, internal::AgalThrow> {
     match self {
-      Self::SuperInstance(value) => value.to_agal_byte(stack),
-      Self::Function(value) => value.to_agal_byte(stack),
-      Self::Promise(value) => value.to_agal_byte(stack),
-      Self::Object(value) => value.to_agal_byte(stack),
-      Self::Array(value) => value.to_agal_byte(stack),
-      Self::Class(value) => value.to_agal_byte(stack),
+      Self::SuperInstance(value) => value.to_agal_byte(stack, modules),
+      Self::Function(value) => value.to_agal_byte(stack, modules),
+      Self::Promise(value) => value.to_agal_byte(stack, modules),
+      Self::Object(value) => value.to_agal_byte(stack, modules),
+      Self::Array(value) => value.to_agal_byte(stack, modules),
+      Self::Class(value) => value.to_agal_byte(stack, modules),
     }
   }
 
   fn to_agal_boolean(
     &self,
-    stack: crate::runtime::RefStack,
+    stack: runtime::RefStack,
+    modules: libraries::RefModules,
   ) -> Result<primitive::AgalBoolean, internal::AgalThrow> {
     match self {
-      Self::SuperInstance(value) => value.to_agal_boolean(stack),
-      Self::Function(value) => value.to_agal_boolean(stack),
-      Self::Promise(value) => value.to_agal_boolean(stack),
-      Self::Object(value) => value.to_agal_boolean(stack),
-      Self::Array(value) => value.to_agal_boolean(stack),
-      Self::Class(value) => value.to_agal_boolean(stack),
+      Self::SuperInstance(value) => value.to_agal_boolean(stack, modules),
+      Self::Function(value) => value.to_agal_boolean(stack, modules),
+      Self::Promise(value) => value.to_agal_boolean(stack, modules),
+      Self::Object(value) => value.to_agal_boolean(stack, modules),
+      Self::Array(value) => value.to_agal_boolean(stack, modules),
+      Self::Class(value) => value.to_agal_boolean(stack, modules),
     }
   }
 
   fn to_agal_array(
     &self,
-    stack: crate::runtime::RefStack,
+    stack: runtime::RefStack,
+    modules: libraries::RefModules,
   ) -> Result<super::RefAgalValue<AgalArray>, internal::AgalThrow> {
     match self {
-      Self::SuperInstance(value) => value.to_agal_array(stack),
-      Self::Function(value) => value.to_agal_array(stack),
-      Self::Promise(value) => value.to_agal_array(stack),
-      Self::Object(value) => value.to_agal_array(stack),
-      Self::Array(value) => value.to_agal_array(stack),
-      Self::Class(value) => value.to_agal_array(stack),
+      Self::SuperInstance(value) => value.to_agal_array(stack, modules),
+      Self::Function(value) => value.to_agal_array(stack, modules),
+      Self::Promise(value) => value.to_agal_array(stack, modules),
+      Self::Object(value) => value.to_agal_array(stack, modules),
+      Self::Array(value) => value.to_agal_array(stack, modules),
+      Self::Class(value) => value.to_agal_array(stack, modules),
     }
   }
 
   fn binary_operation(
     &self,
     stack: crate::runtime::RefStack,
-    operator: parser::ast::NodeOperator,
+    operator: crate::parser::NodeOperator,
     right: super::DefaultRefAgalValue,
+    modules: libraries::RefModules,
   ) -> Result<super::DefaultRefAgalValue, internal::AgalThrow> {
     match self {
-      Self::SuperInstance(value) => value.binary_operation(stack, operator, right),
-      Self::Function(value) => value.binary_operation(stack, operator, right),
-      Self::Promise(value) => value.binary_operation(stack, operator, right),
-      Self::Object(value) => value.binary_operation(stack, operator, right),
-      Self::Array(value) => value.binary_operation(stack, operator, right),
-      Self::Class(value) => value.binary_operation(stack, operator, right),
+      Self::SuperInstance(value) => value.binary_operation(stack, operator, right, modules),
+      Self::Function(value) => value.binary_operation(stack, operator, right, modules),
+      Self::Promise(value) => value.binary_operation(stack, operator, right, modules),
+      Self::Object(value) => value.binary_operation(stack, operator, right, modules),
+      Self::Array(value) => value.binary_operation(stack, operator, right, modules),
+      Self::Class(value) => value.binary_operation(stack, operator, right, modules),
     }
   }
 
   fn to_agal_number(
     &self,
-    stack: crate::runtime::RefStack,
+    stack: runtime::RefStack,
+    modules: libraries::RefModules,
   ) -> Result<primitive::AgalNumber, internal::AgalThrow> {
     match self {
-      Self::SuperInstance(value) => value.to_agal_number(stack),
-      Self::Function(value) => value.to_agal_number(stack),
-      Self::Promise(value) => value.to_agal_number(stack),
-      Self::Object(value) => value.to_agal_number(stack),
-      Self::Array(value) => value.to_agal_number(stack),
-      Self::Class(value) => value.to_agal_number(stack),
+      Self::SuperInstance(value) => value.to_agal_number(stack, modules),
+      Self::Function(value) => value.to_agal_number(stack, modules),
+      Self::Promise(value) => value.to_agal_number(stack, modules),
+      Self::Object(value) => value.to_agal_number(stack, modules),
+      Self::Array(value) => value.to_agal_number(stack, modules),
+      Self::Class(value) => value.to_agal_number(stack, modules),
     }
   }
 

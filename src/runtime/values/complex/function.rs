@@ -1,21 +1,21 @@
-use parser::{ast, util};
-
 use crate::{
-  colors, libraries, runtime::{
-    self, interpreter,
+  libraries, parser,
+  runtime::{
+    self, async_interpreter, interpreter,
     values::{
       internal, primitive,
       traits::{self, AgalValuable, ToAgalValue},
     },
-  }
+  },
+  util,
 };
 
 #[derive(Clone, Debug)]
 pub struct AgalFunction {
   name: String,
   is_async: bool,
-  args: util::List<ast::NodeIdentifier>,
-  body: ast::NodeBlock,
+  args: util::List<parser::NodeIdentifier>,
+  body: parser::NodeBlock,
   env: runtime::RefEnvironment,
 }
 
@@ -23,8 +23,8 @@ impl AgalFunction {
   pub fn new(
     name: String,
     is_async: bool,
-    args: util::List<ast::NodeIdentifier>,
-    body: ast::NodeBlock,
+    args: util::List<parser::NodeIdentifier>,
+    body: parser::NodeBlock,
     env: runtime::RefEnvironment,
   ) -> Self {
     Self {
@@ -50,6 +50,7 @@ impl traits::AgalValuable for AgalFunction {
   fn to_agal_string(
     &self,
     stack: runtime::RefStack,
+    modules: libraries::RefModules,
   ) -> Result<primitive::AgalString, internal::AgalThrow> {
     Ok(primitive::AgalString::from_string(format!(
       "[{} {}]",
@@ -68,10 +69,15 @@ impl traits::AgalValuable for AgalFunction {
   fn to_agal_console(
     &self,
     stack: runtime::RefStack,
+    modules: libraries::RefModules,
   ) -> Result<primitive::AgalString, internal::AgalThrow> {
-    Ok(self.to_agal_string(stack)?.set_color(colors::Color::CYAN))
+    Ok(
+      self
+        .to_agal_string(stack, modules)?
+        .set_color(util::Color::CYAN),
+    )
   }
-  async fn call(
+  fn call(
     &self,
     stack: runtime::RefStack,
     this: crate::runtime::values::DefaultRefAgalValue,
@@ -92,64 +98,35 @@ impl traits::AgalValuable for AgalFunction {
         &arg.name,
         value,
         false,
-        &parser::ast::Node::Identifier(arg.clone()),
+        &parser::Node::Identifier(arg.clone()),
       );
     }
-    let value = interpreter(self.body.clone().to_node().to_box(), stack, modules);
     if self.is_async {
-      super::promise::AgalPromise::new(value).to_result()
+      super::promise::AgalPromise::new(Box::pin(async_interpreter(
+        self.body.clone().to_node().to_box(),
+        stack,
+        modules,
+      )))
+      .to_result()
     } else {
-      value.await
+      interpreter(self.body.clone().to_node().to_box(), stack, modules)
     }
-  }
-
-  fn get_keys(&self) -> Vec<String> {
-    todo!()
-  }
-
-  fn to_agal_byte(
-    &self,
-    stack: runtime::RefStack,
-  ) -> Result<primitive::AgalByte, internal::AgalThrow> {
-    todo!()
   }
 
   fn to_agal_boolean(
     &self,
     stack: runtime::RefStack,
+    modules: libraries::RefModules,
   ) -> Result<primitive::AgalBoolean, internal::AgalThrow> {
-    todo!()
-  }
-
-  fn to_agal_array(
-    &self,
-    stack: runtime::RefStack,
-  ) -> Result<runtime::values::RefAgalValue<super::AgalArray>, internal::AgalThrow> {
-    todo!()
+    Ok(primitive::AgalBoolean::True)
   }
 
   fn binary_operation(
     &self,
     stack: runtime::RefStack,
-    operator: parser::ast::NodeOperator,
+    operator: parser::NodeOperator,
     right: runtime::values::DefaultRefAgalValue,
-  ) -> Result<runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
-    todo!()
-  }
-
-  fn get_object_property(
-    &self,
-    stack: runtime::RefStack,
-    key: &str,
-  ) -> Result<runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
-    todo!()
-  }
-
-  fn set_object_property(
-    &mut self,
-    stack: runtime::RefStack,
-    key: &str,
-    value: runtime::values::DefaultRefAgalValue,
+    modules: libraries::RefModules,
   ) -> Result<runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
     todo!()
   }
@@ -158,15 +135,8 @@ impl traits::AgalValuable for AgalFunction {
     &self,
     stack: runtime::RefStack,
     key: &str,
-    modules: libraries::RefModules
+    modules: libraries::RefModules,
   ) -> Result<runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
-    todo!()
-  }
-
-  fn to_agal_number(
-    &self,
-    stack: runtime::RefStack,
-  ) -> Result<primitive::AgalNumber, internal::AgalThrow> {
     todo!()
   }
 

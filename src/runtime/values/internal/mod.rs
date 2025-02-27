@@ -3,12 +3,14 @@ use super::{
   traits::{self, AgalValuable as _, ToAgalValue as _},
   AgalValue,
 };
-use crate::{libraries, runtime::{self, values::internal}};
+use crate::{
+  libraries,
+  runtime::{self, values::internal},
+};
 
 mod native_function;
 pub use native_function::*;
 mod throw;
-use parser::util;
 pub use throw::*;
 mod error;
 pub use error::*;
@@ -54,25 +56,33 @@ impl traits::AgalValuable for AgalInternal {
       Self::Immutable(immutable) => immutable.get_name(),
     }
   }
-  fn to_agal_string(&self, stack: runtime::RefStack) -> Result<primitive::AgalString, AgalThrow> {
+  fn to_agal_string(
+    &self,
+    stack: runtime::RefStack,
+    modules: libraries::RefModules,
+  ) -> Result<primitive::AgalString, AgalThrow> {
     match self {
-      Self::Lazy(lazy) => lazy.to_agal_string(stack),
-      Self::Error(error) => error.to_agal_string(stack),
-      Self::Return(val) => val.to_agal_string(stack),
-      Self::NativeFunction(func) => func.to_agal_string(stack),
-      Self::Immutable(immutable) => immutable.to_agal_string(stack),
+      Self::Lazy(lazy) => lazy.to_agal_string(stack, modules),
+      Self::Error(error) => error.to_agal_string(stack, modules),
+      Self::Return(val) => val.to_agal_string(stack, modules),
+      Self::NativeFunction(func) => func.to_agal_string(stack, modules),
+      Self::Immutable(immutable) => immutable.to_agal_string(stack, modules),
     }
   }
-  fn to_agal_console(&self, stack: runtime::RefStack) -> Result<primitive::AgalString, AgalThrow> {
+  fn to_agal_console(
+    &self,
+    stack: runtime::RefStack,
+    modules: libraries::RefModules,
+  ) -> Result<primitive::AgalString, AgalThrow> {
     match self {
-      Self::Lazy(lazy) => lazy.to_agal_console(stack),
-      Self::Error(error) => error.to_agal_console(stack),
-      Self::Return(val) => val.to_agal_console(stack),
-      Self::NativeFunction(func) => func.to_agal_console(stack),
-      Self::Immutable(immutable) => immutable.to_agal_console(stack),
+      Self::Lazy(lazy) => lazy.to_agal_console(stack, modules),
+      Self::Error(error) => error.to_agal_console(stack, modules),
+      Self::Return(val) => val.to_agal_console(stack, modules),
+      Self::NativeFunction(func) => func.to_agal_console(stack, modules),
+      Self::Immutable(immutable) => immutable.to_agal_console(stack, modules),
     }
   }
-  async fn call(
+  fn call(
     &self,
     stack: runtime::RefStack,
     this: super::DefaultRefAgalValue,
@@ -80,11 +90,11 @@ impl traits::AgalValuable for AgalInternal {
     modules: libraries::RefModules,
   ) -> Result<super::DefaultRefAgalValue, internal::AgalThrow> {
     match self {
-      Self::Lazy(lazy) => lazy.call(stack, this, args, modules).await,
-      Self::Error(error) => error.call(stack, this, args, modules).await,
-      Self::Return(val) => val.call(stack, this, args, modules).await,
-      Self::NativeFunction(func) => func.call(stack, this, args, modules).await,
-      Self::Immutable(immutable) => immutable.call(stack, this, args, modules).await,
+      Self::Lazy(lazy) => lazy.call(stack, this, args, modules),
+      Self::Error(error) => error.call(stack, this, args, modules),
+      Self::Return(val) => val.call(stack, this, args, modules),
+      Self::NativeFunction(func) => func.call(stack, this, args, modules),
+      Self::Immutable(immutable) => immutable.call(stack, this, args, modules),
     }
   }
 
@@ -101,54 +111,58 @@ impl traits::AgalValuable for AgalInternal {
   fn to_agal_byte(
     &self,
     stack: runtime::RefStack,
+    modules: libraries::RefModules,
   ) -> Result<primitive::AgalByte, internal::AgalThrow> {
     match self {
-      Self::Error(e) => e.to_agal_byte(stack),
-      Self::Lazy(l) => l.to_agal_byte(stack),
-      Self::Return(r) => r.to_agal_byte(stack),
-      Self::NativeFunction(f) => f.to_agal_byte(stack),
-      Self::Immutable(i) => i.to_agal_byte(stack),
+      Self::Error(e) => e.to_agal_byte(stack, modules),
+      Self::Lazy(l) => l.to_agal_byte(stack, modules),
+      Self::Return(r) => r.to_agal_byte(stack, modules),
+      Self::NativeFunction(f) => f.to_agal_byte(stack, modules),
+      Self::Immutable(i) => i.to_agal_byte(stack, modules),
     }
   }
 
   fn to_agal_boolean(
     &self,
     stack: runtime::RefStack,
+    modules: libraries::RefModules,
   ) -> Result<primitive::AgalBoolean, internal::AgalThrow> {
     match self {
-      Self::Error(e) => e.to_agal_boolean(stack),
-      Self::Lazy(l) => l.to_agal_boolean(stack),
-      Self::Return(r) => r.to_agal_boolean(stack),
-      Self::NativeFunction(f) => f.to_agal_boolean(stack),
-      Self::Immutable(i) => i.to_agal_boolean(stack),
+      Self::Error(e) => e.to_agal_boolean(stack, modules),
+      Self::Lazy(l) => l.to_agal_boolean(stack, modules),
+      Self::Return(r) => r.to_agal_boolean(stack, modules),
+      Self::NativeFunction(f) => f.to_agal_boolean(stack, modules),
+      Self::Immutable(i) => i.to_agal_boolean(stack, modules),
     }
   }
 
   fn to_agal_array(
     &self,
     stack: runtime::RefStack,
+    modules: libraries::RefModules,
   ) -> Result<super::RefAgalValue<super::complex::AgalArray>, internal::AgalThrow> {
     match self {
-      Self::Error(e) => e.to_agal_array(stack),
-      Self::Lazy(l) => l.to_agal_array(stack),
-      Self::Return(r) => r.to_agal_array(stack),
-      Self::NativeFunction(f) => f.to_agal_array(stack),
-      Self::Immutable(i) => i.to_agal_array(stack),
+      Self::Error(e) => e.to_agal_array(stack, modules),
+      Self::Lazy(l) => l.to_agal_array(stack, modules),
+      Self::Return(r) => r.to_agal_array(stack, modules),
+      Self::NativeFunction(f) => f.to_agal_array(stack, modules),
+      Self::Immutable(i) => i.to_agal_array(stack, modules),
     }
   }
 
   fn binary_operation(
     &self,
     stack: runtime::RefStack,
-    operator: parser::ast::NodeOperator,
+    operator: crate::parser::NodeOperator,
     right: super::DefaultRefAgalValue,
+    modules: libraries::RefModules,
   ) -> Result<super::DefaultRefAgalValue, internal::AgalThrow> {
     match self {
-      Self::Error(e) => e.binary_operation(stack, operator, right),
-      Self::Lazy(l) => l.binary_operation(stack, operator, right),
-      Self::Return(r) => r.binary_operation(stack, operator, right),
-      Self::NativeFunction(f) => f.binary_operation(stack, operator, right),
-      Self::Immutable(i) => i.binary_operation(stack, operator, right),
+      Self::Error(e) => e.binary_operation(stack, operator, right, modules),
+      Self::Lazy(l) => l.binary_operation(stack, operator, right, modules),
+      Self::Return(r) => r.binary_operation(stack, operator, right, modules),
+      Self::NativeFunction(f) => f.binary_operation(stack, operator, right, modules),
+      Self::Immutable(i) => i.binary_operation(stack, operator, right, modules),
     }
   }
 
@@ -185,7 +199,7 @@ impl traits::AgalValuable for AgalInternal {
     &self,
     stack: runtime::RefStack,
     key: &str,
-    modules: libraries::RefModules
+    modules: libraries::RefModules,
   ) -> Result<super::DefaultRefAgalValue, internal::AgalThrow> {
     match self {
       Self::Error(e) => e.get_instance_property(stack, key, modules),
@@ -199,13 +213,14 @@ impl traits::AgalValuable for AgalInternal {
   fn to_agal_number(
     &self,
     stack: runtime::RefStack,
+    modules: libraries::RefModules,
   ) -> Result<primitive::AgalNumber, internal::AgalThrow> {
     match self {
-      Self::Error(e) => e.to_agal_number(stack),
-      Self::Lazy(l) => l.to_agal_number(stack),
-      Self::Return(r) => r.to_agal_number(stack),
-      Self::NativeFunction(f) => f.to_agal_number(stack),
-      Self::Immutable(i) => i.to_agal_number(stack),
+      Self::Error(e) => e.to_agal_number(stack, modules),
+      Self::Lazy(l) => l.to_agal_number(stack, modules),
+      Self::Return(r) => r.to_agal_number(stack, modules),
+      Self::NativeFunction(f) => f.to_agal_number(stack, modules),
+      Self::Immutable(i) => i.to_agal_number(stack, modules),
     }
   }
 

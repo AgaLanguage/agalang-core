@@ -4,8 +4,6 @@ use std::{
   rc::Rc,
 };
 
-use parser::util::RefValue;
-
 use crate::runtime::values::{self, DefaultRefAgalValue};
 mod fs;
 mod math;
@@ -30,7 +28,6 @@ impl Modules {
     if self.has(key) {
       return self.get(key).unwrap_or_else(|| value);
     }
-    println!("module {key} loaded!");
     let mut v = self.0.borrow_mut();
     v.insert(key.to_string(), value.clone());
     value
@@ -107,7 +104,11 @@ fn try_get_module(key: &str, modules_manager: RefModules) -> EvalResult {
     None => "",
   };
   if proto::get_name(PREFIX_NATIVE_MODULES) == module_name {
-    return Some(proto::get_dir_module(PREFIX_NATIVE_MODULES, submodule_key, modules_manager));
+    return Some(proto::get_dir_module(
+      PREFIX_NATIVE_MODULES,
+      submodule_key,
+      modules_manager,
+    ));
   }
   None
 }

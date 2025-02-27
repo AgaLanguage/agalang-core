@@ -1,18 +1,18 @@
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, fmt::format, rc::Rc};
 
 use crate::{
-  colors, libraries,
+  functions_names,
+  libraries, parser,
   runtime::{
     self,
     values::{
-      self, internal, primitive,
-      traits::{self, AgalValuable as _, ToAgalValue as _},
-      AgalValue,
+      self, error_message, internal, primitive, traits::{self, AgalValuable as _, ToAgalValue as _}, AgalValue
     },
   },
+  util::{self, OnError as _},
 };
 
-use super::AgalComplex;
+use super::{AgalComplex};
 
 type RefHasMap<Value> = Rc<RefCell<HashMap<String, Value>>>;
 fn ref_hash_map<T: Clone>() -> RefHasMap<T> {
@@ -62,6 +62,7 @@ impl traits::AgalValuable for AgalPrototype {
   fn to_agal_string(
     &self,
     stack: runtime::RefStack,
+    modules: libraries::RefModules,
   ) -> Result<primitive::AgalString, internal::AgalThrow> {
     Ok(primitive::AgalString::from_string(
       "<instancia super>".to_string(),
@@ -70,59 +71,104 @@ impl traits::AgalValuable for AgalPrototype {
   fn to_agal_console(
     &self,
     stack: runtime::RefStack,
+    modules: libraries::RefModules,
   ) -> Result<primitive::AgalString, internal::AgalThrow> {
-    Ok(self.to_agal_string(stack)?.set_color(colors::Color::CYAN))
-  }
-
-  fn get_keys(&self) -> Vec<String> {
-    todo!()
+    Ok(
+      self
+        .to_agal_string(stack, modules)?
+        .set_color(util::Color::CYAN),
+    )
   }
 
   fn to_agal_byte(
     &self,
     stack: runtime::RefStack,
+    modules: libraries::RefModules,
   ) -> Result<primitive::AgalByte, internal::AgalThrow> {
-    todo!()
+    match &self.get(functions_names::TO_AGAL_BYTE) {
+      Some(prop) => prop
+        .value
+        .call(
+          stack.clone(),
+          self.clone().to_ref_value(),
+          vec![],
+          modules.clone(),
+        )?
+        .to_agal_byte(stack, modules),
+      None => Err(internal::AgalThrow::Params {
+        type_error: parser::ErrorNames::TypeError,
+        message: error_message::TO_AGAL_BYTE.into(),
+        stack,
+      }),
+    }
   }
 
   fn to_agal_boolean(
     &self,
     stack: runtime::RefStack,
+    modules: libraries::RefModules,
   ) -> Result<primitive::AgalBoolean, internal::AgalThrow> {
-    todo!()
+    match &self.get(functions_names::TO_AGAL_BOOLEAN) {
+      Some(prop) => prop
+        .value
+        .call(
+          stack.clone(),
+          self.clone().to_ref_value(),
+          vec![],
+          modules.clone(),
+        )?
+        .to_agal_boolean(stack, modules),
+      None => Err(internal::AgalThrow::Params {
+        type_error: parser::ErrorNames::TypeError,
+        message: error_message::TO_AGAL_BOOLEAN.into(),
+        stack,
+      }),
+    }
   }
 
   fn to_agal_array(
     &self,
     stack: runtime::RefStack,
+    modules: libraries::RefModules,
   ) -> Result<values::RefAgalValue<super::AgalArray>, internal::AgalThrow> {
-    todo!()
+    match &self.get(functions_names::TO_AGAL_ARRAY) {
+      Some(prop) => prop
+        .value
+        .call(
+          stack.clone(),
+          self.clone().to_ref_value(),
+          vec![],
+          modules.clone(),
+        )?
+        .to_agal_array(stack, modules),
+      None => Err(internal::AgalThrow::Params {
+        type_error: parser::ErrorNames::TypeError,
+        message: error_message::TO_AGAL_ARRAY.into(),
+        stack,
+      }),
+    }
   }
 
   fn binary_operation(
     &self,
     stack: runtime::RefStack,
-    operator: parser::ast::NodeOperator,
+    operator: parser::NodeOperator,
     right: values::DefaultRefAgalValue,
+    modules: libraries::RefModules,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
-    todo!()
-  }
-
-  fn get_object_property(
-    &self,
-    stack: runtime::RefStack,
-    key: &str,
-  ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
-    todo!()
-  }
-
-  fn set_object_property(
-    &mut self,
-    stack: runtime::RefStack,
-    key: &str,
-    value: values::DefaultRefAgalValue,
-  ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
-    todo!()
+    match &self.get(functions_names::BINARY_OPERATION) {
+      Some(prop) => prop.value.call(
+        stack.clone(),
+        self.clone().to_ref_value(),
+        vec![],
+        modules.clone(),
+      ),
+      None => Err(internal::AgalThrow::Params {
+        type_error: parser::ErrorNames::TypeError,
+        message: error_message::BINARY_OPERATION(self.get_name(), operator, right.get_name()),
+        stack,
+      }),
+    }
   }
 
   fn get_instance_property(
@@ -131,24 +177,70 @@ impl traits::AgalValuable for AgalPrototype {
     key: &str,
     modules: libraries::RefModules,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
-    todo!()
+    match self.get(key) {
+      Some(prop) => {
+        if prop.is_public {
+          Ok(prop.value)
+        } else if stack.env().use_private() {
+          Ok(prop.value)
+        } else {
+          Err(format!(
+            "La propiedad '{key}' es privada y no se puede acceder"
+          ))
+        }
+      }
+      None => Err(format!("No existe la propiedad '{key}'")),
+    }
+    .on_error(|message| internal::AgalThrow::Params {
+      type_error: parser::ErrorNames::TypeError,
+      message,
+      stack,
+    })
   }
 
-  async fn call(
+  fn call(
     &self,
     stack: runtime::RefStack,
     this: values::DefaultRefAgalValue,
     args: Vec<values::DefaultRefAgalValue>,
     modules: libraries::RefModules,
   ) -> Result<crate::runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
-    todo!()
+    match &self.get(functions_names::CALL) {
+      Some(prop) => prop.value.call(
+        stack.clone(),
+        self.clone().to_ref_value(),
+        vec![],
+        modules.clone(),
+      ),
+      None => Err(internal::AgalThrow::Params {
+        type_error: parser::ErrorNames::TypeError,
+        message: error_message::CALL.into(),
+        stack,
+      }),
+    }
   }
 
   fn to_agal_number(
     &self,
     stack: runtime::RefStack,
+    modules: libraries::RefModules,
   ) -> Result<primitive::AgalNumber, internal::AgalThrow> {
-    todo!()
+    match &self.get(functions_names::TO_AGAL_NUMBER) {
+      Some(prop) => prop
+        .value
+        .call(
+          stack.clone(),
+          self.clone().to_ref_value(),
+          vec![],
+          modules.clone(),
+        )?
+        .to_agal_number(stack, modules),
+      None => Err(internal::AgalThrow::Params {
+        type_error: parser::ErrorNames::TypeError,
+        message: error_message::TO_AGAL_NUMBER.into(),
+        stack,
+      }),
+    }
   }
 
   fn equals(&self, other: &Self) -> bool {
@@ -224,7 +316,7 @@ impl AgalClass {
     }
     let instance = self.instance.borrow();
     let instance_properties = instance.instance_properties.borrow();
-    let constructor = instance_properties.get("constructor");
+    let constructor = instance_properties.get(functions_names::CONSTRUCTOR);
     let this_value = this.borrow().clone().to_ref_value();
     if let Some(property) = constructor {
       let property_value = property.value.un_ref();
@@ -248,6 +340,7 @@ impl traits::AgalValuable for AgalClass {
   fn to_agal_string(
     &self,
     stack: runtime::RefStack,
+    modules: libraries::RefModules,
   ) -> Result<primitive::AgalString, internal::AgalThrow> {
     Ok(primitive::AgalString::from_string(
       "<instancia super>".to_string(),
@@ -256,57 +349,29 @@ impl traits::AgalValuable for AgalClass {
   fn to_agal_console(
     &self,
     stack: runtime::RefStack,
+    modules: libraries::RefModules,
   ) -> Result<primitive::AgalString, internal::AgalThrow> {
-    Ok(self.to_agal_string(stack)?.set_color(colors::Color::CYAN))
-  }
-
-  fn get_keys(&self) -> Vec<String> {
-    todo!()
-  }
-
-  fn to_agal_byte(
-    &self,
-    stack: runtime::RefStack,
-  ) -> Result<primitive::AgalByte, internal::AgalThrow> {
-    todo!()
+    Ok(
+      self
+        .to_agal_string(stack, modules)?
+        .set_color(util::Color::CYAN),
+    )
   }
 
   fn to_agal_boolean(
     &self,
     stack: runtime::RefStack,
+    modules: libraries::RefModules,
   ) -> Result<primitive::AgalBoolean, internal::AgalThrow> {
-    todo!()
-  }
-
-  fn to_agal_array(
-    &self,
-    stack: runtime::RefStack,
-  ) -> Result<values::RefAgalValue<super::AgalArray>, internal::AgalThrow> {
-    todo!()
+    Ok(primitive::AgalBoolean::True)
   }
 
   fn binary_operation(
     &self,
     stack: runtime::RefStack,
-    operator: parser::ast::NodeOperator,
+    operator: parser::NodeOperator,
     right: values::DefaultRefAgalValue,
-  ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
-    todo!()
-  }
-
-  fn get_object_property(
-    &self,
-    stack: runtime::RefStack,
-    key: &str,
-  ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
-    todo!()
-  }
-
-  fn set_object_property(
-    &mut self,
-    stack: runtime::RefStack,
-    key: &str,
-    value: values::DefaultRefAgalValue,
+    modules: libraries::RefModules,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
     todo!()
   }
@@ -320,7 +385,7 @@ impl traits::AgalValuable for AgalClass {
     todo!()
   }
 
-  async fn call(
+  fn call(
     &self,
     stack: runtime::RefStack,
     this: values::DefaultRefAgalValue,
@@ -330,15 +395,8 @@ impl traits::AgalValuable for AgalClass {
     todo!()
   }
 
-  fn to_agal_number(
-    &self,
-    stack: runtime::RefStack,
-  ) -> Result<primitive::AgalNumber, internal::AgalThrow> {
-    todo!()
-  }
-
   fn equals(&self, other: &Self) -> bool {
-    todo!()
+    Rc::as_ptr(&self.static_properties) == Rc::as_ptr(&self.static_properties)
   }
 
   fn less_than(&self, other: &Self) -> bool {

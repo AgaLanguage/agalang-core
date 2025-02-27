@@ -37,58 +37,69 @@ impl traits::AgalValuable for AgalPrimitive {
       Self::Byte(b) => b.get_name(),
     }
   }
-  fn to_agal_number(&self, stack: runtime::RefStack) -> Result<AgalNumber, internal::AgalThrow> {
+  fn to_agal_number(
+    &self,
+    stack: runtime::RefStack,
+    modules: libraries::RefModules,
+  ) -> Result<AgalNumber, internal::AgalThrow> {
     match self {
-      Self::Boolean(value) => value.to_agal_number(stack),
-      Self::Number(value) => value.to_agal_number(stack),
-      Self::String(value) => value.to_agal_number(stack),
-      Self::Char(value) => value.to_agal_number(stack),
-      Self::Byte(value) => value.to_agal_number(stack),
+      Self::Boolean(value) => value.to_agal_number(stack, modules),
+      Self::Number(value) => value.to_agal_number(stack, modules),
+      Self::String(value) => value.to_agal_number(stack, modules),
+      Self::Char(value) => value.to_agal_number(stack, modules),
+      Self::Byte(value) => value.to_agal_number(stack, modules),
     }
   }
   fn to_agal_string(
     &self,
     stack: runtime::RefStack,
+    modules: libraries::RefModules,
   ) -> Result<string::AgalString, internal::AgalThrow> {
     match self {
-      Self::Boolean(value) => value.to_agal_string(stack),
-      Self::Number(value) => value.to_agal_string(stack),
-      Self::String(value) => value.to_agal_string(stack),
-      Self::Char(value) => value.to_agal_string(stack),
-      Self::Byte(value) => value.to_agal_string(stack),
+      Self::Boolean(value) => value.to_agal_string(stack, modules),
+      Self::Number(value) => value.to_agal_string(stack, modules),
+      Self::String(value) => value.to_agal_string(stack, modules),
+      Self::Char(value) => value.to_agal_string(stack, modules),
+      Self::Byte(value) => value.to_agal_string(stack, modules),
     }
   }
-  fn to_agal_byte(&self, stack: runtime::RefStack) -> Result<byte::AgalByte, internal::AgalThrow> {
+  fn to_agal_byte(
+    &self,
+    stack: runtime::RefStack,
+    modules: libraries::RefModules,
+  ) -> Result<byte::AgalByte, internal::AgalThrow> {
     match self {
-      Self::Boolean(value) => value.to_agal_byte(stack),
-      Self::Number(value) => value.to_agal_byte(stack),
-      Self::String(value) => value.to_agal_byte(stack),
-      Self::Char(value) => value.to_agal_byte(stack),
-      Self::Byte(value) => value.to_agal_byte(stack),
+      Self::Boolean(value) => value.to_agal_byte(stack, modules),
+      Self::Number(value) => value.to_agal_byte(stack, modules),
+      Self::String(value) => value.to_agal_byte(stack, modules),
+      Self::Char(value) => value.to_agal_byte(stack, modules),
+      Self::Byte(value) => value.to_agal_byte(stack, modules),
     }
   }
   fn to_agal_console(
     &self,
     stack: runtime::RefStack,
+    modules: libraries::RefModules,
   ) -> Result<string::AgalString, internal::AgalThrow> {
     match self {
-      Self::Boolean(value) => value.to_agal_console(stack),
-      Self::Number(value) => value.to_agal_console(stack),
-      Self::String(value) => value.to_agal_console(stack),
-      Self::Char(value) => value.to_agal_console(stack),
-      Self::Byte(value) => value.to_agal_console(stack),
+      Self::Boolean(value) => value.to_agal_console(stack, modules),
+      Self::Number(value) => value.to_agal_console(stack, modules),
+      Self::String(value) => value.to_agal_console(stack, modules),
+      Self::Char(value) => value.to_agal_console(stack, modules),
+      Self::Byte(value) => value.to_agal_console(stack, modules),
     }
   }
   fn to_agal_boolean(
     &self,
     stack: runtime::RefStack,
+    modules: libraries::RefModules,
   ) -> Result<boolean::AgalBoolean, internal::AgalThrow> {
     match self {
       Self::Boolean(value) => Ok(*value),
-      Self::Number(value) => value.to_agal_boolean(stack),
-      Self::String(value) => value.to_agal_boolean(stack),
-      Self::Char(value) => value.to_agal_boolean(stack),
-      Self::Byte(value) => value.to_agal_boolean(stack),
+      Self::Number(value) => value.to_agal_boolean(stack, modules),
+      Self::String(value) => value.to_agal_boolean(stack, modules),
+      Self::Char(value) => value.to_agal_boolean(stack, modules),
+      Self::Byte(value) => value.to_agal_boolean(stack, modules),
     }
   }
 
@@ -105,28 +116,30 @@ impl traits::AgalValuable for AgalPrimitive {
   fn to_agal_array(
     &self,
     stack: runtime::RefStack,
+    modules: libraries::RefModules,
   ) -> Result<super::RefAgalValue<super::complex::AgalArray>, internal::AgalThrow> {
     match self {
-      Self::Boolean(b) => b.to_agal_array(stack),
-      Self::Number(n) => n.to_agal_array(stack),
-      Self::String(s) => s.to_agal_array(stack),
-      Self::Char(c) => c.to_agal_array(stack),
-      Self::Byte(b) => b.to_agal_array(stack),
+      Self::Boolean(b) => b.to_agal_array(stack, modules),
+      Self::Number(n) => n.to_agal_array(stack, modules),
+      Self::String(s) => s.to_agal_array(stack, modules),
+      Self::Char(c) => c.to_agal_array(stack, modules),
+      Self::Byte(b) => b.to_agal_array(stack, modules),
     }
   }
 
   fn binary_operation(
     &self,
     stack: runtime::RefStack,
-    operator: parser::ast::NodeOperator,
+    operator: crate::parser::NodeOperator,
     right: super::DefaultRefAgalValue,
+    modules: libraries::RefModules,
   ) -> Result<super::DefaultRefAgalValue, internal::AgalThrow> {
     match self {
-      Self::Boolean(b) => b.binary_operation(stack, operator, right),
-      Self::Number(n) => n.binary_operation(stack, operator, right),
-      Self::String(s) => s.binary_operation(stack, operator, right),
-      Self::Char(c) => c.binary_operation(stack, operator, right),
-      Self::Byte(b) => b.binary_operation(stack, operator, right),
+      Self::Boolean(b) => b.binary_operation(stack, operator, right, modules),
+      Self::Number(n) => n.binary_operation(stack, operator, right, modules),
+      Self::String(s) => s.binary_operation(stack, operator, right, modules),
+      Self::Char(c) => c.binary_operation(stack, operator, right, modules),
+      Self::Byte(b) => b.binary_operation(stack, operator, right, modules),
     }
   }
 
@@ -163,18 +176,18 @@ impl traits::AgalValuable for AgalPrimitive {
     &self,
     stack: runtime::RefStack,
     key: &str,
-    modules: libraries::RefModules
+    modules: libraries::RefModules,
   ) -> Result<super::DefaultRefAgalValue, internal::AgalThrow> {
     match self {
-      Self::Boolean(b) => b.get_instance_property(stack, key,modules),
-      Self::Number(n) => n.get_instance_property(stack, key,modules),
-      Self::String(s) => s.get_instance_property(stack, key,modules),
-      Self::Char(c) => c.get_instance_property(stack, key,modules),
-      Self::Byte(b) => b.get_instance_property(stack, key,modules),
+      Self::Boolean(b) => b.get_instance_property(stack, key, modules),
+      Self::Number(n) => n.get_instance_property(stack, key, modules),
+      Self::String(s) => s.get_instance_property(stack, key, modules),
+      Self::Char(c) => c.get_instance_property(stack, key, modules),
+      Self::Byte(b) => b.get_instance_property(stack, key, modules),
     }
   }
 
-  async fn call(
+  fn call(
     &self,
     stack: runtime::RefStack,
     this: super::DefaultRefAgalValue,
@@ -182,11 +195,11 @@ impl traits::AgalValuable for AgalPrimitive {
     modules: libraries::RefModules,
   ) -> Result<crate::runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
     match self {
-      Self::Boolean(b) => b.call(stack, this, args, modules).await,
-      Self::Number(n) => n.call(stack, this, args, modules).await,
-      Self::String(s) => s.call(stack, this, args, modules).await,
-      Self::Char(c) => c.call(stack, this, args, modules).await,
-      Self::Byte(b) => b.call(stack, this, args, modules).await,
+      Self::Boolean(b) => b.call(stack, this, args, modules),
+      Self::Number(n) => n.call(stack, this, args, modules),
+      Self::String(s) => s.call(stack, this, args, modules),
+      Self::Char(c) => c.call(stack, this, args, modules),
+      Self::Byte(b) => b.call(stack, this, args, modules),
     }
   }
 

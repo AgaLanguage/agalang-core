@@ -1,8 +1,8 @@
 use std::{cell::RefCell, future::Future, pin::Pin, rc::Rc};
 
+use crate::{parser, util};
 use error_message::TO_AGAL_CONSOLE;
 use internal::AgalThrow;
-use parser::internal::ErrorNames;
 
 mod error_message;
 
@@ -63,26 +63,30 @@ impl<T: traits::AgalValuable + traits::ToAgalValue> traits::AgalValuable for Ref
   fn to_agal_string(
     &self,
     stack: super::RefStack,
+    modules: libraries::RefModules,
   ) -> Result<primitive::AgalString, internal::AgalThrow> {
-    self.borrow().to_agal_string(stack)
+    self.borrow().to_agal_string(stack, modules)
   }
   fn to_agal_byte(
     &self,
     stack: super::RefStack,
+    modules: libraries::RefModules,
   ) -> Result<primitive::AgalByte, internal::AgalThrow> {
-    self.borrow().to_agal_byte(stack)
+    self.borrow().to_agal_byte(stack, modules)
   }
   fn to_agal_boolean(
     &self,
     stack: super::RefStack,
+    modules: libraries::RefModules,
   ) -> Result<primitive::AgalBoolean, internal::AgalThrow> {
-    self.borrow().to_agal_boolean(stack)
+    self.borrow().to_agal_boolean(stack, modules)
   }
   fn to_agal_console(
     &self,
     stack: super::RefStack,
+    modules: libraries::RefModules,
   ) -> Result<primitive::AgalString, internal::AgalThrow> {
-    self.borrow().to_agal_console(stack)
+    self.borrow().to_agal_console(stack, modules)
   }
   fn get_instance_property(
     &self,
@@ -107,29 +111,33 @@ impl<T: traits::AgalValuable + traits::ToAgalValue> traits::AgalValuable for Ref
   ) -> Result<DefaultRefAgalValue, internal::AgalThrow> {
     self.borrow_mut().set_object_property(stack, key, value)
   }
-  async fn call(
+  fn call(
     &self,
     stack: super::RefStack,
     this: DefaultRefAgalValue,
     args: Vec<DefaultRefAgalValue>,
     modules: libraries::RefModules,
-  ) -> Result<crate::runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
-    self.borrow().call(stack, this, args, modules).await
+  ) -> ResultAgalValue {
+    self.borrow().call(stack, this, args, modules)
   }
 
   fn binary_operation(
     &self,
     stack: super::RefStack,
-    operator: parser::ast::NodeOperator,
+    operator: parser::NodeOperator,
     right: DefaultRefAgalValue,
+    modules: libraries::RefModules,
   ) -> Result<DefaultRefAgalValue, internal::AgalThrow> {
-    self.borrow().binary_operation(stack, operator, right)
+    self
+      .borrow()
+      .binary_operation(stack, operator, right, modules)
   }
   fn to_agal_array(
     &self,
     stack: super::RefStack,
+    modules: libraries::RefModules,
   ) -> Result<RefAgalValue<complex::AgalArray>, internal::AgalThrow> {
-    self.borrow().to_agal_array(stack)
+    self.borrow().to_agal_array(stack, modules)
   }
   fn get_keys(&self) -> Vec<String> {
     self.borrow().get_keys()
@@ -138,8 +146,9 @@ impl<T: traits::AgalValuable + traits::ToAgalValue> traits::AgalValuable for Ref
   fn to_agal_number(
     &self,
     stack: super::RefStack,
+    modules: libraries::RefModules,
   ) -> Result<primitive::AgalNumber, internal::AgalThrow> {
-    self.borrow().to_agal_number(stack)
+    self.borrow().to_agal_number(stack, modules)
   }
 
   fn equals(&self, other: &Self) -> bool {
@@ -150,12 +159,9 @@ impl<T: traits::AgalValuable + traits::ToAgalValue> traits::AgalValuable for Ref
     self.borrow().less_than(&*other.borrow())
   }
 }
-impl<T: traits::AgalValuable + traits::ToAgalValue> ToString for RefAgalValue<T> {
+impl<T: traits::AgalValuable + traits::ToAgalValue + ToString> ToString for RefAgalValue<T> {
   fn to_string(&self) -> String {
-    match self.try_to_string(RefStack::get_default()) {
-      Ok(s) => s,
-      Err(e) => e.to_string(),
-    }
+    self.to_string()
   }
 }
 impl RefAgalValue<AgalValue> {
@@ -274,16 +280,17 @@ impl traits::AgalValuable for AgalValue {
   fn to_agal_string(
     &self,
     stack: super::RefStack,
+    modules: libraries::RefModules,
   ) -> Result<primitive::AgalString, internal::AgalThrow> {
     match self {
-      Self::Complex(c) => c.to_agal_string(stack),
-      Self::Primitive(p) => p.to_agal_string(stack),
-      Self::Internal(i) => i.to_agal_string(stack),
+      Self::Complex(c) => c.to_agal_string(stack, modules),
+      Self::Primitive(p) => p.to_agal_string(stack, modules),
+      Self::Internal(i) => i.to_agal_string(stack, modules),
       Self::Never | Self::Null => Ok(primitive::AgalString::from_string(
         super::NULL_KEYWORD.to_string(),
       )),
       _ => Err(internal::AgalThrow::Params {
-        type_error: parser::internal::ErrorNames::TypeError,
+        type_error: parser::ErrorNames::TypeError,
         message: error_message::TO_AGAL_STRING.to_string(),
         stack,
       }),
@@ -292,13 +299,14 @@ impl traits::AgalValuable for AgalValue {
   fn to_agal_number(
     &self,
     stack: super::RefStack,
+    modules: libraries::RefModules,
   ) -> Result<primitive::AgalNumber, internal::AgalThrow> {
     match self {
-      Self::Complex(c) => c.to_agal_number(stack),
-      Self::Primitive(p) => p.to_agal_number(stack),
-      Self::Internal(i) => i.to_agal_number(stack),
+      Self::Complex(c) => c.to_agal_number(stack, modules),
+      Self::Primitive(p) => p.to_agal_number(stack, modules),
+      Self::Internal(i) => i.to_agal_number(stack, modules),
       _ => Err(internal::AgalThrow::Params {
-        type_error: parser::internal::ErrorNames::TypeError,
+        type_error: parser::ErrorNames::TypeError,
         message: error_message::TO_AGAL_NUMBER.to_string(),
         stack,
       }),
@@ -307,15 +315,16 @@ impl traits::AgalValuable for AgalValue {
   fn to_agal_byte(
     &self,
     stack: super::RefStack,
+    modules: libraries::RefModules,
   ) -> Result<primitive::AgalByte, internal::AgalThrow> {
     match self {
-      Self::Complex(c) => c.to_agal_byte(stack),
-      Self::Primitive(p) => p.to_agal_byte(stack),
-      Self::Internal(i) => i.to_agal_byte(stack),
-      Self::Export(_, v) => v.to_agal_byte(stack),
+      Self::Complex(c) => c.to_agal_byte(stack, modules),
+      Self::Primitive(p) => p.to_agal_byte(stack, modules),
+      Self::Internal(i) => i.to_agal_byte(stack, modules),
+      Self::Export(_, v) => v.to_agal_byte(stack, modules),
       Self::Never | Self::Null => Ok(primitive::AgalByte::new(0)),
       Self::Break | Self::Console | Self::Continue => Err(internal::AgalThrow::Params {
-        type_error: parser::internal::ErrorNames::TypeError,
+        type_error: parser::ErrorNames::TypeError,
         message: error_message::TO_AGAL_BYTE.to_string(),
         stack,
       }),
@@ -324,12 +333,13 @@ impl traits::AgalValuable for AgalValue {
   fn to_agal_boolean(
     &self,
     stack: super::RefStack,
+    modules: libraries::RefModules,
   ) -> Result<primitive::AgalBoolean, internal::AgalThrow> {
     match self {
-      Self::Complex(c) => c.to_agal_boolean(stack),
-      Self::Primitive(p) => p.to_agal_boolean(stack),
-      Self::Internal(i) => i.to_agal_boolean(stack),
-      Self::Export(_, v) => v.to_agal_boolean(stack),
+      Self::Complex(c) => c.to_agal_boolean(stack, modules),
+      Self::Primitive(p) => p.to_agal_boolean(stack, modules),
+      Self::Internal(i) => i.to_agal_boolean(stack, modules),
+      Self::Export(_, v) => v.to_agal_boolean(stack, modules),
       Self::Never | Self::Null | Self::Break | Self::Continue | Self::Console => {
         Ok(primitive::AgalBoolean::False)
       }
@@ -338,20 +348,21 @@ impl traits::AgalValuable for AgalValue {
   fn to_agal_console(
     &self,
     stack: super::RefStack,
+    modules: libraries::RefModules,
   ) -> Result<primitive::AgalString, internal::AgalThrow> {
     match self {
-      Self::Complex(c) => c.to_agal_console(stack),
-      Self::Primitive(p) => p.to_agal_console(stack),
-      Self::Internal(i) => i.to_agal_console(stack),
-      Self::Export(_, v) => v.to_agal_console(stack),
+      Self::Complex(c) => c.to_agal_console(stack, modules),
+      Self::Primitive(p) => p.to_agal_console(stack, modules),
+      Self::Internal(i) => i.to_agal_console(stack, modules),
+      Self::Export(_, v) => v.to_agal_console(stack, modules),
       Self::Null => Ok(primitive::AgalString::from_string(
-        crate::colors::Color::BRIGHT_WHITE.apply(super::NULL_KEYWORD),
+        util::Color::BRIGHT_WHITE.apply(super::NULL_KEYWORD),
       )),
       Self::Never => Ok(primitive::AgalString::from_string(
-        crate::colors::Color::GRAY.apply(super::NOTHING_KEYWORD),
+        util::Color::GRAY.apply(super::NOTHING_KEYWORD),
       )),
       Self::Break | Self::Continue | Self::Console => Err(internal::AgalThrow::Params {
-        type_error: parser::internal::ErrorNames::TypeError,
+        type_error: parser::ErrorNames::TypeError,
         message: TO_AGAL_CONSOLE.to_string(),
         stack,
       }),
@@ -370,11 +381,11 @@ impl traits::AgalValuable for AgalValue {
       Self::Export(_, v) => v.get_instance_property(stack, key, modules),
       Self::Never | Self::Null | Self::Break | Self::Continue | Self::Console => {
         internal::AgalThrow::Params {
-          type_error: parser::internal::ErrorNames::TypeError,
+          type_error: parser::ErrorNames::TypeError,
           message: format!(
             "No se puede obtener la propiedad '{}' de {}",
             key,
-            self.to_agal_string(stack.clone())?.to_string()
+            self.to_agal_string(stack.clone(), modules)?.to_string()
           ),
           stack,
         }
@@ -388,23 +399,21 @@ impl traits::AgalValuable for AgalValue {
     this: DefaultRefAgalValue,
     args: Vec<DefaultRefAgalValue>,
     modules: libraries::RefModules,
-  ) -> Pin<Box<dyn Future<Output = Result<DefaultRefAgalValue, internal::AgalThrow>> + '_>> {
-    Box::pin(async move {
-      match self {
-        Self::Complex(c) => c.call(stack, this, args, modules).await,
-        Self::Primitive(p) => p.call(stack, this, args, modules).await,
-        Self::Internal(i) => i.call(stack, this, args, modules).await,
-        Self::Export(_, v) => v.call(stack, this, args, modules).await,
-        Self::Never | Self::Null | Self::Break | Self::Continue | Self::Console => {
-          internal::AgalThrow::Params {
-            type_error: parser::internal::ErrorNames::TypeError,
-            message: error_message::CALL.to_string(),
-            stack,
-          }
-          .to_result()
+  ) -> ResultAgalValue {
+    match self {
+      Self::Complex(c) => c.call(stack, this, args, modules),
+      Self::Primitive(p) => p.call(stack, this, args, modules),
+      Self::Internal(i) => i.call(stack, this, args, modules),
+      Self::Export(_, v) => v.call(stack, this, args, modules),
+      Self::Never | Self::Null | Self::Break | Self::Continue | Self::Console => {
+        internal::AgalThrow::Params {
+          type_error: parser::ErrorNames::TypeError,
+          message: error_message::CALL.to_string(),
+          stack,
         }
+        .to_result()
       }
-    })
+    }
   }
 
   fn get_keys(&self) -> Vec<String> {
@@ -420,15 +429,16 @@ impl traits::AgalValuable for AgalValue {
   fn to_agal_array(
     &self,
     stack: super::RefStack,
+    modules: libraries::RefModules,
   ) -> Result<RefAgalValue<complex::AgalArray>, internal::AgalThrow> {
     match self {
-      Self::Complex(c) => c.to_agal_array(stack),
-      Self::Primitive(p) => p.to_agal_array(stack),
-      Self::Internal(i) => i.to_agal_array(stack),
-      Self::Export(_, v) => v.to_agal_array(stack),
+      Self::Complex(c) => c.to_agal_array(stack, modules),
+      Self::Primitive(p) => p.to_agal_array(stack, modules),
+      Self::Internal(i) => i.to_agal_array(stack, modules),
+      Self::Export(_, v) => v.to_agal_array(stack, modules),
       Self::Never | Self::Null | Self::Break | Self::Continue | Self::Console => {
         Err(internal::AgalThrow::Params {
-          type_error: parser::internal::ErrorNames::TypeError,
+          type_error: parser::ErrorNames::TypeError,
           message: error_message::TO_AGAL_ARRAY.to_string(),
           stack,
         })
@@ -441,11 +451,12 @@ impl traits::AgalValuable for AgalValue {
     stack: super::RefStack,
     operator: parser::ast::NodeOperator,
     right: DefaultRefAgalValue,
+    modules: libraries::RefModules,
   ) -> Result<DefaultRefAgalValue, internal::AgalThrow> {
     match (self, operator, &*right.clone().borrow()) {
-      (Self::Complex(c), _, _) => c.borrow().binary_operation(stack, operator, right),
-      (Self::Primitive(p), _, _) => p.borrow().binary_operation(stack, operator, right),
-      (Self::Internal(i), _, _) => i.borrow().binary_operation(stack, operator, right),
+      (Self::Complex(c), _, _) => c.borrow().binary_operation(stack, operator, right, modules),
+      (Self::Primitive(p), _, _) => p.borrow().binary_operation(stack, operator, right, modules),
+      (Self::Internal(i), _, _) => i.borrow().binary_operation(stack, operator, right, modules),
       (Self::Null, parser::ast::NodeOperator::NotEqual, Self::Null)
       | (Self::Null, parser::ast::NodeOperator::Equal, _)
       | (Self::Never, parser::ast::NodeOperator::NotEqual, Self::Never)
@@ -461,8 +472,8 @@ impl traits::AgalValuable for AgalValue {
       ) => Ok(right),
       (Self::Never | Self::Null, parser::ast::NodeOperator::And, _) => self.clone().to_result(),
       (_, _, _) => AgalThrow::Params {
-        type_error: ErrorNames::TypeError,
-        message: error_message::BINARY_OPERATION(self.clone().as_ref(), operator, right),
+        type_error: parser::ErrorNames::TypeError,
+        message: error_message::BINARY_OPERATION(self.get_name(), operator, right.get_name()),
         stack,
       }
       .to_result(),
@@ -475,7 +486,7 @@ impl traits::AgalValuable for AgalValue {
       Self::Internal(i) => i.borrow().get_object_property(stack, key),
       Self::Primitive(p) => p.borrow().get_object_property(stack, key),
       _ => AgalThrow::Params {
-        type_error: parser::internal::ErrorNames::TypeError,
+        type_error: parser::ErrorNames::TypeError,
         message: error_message::GET_OBJECT_PROPERTY.to_owned(),
         stack,
       }
@@ -494,7 +505,7 @@ impl traits::AgalValuable for AgalValue {
       Self::Internal(i) => i.borrow_mut().set_object_property(stack, key, value),
       Self::Primitive(p) => p.borrow_mut().set_object_property(stack, key, value),
       _ => AgalThrow::Params {
-        type_error: parser::internal::ErrorNames::TypeError,
+        type_error: parser::ErrorNames::TypeError,
         message: error_message::SET_OBJECT_PROPERTY.to_owned(),
         stack,
       }

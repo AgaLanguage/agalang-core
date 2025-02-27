@@ -1,4 +1,10 @@
-use crate::{libraries, runtime::values::{traits, DefaultRefAgalValue}};
+use crate::{
+  libraries,
+  runtime::{
+    self,
+    values::{traits, DefaultRefAgalValue},
+  },
+};
 
 #[derive(Debug, Clone)]
 pub struct AgalImmutable(DefaultRefAgalValue);
@@ -28,49 +34,55 @@ impl traits::AgalValuable for AgalImmutable {
 
   fn to_agal_string(
     &self,
-    stack: crate::runtime::RefStack,
+    stack: runtime::RefStack,
+    modules: libraries::RefModules,
   ) -> Result<crate::runtime::values::primitive::AgalString, super::AgalThrow> {
-    self.0.to_agal_string(stack)
+    self.0.to_agal_string(stack, modules)
   }
 
   fn to_agal_byte(
     &self,
-    stack: crate::runtime::RefStack,
+    stack: runtime::RefStack,
+    modules: libraries::RefModules,
   ) -> Result<crate::runtime::values::primitive::AgalByte, super::AgalThrow> {
-    self.0.to_agal_byte(stack)
+    self.0.to_agal_byte(stack, modules)
   }
 
   fn to_agal_boolean(
     &self,
-    stack: crate::runtime::RefStack,
+    stack: runtime::RefStack,
+    modules: libraries::RefModules,
   ) -> Result<crate::runtime::values::primitive::AgalBoolean, super::AgalThrow> {
-    self.0.to_agal_boolean(stack)
+    self.0.to_agal_boolean(stack, modules)
   }
 
   fn to_agal_number(
     &self,
-    stack: crate::runtime::RefStack,
+    stack: runtime::RefStack,
+    modules: libraries::RefModules,
   ) -> Result<crate::runtime::values::primitive::AgalNumber, super::AgalThrow> {
-    self.0.to_agal_number(stack)
+    self.0.to_agal_number(stack, modules)
   }
 
   fn to_agal_array(
     &self,
-    stack: crate::runtime::RefStack,
+    stack: runtime::RefStack,
+    modules: libraries::RefModules,
   ) -> Result<
     crate::runtime::values::RefAgalValue<crate::runtime::values::complex::AgalArray>,
     super::AgalThrow,
   > {
-    self.0.to_agal_array(stack)
+    self.0.to_agal_array(stack, modules)
   }
 
   fn binary_operation(
     &self,
     stack: crate::runtime::RefStack,
-    operator: parser::ast::NodeOperator,
+    operator: crate::parser::NodeOperator,
     right: DefaultRefAgalValue,
+    modules: libraries::RefModules,
   ) -> Result<DefaultRefAgalValue, super::AgalThrow> {
-    self.0.binary_operation(stack, operator, right)
+    self.0.binary_operation(stack, operator, right, modules)
   }
 
   fn get_object_property(
@@ -88,7 +100,7 @@ impl traits::AgalValuable for AgalImmutable {
     value: DefaultRefAgalValue,
   ) -> Result<DefaultRefAgalValue, super::AgalThrow> {
     super::AgalThrow::Params {
-      type_error: parser::internal::ErrorNames::TypeError,
+      type_error: crate::parser::ErrorNames::TypeError,
       message: "No se puede modificar un valor inmutable".into(),
       stack,
     }
@@ -99,19 +111,19 @@ impl traits::AgalValuable for AgalImmutable {
     &self,
     stack: crate::runtime::RefStack,
     key: &str,
-    modules: libraries::RefModules
+    modules: libraries::RefModules,
   ) -> Result<DefaultRefAgalValue, super::AgalThrow> {
     self.0.get_instance_property(stack, key, modules)
   }
 
-  async fn call(
+  fn call(
     &self,
     stack: crate::runtime::RefStack,
     this: DefaultRefAgalValue,
     args: Vec<DefaultRefAgalValue>,
     modules: libraries::RefModules,
   ) -> Result<crate::runtime::values::DefaultRefAgalValue, super::AgalThrow> {
-    self.0.call(stack, this, args, modules).await
+    self.0.call(stack, this, args, modules)
   }
 
   fn equals(&self, other: &Self) -> bool {
