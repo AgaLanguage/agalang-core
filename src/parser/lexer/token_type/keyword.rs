@@ -28,10 +28,12 @@ pub enum KeywordsType {
   Await,
   Async,
   Console,
+  Delete,
 }
-type KeywordsList = [KeywordsType; 28];
+type KeywordsList = [KeywordsType; 29];
 const KEYWORDS: KeywordsList = [
   KeywordsType::None,
+  KeywordsType::Delete,
   KeywordsType::Define,
   KeywordsType::Constant,
   KeywordsType::Name,
@@ -94,6 +96,7 @@ impl KeywordsType {
       KeywordsType::Await => "espera",
       KeywordsType::Async => "asinc",
       KeywordsType::Console => "csl",
+      KeywordsType::Delete => "borra",
     }
   }
   pub fn to_string(&self) -> String {

@@ -319,6 +319,40 @@ impl Parser {
             .into(),
           )
         }
+        super::KeywordsType::Delete => {
+          if self.match_token(super::TokenType::Identifier) {
+            let semicolon = self.expect(
+              super::TokenType::Punctuation(super::PunctuationType::SemiColon),
+              "",
+            );
+            Some(if semicolon.token_type == super::TokenType::Error {
+              Err(ast::NodeError {
+                message: format!(
+                  "Se esperaba un punto y coma ({})",
+                  super::KeywordsType::Delete.to_string()
+                ),
+                location: semicolon.location,
+                meta: semicolon.meta,
+              })
+            } else {
+              Ok(ast::Node::VarDel(ast::NodeIdentifier {
+                name: token.value,
+                location: token.location,
+                file: token.meta,
+              }))
+            })
+          }else {
+            let at = self.at();
+            Some(Err(ast::NodeError {
+              message: format!(
+                "Se esperaba un punto y coma ({})",
+                super::KeywordsType::Delete.to_string()
+              ),
+              location: at.location,
+              meta: at.meta,
+            }))
+          }
+        }
         _ => {
           self.eat();
           None

@@ -30,6 +30,7 @@ pub enum Node {
 
   // Statements //
   VarDecl(NodeVarDecl),
+  VarDel(NodeIdentifier),
   Name(NodeIdentifier),
   Assignment(NodeAssignment),
   Class(NodeClass),
@@ -87,9 +88,8 @@ impl Node {
       Node::Number(node) => node.location.clone(),
       Node::Object(node) => node.location.clone(),
       Node::Array(node) => node.location.clone(),
-      Node::Identifier(node) => node.location.clone(),
+      Node::Identifier(node) | Node::Name(node) | Node::VarDel(node) => node.location.clone(),
       Node::VarDecl(node) => node.location.clone(),
-      Node::Name(node) => node.location.clone(),
       Node::Assignment(node) => node.location.clone(),
       Node::Class(node) => node.location.clone(),
       Node::While(node) | Node::DoWhile(node) => node.location.clone(),
@@ -129,9 +129,8 @@ impl Node {
       Node::Number(node) => &node.file,
       Node::Object(node) => &node.file,
       Node::Array(node) => &node.file,
-      Node::Identifier(node) => &node.file,
+      Node::Identifier(node) | Node::Name(node)  | Node::VarDel(node)=> &node.file,
       Node::VarDecl(node) => &node.file,
-      Node::Name(node) => &node.file,
       Node::Assignment(node) => &node.file,
       Node::Class(node) => &node.file,
       Node::While(node) | Node::DoWhile(node) => &node.file,
@@ -163,6 +162,7 @@ impl Node {
       Node::Array(_) => "Lista",
       Node::Identifier(_) => "Identificador",
       Node::VarDecl(_) => "Variable",
+      Node::VarDel(node)=> "VariableEliminada",
       Node::Name(_) => "Nombre",
       Node::Assignment(_) => "Asignacion",
       Node::Class(_) => "Clase",
@@ -242,6 +242,7 @@ impl std::fmt::Display for Node {
         format!("NodeArray: [\n{}\n]", data_format(str_elements.join(",\n")))
       }
       Node::Identifier(node) => format!("NodeIdentifier: {}", node.name),
+      Node::VarDel(node) => format!("NodeVarDel: {}", node.name),
       Node::VarDecl(node) => {
         let keyword = if node.is_const {
           KeywordsType::Constant
