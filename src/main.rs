@@ -1,10 +1,10 @@
 #![allow(warnings)]
+mod functions_names;
 mod libraries;
 mod parser;
 mod path;
 mod runtime;
 mod util;
-mod functions_names;
 
 use std::{
   cell::RefCell, collections::HashMap, process::ExitCode, rc::Rc, thread::sleep, time::Duration,

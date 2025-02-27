@@ -1,18 +1,19 @@
 use std::{cell::RefCell, collections::HashMap, fmt::format, rc::Rc};
 
 use crate::{
-  functions_names,
-  libraries, parser,
+  functions_names, libraries, parser,
   runtime::{
     self,
     values::{
-      self, error_message, internal, primitive, traits::{self, AgalValuable as _, ToAgalValue as _}, AgalValue
+      self, error_message, internal, primitive,
+      traits::{self, AgalValuable as _, ToAgalValue as _},
+      AgalValue,
     },
   },
   util::{self, OnError as _},
 };
 
-use super::{AgalComplex};
+use super::AgalComplex;
 
 type RefHasMap<Value> = Rc<RefCell<HashMap<String, Value>>>;
 fn ref_hash_map<T: Clone>() -> RefHasMap<T> {

@@ -4,10 +4,12 @@ use super::{
   AgalPrimitive, AgalValue,
 };
 use crate::{
-  functions_names, libraries, parser, runtime::{
+  functions_names, libraries, parser,
+  runtime::{
     self,
     values::{self, complex, error_message},
-  }, util
+  },
+  util,
 };
 pub const STRING_REPLACE: &str = "remplaza";
 

@@ -1,7 +1,8 @@
 use std::{cell::RefCell, rc::Rc};
 
 use crate::{
-  functions_names, libraries, parser, runtime::{
+  functions_names, libraries, parser,
+  runtime::{
     self,
     values::{
       self, error_message,
@@ -10,7 +11,8 @@ use crate::{
       traits::{self, AgalValuable, ToAgalValue as _},
       AgalValue,
     },
-  }, util::OnError as _
+  },
+  util::OnError as _,
 };
 
 use super::AgalComplex;

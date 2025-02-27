@@ -1,11 +1,14 @@
 use std::{cell::RefCell, rc::Rc};
 
 use crate::{
-  functions_names, libraries::{self, Modules}, parser, runtime::values::{
+  functions_names,
+  libraries::{self, Modules},
+  parser,
+  runtime::values::{
     self, complex, internal,
     traits::{AgalValuable as _, ToAgalValue as _},
     AgalValue,
-  }
+  },
 };
 
 pub fn get_name() -> String {
@@ -32,7 +35,7 @@ pub fn get_sub_module(
       is_public: true,
       is_static: true,
       value: internal::AgalNativeFunction {
-        name: format!("{module_name}::{}",functions_names::TO_AGAL_STRING),
+        name: format!("{module_name}::{}", functions_names::TO_AGAL_STRING),
         func: Rc::new(|arguments, stack, modules, this| {
           arguments
             .get(0)
@@ -50,26 +53,29 @@ pub fn get_sub_module(
       .to_ref_value(),
     },
   );
-  hashmap.insert(functions_names::CALL.into(), complex::AgalClassProperty {
-    is_public: true,
-    is_static: true,
-    value: internal::AgalNativeFunction {
-      name: format!("{module_name}::{}",functions_names::CALL),
-      func: Rc::new(|arguments, stack, modules, this| {
-        arguments
-          .get(0)
-          .ok_or_else(|| internal::AgalThrow::Params {
-            type_error: parser::ErrorNames::TypeError,
-            message: "Se esperaba un argumento".into(),
-            stack: stack.clone(),
-          })?
-          .to_agal_number(stack.clone(), modules.clone())
-          .unwrap_or_default()
-          .to_result()
-      }),
-    }
-    .to_ref_value(),
-  });
+  hashmap.insert(
+    functions_names::CALL.into(),
+    complex::AgalClassProperty {
+      is_public: true,
+      is_static: true,
+      value: internal::AgalNativeFunction {
+        name: format!("{module_name}::{}", functions_names::CALL),
+        func: Rc::new(|arguments, stack, modules, this| {
+          arguments
+            .get(0)
+            .ok_or_else(|| internal::AgalThrow::Params {
+              type_error: parser::ErrorNames::TypeError,
+              message: "Se esperaba un argumento".into(),
+              stack: stack.clone(),
+            })?
+            .to_agal_number(stack.clone(), modules.clone())
+            .unwrap_or_default()
+            .to_result()
+        }),
+      }
+      .to_ref_value(),
+    },
+  );
 
   let prototype = complex::AgalPrototype::new(Rc::new(RefCell::new(hashmap)), None);
   modules_manager.add(

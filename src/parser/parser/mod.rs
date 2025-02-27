@@ -4,6 +4,8 @@ pub use ast::*;
 
 use crate::util::{self, OnError as _};
 
+use super::KeywordsType;
+
 const MISSING_TOKEN: &str = "\x1b[81mToken desaparecido\x1b[0m";
 
 struct SemiToken {
@@ -193,42 +195,30 @@ impl Parser {
     }
     false
   }
-  fn expect(&mut self, token_type: super::TokenType, err: &str) -> util::Token<super::TokenType> {
-    let token = self.tokens.get(self.index);
-    self.index += 1;
-    if token.is_none() {
-      let location = self.prev().location.clone();
-      let line = self
-        .source
-        .lines()
-        .nth(location.clone().start.line)
-        .unwrap();
-      return util::Token::<super::TokenType> {
-        token_type: super::TokenType::Error,
-        value: err.to_string(),
-        location: location.clone(),
-        meta: format!("{}\0{}", line, " ".repeat(location.start.column)),
-      };
-    }
-    let token = token.unwrap();
+  fn expect(
+    &mut self,
+    token_type: super::TokenType,
+    err: &str,
+  ) -> Result<util::Token<super::TokenType>, NodeError> {
+    let token = self.eat();
     if token.token_type != token_type {
       let line = self
         .source
         .lines()
         .nth(token.location.clone().start.line)
         .unwrap();
-      return util::Token::<super::TokenType> {
-        token_type: super::TokenType::Error,
-        value: err.to_string(),
+      Err(NodeError {
         location: token.location.clone(),
+        message: err.to_string(),
         meta: format!("{}\0{}", line, " ".repeat(token.location.start.column)),
-      };
-    }
-    util::Token::<super::TokenType> {
-      token_type: token.token_type,
-      value: token.value.clone(),
-      location: token.location.clone(),
-      meta: token.meta.clone(),
+      })
+    } else {
+      Ok(util::Token::<super::TokenType> {
+        token_type: token.token_type,
+        value: token.value.clone(),
+        location: token.location.clone(),
+        meta: token.meta.clone(),
+      })
     }
   }
   pub fn produce_ast(&mut self) -> Result<ast::Node, NodeError> {
@@ -247,22 +237,22 @@ impl Parser {
     is_function: bool,
     is_loop: bool,
     is_async: bool,
-  ) -> Option<Result<ast::Node, NodeError>> {
+  ) -> Result<ast::Node, NodeError> {
     let token = self.at();
     match token.token_type {
       super::TokenType::EOF => {
         self.eat();
-        None
+        Ok(ast::Node::default())
       }
       super::TokenType::Error => {
-        return Some(Err(ast::NodeError {
+        return Err(ast::NodeError {
           message: token.value,
           location: token.location,
           meta: token.meta,
-        }));
+        });
       }
       super::TokenType::Keyword(key) => match key {
-        super::KeywordsType::Define | super::KeywordsType::Constant => Some(self.parse_var_decl()),
+        super::KeywordsType::Define | super::KeywordsType::Constant => self.parse_var_decl(),
         super::KeywordsType::While
         | super::KeywordsType::Do
         | super::KeywordsType::If
@@ -270,16 +260,14 @@ impl Parser {
         | super::KeywordsType::Try
         | super::KeywordsType::Class
         | super::KeywordsType::Para
-        | super::KeywordsType::Async => {
-          Some(self.parse_keyword_value(is_function, is_loop, is_async))
-        }
+        | super::KeywordsType::Async => self.parse_keyword_value(is_function, is_loop, is_async),
         super::KeywordsType::Console => {
           let node = self.parse_keyword_value(is_function, is_loop, is_async);
           let semicolon = self.expect(
             super::TokenType::Punctuation(super::PunctuationType::SemiColon),
             "Se esperaba un punto y coma (stmt)",
-          );
-          Some(if semicolon.token_type == super::TokenType::Error {
+          )?;
+          if semicolon.token_type == super::TokenType::Error {
             Err(ast::NodeError {
               message: semicolon.value,
               location: semicolon.location,
@@ -287,78 +275,65 @@ impl Parser {
             })
           } else {
             node
-          })
+          }
         }
         super::KeywordsType::Return
         | super::KeywordsType::Continue
-        | super::KeywordsType::Romper => Some(self.parse_simple_decl(is_function, is_loop)),
-        super::KeywordsType::Export => Some(self.parse_export_decl(is_global_scope)),
-        super::KeywordsType::Import => Some(self.parse_import_decl(is_global_scope)),
-        super::KeywordsType::Throw => Some(self.parse_throw_decl()),
+        | super::KeywordsType::Romper => self.parse_simple_decl(is_function, is_loop),
+        super::KeywordsType::Export => self.parse_export_decl(is_global_scope),
+        super::KeywordsType::Import => self.parse_import_decl(is_global_scope),
+        super::KeywordsType::Throw => self.parse_throw_decl(),
         super::KeywordsType::Await => {
           self.eat(); // await
           if !is_async {
-            return Some(Err(ast::NodeError {
+            return Err(ast::NodeError {
               message: format!(
                 "La palabra clave '{}' solo se puede utilizar en un contexto asíncrono",
                 super::KeywordsType::Await.as_str()
               ),
               location: token.location,
               meta: token.meta,
-            }));
+            });
           }
-          Some(
-            ast::Node::Await(ast::NodeExpressionMedicator {
-              expression: match self.parse_stmt_expr() {
-                Err(e) => return Some(Err(e)),
-                Ok(expr) => expr.to_box(),
-              },
-              location: token.location,
-              file: token.meta,
-            })
-            .into(),
-          )
+          ast::Node::Await(ast::NodeExpressionMedicator {
+            expression: self.parse_stmt_expr()?.to_box(),
+            location: token.location,
+            file: token.meta,
+          })
+          .into()
         }
         super::KeywordsType::Delete => {
           if self.match_token(super::TokenType::Identifier) {
-            let semicolon = self.expect(
+            self.expect(
               super::TokenType::Punctuation(super::PunctuationType::SemiColon),
-              "",
-            );
-            Some(if semicolon.token_type == super::TokenType::Error {
-              Err(ast::NodeError {
-                message: format!(
-                  "Se esperaba un punto y coma ({})",
-                  super::KeywordsType::Delete.to_string()
-                ),
-                location: semicolon.location,
-                meta: semicolon.meta,
-              })
-            } else {
-              Ok(ast::Node::VarDel(ast::NodeIdentifier {
-                name: token.value,
-                location: token.location,
-                file: token.meta,
-              }))
-            })
-          }else {
-            let at = self.at();
-            Some(Err(ast::NodeError {
-              message: format!(
+              &format!(
                 "Se esperaba un punto y coma ({})",
+                super::KeywordsType::Delete.to_string()
+              ),
+            )?;
+            Ok(ast::Node::VarDel(ast::NodeIdentifier {
+              name: token.value,
+              location: token.location,
+              file: token.meta,
+            }))
+          } else {
+            let at = self.at();
+            Err(ast::NodeError {
+              message: format!(
+                "Se esperaba un identificador ({})",
                 super::KeywordsType::Delete.to_string()
               ),
               location: at.location,
               meta: at.meta,
-            }))
+            })
           }
         }
         _ => {
           self.eat();
-          None
+          Ok(ast::Node::default())
         }
       },
-      _ => Some(self.parse_stmt_expr()),
+      _ => self.parse_stmt_expr(),
     }
   }
   fn parse_throw_decl(&mut self) -> Result<ast::Node, NodeError> {
@@ -366,18 +341,11 @@ impl Parser {
     let expr = self.parse_expr()?;
     let semicolon = self.expect(
       super::TokenType::Punctuation(super::PunctuationType::SemiColon),
-      "",
-    );
-    if semicolon.token_type == super::TokenType::Error {
-      return Err(ast::NodeError {
-        message: format!(
-          "Se esperaba un punto y coma ({})",
-          super::KeywordsType::Throw.to_string()
-        ),
-        location: semicolon.location,
-        meta: semicolon.meta,
-      });
-    }
+      &format!(
+        "Se esperaba un punto y coma ({})",
+        super::KeywordsType::Throw.to_string()
+      ),
+    )?;
     ast::Node::Throw(ast::NodeValue {
       value: Box::new(expr),
       location: token.location,
@@ -390,14 +358,7 @@ impl Parser {
     let path = self.expect(
       super::TokenType::StringLiteral,
       "Se esperaba una ruta de archivo, debe usar una cadena literal con '",
-    );
-    if path.token_type == super::TokenType::Error {
-      return Err(ast::NodeError {
-        message: path.value.clone(),
-        location: path.location,
-        meta: path.meta,
-      });
-    }
+    )?;
     let mut is_lazy = false;
     let mut name = None;
     if self.at().token_type == super::TokenType::Keyword(super::KeywordsType::As) {
@@ -406,27 +367,13 @@ impl Parser {
         self.eat();
         is_lazy = true;
       }
-      let alias = self.expect(super::TokenType::Identifier, "Se esperaba un identificador");
-      if alias.token_type == super::TokenType::Error {
-        return Err(ast::NodeError {
-          message: alias.value.clone(),
-          location: alias.location,
-          meta: alias.meta,
-        });
-      }
+      let alias = self.expect(super::TokenType::Identifier, "Se esperaba un identificador")?;
       name = Some(alias.value.clone());
     }
     let semicolon = self.expect(
       super::TokenType::Punctuation(super::PunctuationType::SemiColon),
-      "",
-    );
-    if semicolon.token_type == super::TokenType::Error {
-      return Err(ast::NodeError {
-        message: format!("Se esperaba un punto y coma ({})", path.value),
-        location: semicolon.location,
-        meta: semicolon.meta,
-      });
-    }
+      &format!("Se esperaba un punto y coma ({})", path.value),
+    )?;
     if !is_global_scope {
       let line = self.source.lines().nth(token.location.start.line).unwrap();
       return Err(ast::NodeError {
@@ -495,28 +442,14 @@ impl Parser {
   }
   fn parse_name_decl(&mut self) -> Result<ast::Node, NodeError> {
     let token = self.eat(); // nombre
-    let name = self.expect(super::TokenType::Identifier, "Se esperaba un identificador");
-    if name.token_type == super::TokenType::Error {
-      return Err(ast::NodeError {
-        message: name.value.clone(),
-        location: name.location,
-        meta: name.meta,
-      });
-    }
+    let name = self.expect(super::TokenType::Identifier, "Se esperaba un identificador")?;
     let semicolon = self.expect(
       super::TokenType::Punctuation(super::PunctuationType::SemiColon),
-      "",
-    );
-    if semicolon.token_type == super::TokenType::Error {
-      return Err(ast::NodeError {
-        message: format!(
-          "Se esperaba un punto y coma ({})",
-          super::KeywordsType::Name.to_string()
-        ),
-        location: semicolon.location,
-        meta: semicolon.meta,
-      });
-    }
+      &format!(
+        "Se esperaba un punto y coma ({})",
+        super::KeywordsType::Name.to_string()
+      ),
+    )?;
     ast::Node::Name(ast::NodeIdentifier {
       name: name.value.clone(),
       location: token.location,
@@ -536,14 +469,7 @@ impl Parser {
     } else {
       false
     };
-    let name = self.expect(super::TokenType::Identifier, "Se esperaba un identificador");
-    if name.token_type == super::TokenType::Error {
-      return Err(ast::NodeError {
-        message: name.value.clone(),
-        location: name.location,
-        meta: name.meta,
-      });
-    }
+    let name = self.expect(super::TokenType::Identifier, "Se esperaba un identificador")?;
     let token = self.at();
     if token.token_type == super::TokenType::Error {
       self.eat();
@@ -589,15 +515,8 @@ impl Parser {
     };
     let semicolon = self.expect(
       super::TokenType::Punctuation(super::PunctuationType::SemiColon),
-      "",
-    );
-    if semicolon.token_type == super::TokenType::Error {
-      return Err(ast::NodeError {
-        message: format!("Se esperaba un punto y coma ({})", name.value),
-        location: semicolon.location,
-        meta: semicolon.meta,
-      });
-    }
+      &format!("Se esperaba un punto y coma ({})", name.value),
+    )?;
     Ok(ast::NodeClassProperty {
       name: name.value.clone(),
       value: Some(value.to_box()),
@@ -606,14 +525,7 @@ impl Parser {
   }
   fn parse_class_decl(&mut self) -> Result<ast::Node, NodeError> {
     let token = self.eat(); // clase
-    let name = self.expect(super::TokenType::Identifier, "Se esperaba un identificador");
-    if name.token_type == super::TokenType::Error {
-      return Err(ast::NodeError {
-        message: name.value.clone(),
-        location: name.location,
-        meta: name.meta,
-      });
-    }
+    let name = self.expect(super::TokenType::Identifier, "Se esperaba un identificador")?;
 
     let extend_of =
       if self.at().token_type == super::TokenType::Keyword(super::KeywordsType::Extender) {
@@ -640,15 +552,8 @@ impl Parser {
 
     let open_brace = self.expect(
       super::TokenType::Punctuation(super::PunctuationType::RegularBracketOpen),
-      "",
-    );
-    if open_brace.token_type == super::TokenType::Error {
-      return Err(ast::NodeError {
-        message: "Se esperaba un corchete de apertura".to_string(),
-        location: open_brace.location,
-        meta: open_brace.meta,
-      });
-    }
+      "Se esperaba un corchete de apertura",
+    )?;
     let mut body = util::List::new();
     while !(self.is_eof()
       || self.match_token(super::TokenType::Punctuation(
@@ -740,18 +645,11 @@ impl Parser {
         let expr = self.parse_expr()?;
         let semicolon = self.expect(
           super::TokenType::Punctuation(super::PunctuationType::SemiColon),
-          "",
-        );
-        if semicolon.token_type == super::TokenType::Error {
-          return Err(ast::NodeError {
-            message: format!(
-              "Se esperaba un punto y coma ({})",
-              super::KeywordsType::Return.to_string()
-            ),
-            location: semicolon.location,
-            meta: semicolon.meta,
-          });
-        }
+          &format!(
+            "Se esperaba un punto y coma ({})",
+            super::KeywordsType::Return.to_string()
+          ),
+        )?;
         ast::Node::Return(ast::NodeReturn {
           value: Some(expr.to_box()),
           location: token.location,
@@ -770,16 +668,9 @@ impl Parser {
         }
         let semicolon = self.expect(
           super::TokenType::Punctuation(super::PunctuationType::SemiColon),
-          "",
-        );
-        if semicolon.token_type == super::TokenType::Error {
-          return Err(ast::NodeError {
-            message: format!("Se esperaba un punto y coma (Modificador de Bucle)"),
-            location: semicolon.location,
-            meta: semicolon.meta,
-          });
-        }
-        let action = if token.value == "cont" {
+          "Se esperaba un punto y coma (Modificador de Bucle)",
+        )?;
+        let action = if token.value == KeywordsType::Continue.to_string() {
           ast::NodeLoopEditType::Continue
         } else {
           ast::NodeLoopEditType::Break
@@ -861,10 +752,7 @@ impl Parser {
           .into()
         } else if operator == ast::NodeOperator::BitMoveRight {
           let identifier =
-            self.expect(super::TokenType::Identifier, "Se esperaba un identificador");
-          if identifier.token_type == super::TokenType::Error {
-            return Err(ast::NodeError::new(&identifier, None));
-          }
+            self.expect(super::TokenType::Identifier, "Se esperaba un identificador")?;
           ast::Node::Console(ast::NodeConsole::Input {
             location: token.location,
             identifier: identifier.value,
@@ -919,40 +807,19 @@ impl Parser {
     let token = self.eat(); // para
     let open_paren = self.expect(
       super::TokenType::Punctuation(super::PunctuationType::CircularBracketOpen),
-      "",
-    );
-    if open_paren.token_type == super::TokenType::Error {
-      return Err(ast::NodeError {
-        message: "Se esperaba un paréntesis de apertura".to_string(),
-        location: open_paren.location,
-        meta: open_paren.meta,
-      });
-    }
+      "Se esperaba un paréntesis de apertura",
+    )?;
     let init = self.parse_var_decl()?.to_box();
     let condition = self.parse_expr()?;
     let semicolon = self.expect(
       super::TokenType::Punctuation(super::PunctuationType::SemiColon),
-      "",
-    );
-    if semicolon.token_type == super::TokenType::Error {
-      return Err(ast::NodeError {
-        message: "Se esperaba un punto y coma (Para)".to_string(),
-        location: semicolon.location,
-        meta: semicolon.meta,
-      });
-    }
+      "Se esperaba un punto y coma (Para)",
+    )?;
     let update = self.parse_expr()?;
     let close_paren = self.expect(
       super::TokenType::Punctuation(super::PunctuationType::CircularBracketClose),
-      "",
+      "Se esperaba un paréntesis de cierre",
     );
-    if close_paren.token_type == super::TokenType::Error {
-      return Err(ast::NodeError {
-        message: "Se esperaba un paréntesis de cierre".to_string(),
-        location: close_paren.location,
-        meta: close_paren.meta,
-      });
-    }
     let block = self.parse_block_expr(is_function, true, is_async);
     if block.is_err() {
       return Err(block.err().unwrap());
@@ -984,34 +851,13 @@ impl Parser {
       self.eat();
       let open_paren = self.expect(
         super::TokenType::Punctuation(super::PunctuationType::CircularBracketOpen),
-        "",
-      );
-      if open_paren.token_type == super::TokenType::Error {
-        return Err(ast::NodeError {
-          message: "Se esperaba un paréntesis de apertura".to_string(),
-          location: open_paren.location,
-          meta: open_paren.meta,
-        });
-      }
-      let identifier = self.expect(super::TokenType::Identifier, "");
-      if identifier.token_type == super::TokenType::Error {
-        return Err(ast::NodeError {
-          message: identifier.value.clone(),
-          location: identifier.location,
-          meta: identifier.meta,
-        });
-      }
+        "Se esperaba un paréntesis de apertura",
+      )?;
+      let identifier = self.expect(super::TokenType::Identifier, "Se esperaba un identificador")?;
       let close_paren = self.expect(
         super::TokenType::Punctuation(super::PunctuationType::CircularBracketClose),
-        "",
-      );
-      if close_paren.token_type == super::TokenType::Error {
-        return Err(ast::NodeError {
-          message: "Se esperaba un paréntesis de cierre".to_string(),
-          location: close_paren.location,
-          meta: close_paren.meta,
-        });
-      }
+        "Se esperaba un paréntesis de cierre",
+      )?;
       let block = self.parse_block_expr(is_function, is_loop, is_async);
       if block.is_err() {
         return Err(block.err().unwrap());
@@ -1042,14 +888,7 @@ impl Parser {
   }
   fn parse_function_decl(&mut self, is_async: bool) -> Result<ast::Node, NodeError> {
     let token = self.eat(); // fn
-    let name = self.expect(super::TokenType::Identifier, "Se esperaba un identificador");
-    if name.token_type == super::TokenType::Error {
-      return Err(ast::NodeError {
-        message: name.value.clone(),
-        location: name.location,
-        meta: name.meta,
-      });
-    }
+    let name = self.expect(super::TokenType::Identifier, "Se esperaba un identificador")?;
     let params = self.parse_arguments_expr();
     if params.is_err() {
       return Err(params.err().unwrap());
@@ -1069,29 +908,15 @@ impl Parser {
   fn parse_arguments_expr(&mut self) -> Result<util::List<ast::NodeIdentifier>, ast::NodeError> {
     let open_paren = self.expect(
       super::TokenType::Punctuation(super::PunctuationType::CircularBracketOpen),
-      "",
-    );
-    if open_paren.token_type == super::TokenType::Error {
-      return Err(ast::NodeError {
-        message: "Se esperaba un paréntesis de apertura".to_string(),
-        location: open_paren.location,
-        meta: open_paren.meta,
-      });
-    }
+      "Se esperaba un paréntesis de apertura",
+    )?;
     let mut params = util::List::new();
     while !(self.is_eof()
       || self.match_token(super::TokenType::Punctuation(
         super::PunctuationType::CircularBracketClose,
       )))
     {
-      let param = self.expect(super::TokenType::Identifier, "Se esperaba un identificador");
-      if param.token_type == super::TokenType::Error {
-        return Err(ast::NodeError {
-          message: param.value.clone(),
-          location: param.location,
-          meta: param.meta,
-        });
-      }
+      let param = self.expect(super::TokenType::Identifier, "Se esperaba un identificador")?;
       params.push(ast::NodeIdentifier {
         name: param.value.clone(),
         location: param.location,
@@ -1164,30 +989,19 @@ impl Parser {
     let body = self.parse_block_expr(is_function, true, is_async)?;
     let while_token = self.expect(
       super::TokenType::Keyword(super::KeywordsType::While),
-      "Se esperaba la palabra clave 'mien'",
-    );
-    if while_token.token_type == super::TokenType::Error {
-      return Err(ast::NodeError {
-        message: "Se esperaba la palabra clave 'mien'".to_string(),
-        location: while_token.location,
-        meta: while_token.meta,
-      });
-    }
+      &format!(
+        "Se esperaba la palabra clave '{}'",
+        super::KeywordsType::While.as_str()
+      ),
+    )?;
     let condition = self.parse_expr()?.to_box();
     let semicolon = self.expect(
       super::TokenType::Punctuation(super::PunctuationType::SemiColon),
-      "",
-    );
-    if semicolon.token_type == super::TokenType::Error {
-      return Err(ast::NodeError {
-        message: format!(
-          "Se esperaba un punto y coma ({})",
-          super::KeywordsType::Do.to_string()
-        ),
-        location: semicolon.location,
-        meta: semicolon.meta,
-      });
-    }
+      &format!(
+        "Se esperaba un punto y coma ({})",
+        super::KeywordsType::Do.to_string()
+      ),
+    )?;
     ast::Node::DoWhile(ast::NodeWhile {
       condition,
       body,
@@ -1233,20 +1047,7 @@ impl Parser {
     if !self.match_token(super::TokenType::Punctuation(
       super::PunctuationType::RegularBracketOpen,
     )) {
-      let expr = self.parse_stmt(false, in_function, in_loop, is_async);
-      if expr.is_none() {
-        let line = self
-          .source
-          .lines()
-          .nth(open_brace.location.start.line)
-          .unwrap();
-        return Err(ast::NodeError {
-          message: "Se esperaba un bloque".to_string(),
-          location: open_brace.location,
-          meta: format!("{}\0{}", self.file_name, line),
-        });
-      }
-      let expr = expr.unwrap()?;
+      let expr = self.parse_stmt(false, in_function, in_loop, is_async)?;
       let mut body = util::List::new();
       let location = expr.get_location();
       body.push(expr);
@@ -1282,17 +1083,14 @@ impl Parser {
       if is_eof || is_stop {
         break;
       }
-      let stmt = self.parse_stmt(is_global_scope, in_function, in_loop, is_async);
-      if let Some(stmt) = stmt {
-        let stmt = stmt?;
-        match stmt {
-          ast::Node::Function(_) => functions.push(stmt),
-          ast::Node::Export(ref export) => match export.value.as_ref() {
-            ast::Node::Function(_) => functions.push(stmt.clone()),
-            _ => code.push(stmt),
-          },
+      let stmt = self.parse_stmt(is_global_scope, in_function, in_loop, is_async)?;
+      match stmt {
+        ast::Node::Function(_) => functions.push(stmt),
+        ast::Node::Export(ref export) => match export.value.as_ref() {
+          ast::Node::Function(_) => functions.push(stmt.clone()),
           _ => code.push(stmt),
-        }
+        },
+        _ => code.push(stmt),
       }
     }
     let mut body = util::List::new();
@@ -1319,7 +1117,7 @@ impl Parser {
       location: token.location.clone(),
     };
 
-    let identifier = self.expect(super::TokenType::Identifier, "Se esperaba un identificador");
+    let identifier = self.expect(super::TokenType::Identifier, "Se esperaba un identificador")?;
     if semi_token.location.start.line == identifier.location.start.line {
       semi_token.value += " "
         .repeat(identifier.location.start.column - semi_token.location.start.column)
@@ -1392,8 +1190,8 @@ impl Parser {
     semi_token.location.start.column = value.get_location().start.column;
     let semicolon = self.expect(
       super::TokenType::Punctuation(super::PunctuationType::SemiColon),
-      "",
-    );
+      "Se esperaba un punto y coma (variable v)",
+    )?;
     if semi_token.location.start.line == semicolon.location.start.line {
       semi_token.value += " "
         .repeat(semicolon.location.start.column - semi_token.location.start.column)
@@ -1402,13 +1200,6 @@ impl Parser {
       semi_token.value = "".to_string();
     };
     semi_token.location.start.column += 1;
-    if semicolon.token_type == super::TokenType::Error {
-      return Err(ast::NodeError {
-        message: format!("Se esperaba un punto y coma (variable v)"),
-        location: semi_token.location,
-        meta: semi_token.value,
-      });
-    }
     ast::Node::VarDecl(ast::NodeVarDecl {
       name: identifier.value.clone(),
       value: Some(value.to_box()),
@@ -1423,14 +1214,7 @@ impl Parser {
     let semicolon = self.expect(
       super::TokenType::Punctuation(super::PunctuationType::SemiColon),
       "Se esperaba un punto y coma (expr)",
-    );
-    if semicolon.token_type == super::TokenType::Error {
-      return Err(ast::NodeError {
-        message: semicolon.value,
-        location: semicolon.location,
-        meta: semicolon.meta,
-      });
-    }
+    )?;
     node
   }
   fn parse_expr(&mut self) -> Result<ast::Node, NodeError> {
@@ -1886,14 +1670,7 @@ impl Parser {
         let close = self.expect(
           super::TokenType::Punctuation(super::PunctuationType::QuadrateBracketClose),
           "Se esperaba un corchete cuadrado de cierre (pme)",
-        );
-        if close.token_type == super::TokenType::Error {
-          return Err(ast::NodeError {
-            location: close.location,
-            message: close.value,
-            meta: close.meta,
-          });
-        }
+        )?;
       }
       value = ast::Node::Member(ast::NodeMember {
         object: value.clone().to_box(),
@@ -1986,18 +1763,18 @@ impl Parser {
       super::TokenType::Punctuation(super::PunctuationType::CircularBracketOpen) => {
         self.eat();
         let expr = self.parse_expr();
+        match &expr {
+          Ok(node) => {}
+          Err(e) => return Ok(expr),
+        }
         let close_paren = self.expect(
           super::TokenType::Punctuation(super::PunctuationType::CircularBracketClose),
-          "",
+          "Se esperaba un paréntesis de cierre",
         );
-        if close_paren.token_type == super::TokenType::Error {
-          return Ok(Err(ast::NodeError {
-            message: "Se esperaba un paréntesis de cierre".to_string(),
-            location: close_paren.location,
-            meta: close_paren.meta,
-          }));
+        match close_paren {
+          Ok(_) => Ok(expr),
+          Err(e) => Ok(Err(e)),
         }
-        return Ok(expr);
       }
       super::TokenType::Punctuation(super::PunctuationType::QuadrateBracketOpen) => {
         Ok(self.parse_array_expr())
@@ -2100,14 +1877,7 @@ impl Parser {
         let colon = self.expect(
           super::TokenType::Punctuation(super::PunctuationType::DoubleDot),
           "Se esperaba dos puntos",
-        );
-        if colon.token_type == super::TokenType::Error {
-          return Err(ast::NodeError {
-            message: colon.value,
-            location: colon.location,
-            meta: colon.meta,
-          });
-        }
+        )?;
         let value = self.parse_expr()?;
         return Ok(ast::NodeProperty::Property(key, value));
       }
@@ -2153,32 +1923,12 @@ impl Parser {
           let close_bracket = self.expect(
             super::TokenType::Punctuation(super::PunctuationType::QuadrateBracketClose),
             "Se esperaba un corchete cuadrado de cierre (pop)",
-          );
-          if close_bracket.token_type == super::TokenType::Error {
-            let line = self
-              .source
-              .lines()
-              .nth(close_bracket.location.start.line)
-              .unwrap();
-            let meta = format!("{}\0{}", line, &close_bracket.value);
-            return Err(ast::NodeError {
-              message: close_bracket.value,
-              location: close_bracket.location,
-              meta,
-            });
-          }
+          )?;
           let key = expr?;
           let colon = self.expect(
             super::TokenType::Punctuation(super::PunctuationType::DoubleDot),
             "Se esperaba dos puntos",
-          );
-          if colon.token_type == super::TokenType::Error {
-            return Err(ast::NodeError {
-              message: colon.value,
-              location: colon.location,
-              meta: colon.meta,
-            });
-          }
+          )?;
           let value = self.parse_expr()?;
           return Ok(ast::NodeProperty::Dynamic(key, value));
         }
@@ -2186,14 +1936,7 @@ impl Parser {
           let dot = self.expect(
             super::TokenType::Punctuation(super::PunctuationType::Dot),
             "Se esperaba un punto",
-          );
-          if dot.token_type == super::TokenType::Error {
-            return Err(ast::NodeError {
-              message: dot.value,
-              location: dot.location,
-              meta: dot.meta,
-            });
-          }
+          )?;
           let data = self.parse_expr()?;
           return Ok(ast::NodeProperty::Iterable(data));
         }
@@ -2261,20 +2004,13 @@ impl Parser {
           let dot = self.expect(
             super::TokenType::Punctuation(super::PunctuationType::Dot),
             "Se esperaba un punto",
-          );
-          if dot.token_type == super::TokenType::Error {
-            return Err(ast::NodeError {
-              message: dot.value,
-              location: dot.location,
-              meta: dot.meta,
-            });
-          }
+          )?;
           let data = self.parse_expr()?;
           Ok(ast::NodeProperty::Iterable(data))
         } else {
           let line = self.source.lines().nth(token.location.start.line).unwrap();
           return Err(ast::NodeError {
-            message: "Se esperaba un valor para la util::Lista".to_string(),
+            message: "Se esperaba un valor para la Lista".to_string(),
             location: token.location,
             meta: format!("{}\0{}", line, token.value),
           });

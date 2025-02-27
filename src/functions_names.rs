@@ -9,4 +9,4 @@ pub const CALL: &str = "__ll__";
 
 pub const BINARY_OPERATION: &str = "__bin__";
 
-pub const CONSTRUCTOR:&str = "__constructor__";
+pub const CONSTRUCTOR: &str = "__constructor__";

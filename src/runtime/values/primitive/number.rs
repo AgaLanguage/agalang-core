@@ -1,7 +1,8 @@
 use std::ops::{Add, Div, Mul, Rem, Sub};
 
 use crate::{
-  functions_names, libraries, parser, runtime::{
+  functions_names, libraries, parser,
+  runtime::{
     self, stack,
     values::{
       error_message, internal,
@@ -9,7 +10,8 @@ use crate::{
       AgalValue,
     },
     Stack,
-  }, util
+  },
+  util,
 };
 
 use super::{string::AgalString, AgalBoolean, AgalPrimitive};

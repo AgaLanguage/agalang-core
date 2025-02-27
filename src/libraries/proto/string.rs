@@ -5,7 +5,10 @@ use crate::{
   libraries::{self, Modules},
   parser,
   runtime::values::{
-    self, complex, internal, primitive::{self, STRING_REPLACE}, traits::{AgalValuable as _, ToAgalValue as _}, AgalValue
+    self, complex, internal,
+    primitive::{self, STRING_REPLACE},
+    traits::{AgalValuable as _, ToAgalValue as _},
+    AgalValue,
   },
 };
 
@@ -75,7 +78,8 @@ pub fn get_sub_module(
               stack: stack.clone(),
             })?
             .try_to_string(stack.clone(), modules.clone())?;
-          primitive::AgalString::from_string(this.to_string().replace(from.as_str(), to.as_str())).to_result()
+          primitive::AgalString::from_string(this.to_string().replace(from.as_str(), to.as_str()))
+            .to_result()
         }),
       }
       .to_ref_value(),

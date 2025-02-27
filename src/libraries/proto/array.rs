@@ -1,10 +1,11 @@
 use std::{cell::RefCell, rc::Rc};
 
 use crate::{
-  functions_names, libraries, parser, runtime::values::{
+  functions_names, libraries, parser,
+  runtime::values::{
     self, complex, internal,
     traits::{AgalValuable, ToAgalValue as _},
-  }
+  },
 };
 
 pub fn get_name() -> String {
@@ -31,7 +32,7 @@ pub fn get_sub_module(
       is_public: true,
       is_static: true,
       value: internal::AgalNativeFunction {
-        name: format!("{module_name}::{}",functions_names::TO_AGAL_STRING),
+        name: format!("{module_name}::{}", functions_names::TO_AGAL_STRING),
         func: Rc::new(|arguments, stack, modules, this| {
           arguments
             .get(0)
