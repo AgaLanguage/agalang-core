@@ -303,7 +303,9 @@ impl Parser {
           .into()
         }
         super::KeywordsType::Delete => {
+          self.eat();
           if self.match_token(super::TokenType::Identifier) {
+            let name = self.prev().value;
             self.expect(
               super::TokenType::Punctuation(super::PunctuationType::SemiColon),
               &format!(
@@ -312,7 +314,7 @@ impl Parser {
               ),
             )?;
             Ok(ast::Node::VarDel(ast::NodeIdentifier {
-              name: token.value,
+              name,
               location: token.location,
               file: token.meta,
             }))

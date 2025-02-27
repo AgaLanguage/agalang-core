@@ -131,6 +131,9 @@ impl Environment {
   pub fn is_constant(&self, name: &str) -> bool {
     self.constants.borrow().contains(name)
   }
+  pub fn delete(&self, name: &str) -> bool {
+    self.variables.borrow_mut().remove(name).is_some()
+  }
   pub fn assign(
     &mut self,
     stack: RefStack,
@@ -171,7 +174,7 @@ impl Environment {
   }
   pub fn get(&self, stack: RefStack, name: &str, node: &parser::Node) -> ResultAgalValue {
     let env = self.resolve(name, node);
-    if !env.has(name) {
+    if !env._has(name) {
       return Err(internal::AgalThrow::Params {
         type_error: parser::ErrorNames::EnvironmentError,
         message: format!("La variable {} no ha sido declarada", name),
@@ -184,7 +187,7 @@ impl Environment {
     self.variables.borrow_mut().contains_key(name)
   }
   pub fn has(&self, name: &str, node: &parser::Node) -> bool {
-    self.resolve(name, node).has(name)
+    self.resolve(name, node)._has(name)
   }
   fn resolve(&self, name: &str, node: &parser::Node) -> RefEnvironment {
     if !self._has(name) && self.parent.is_some() {
@@ -250,15 +253,18 @@ impl RefEnvironment {
   pub fn get(&self, stack: RefStack, name: &str, node: &parser::Node) -> ResultAgalValue {
     self.0.borrow().get(stack, name, node)
   }
-  pub fn has(&self, name: &str) -> bool {
-    self.0.borrow().variables.borrow_mut().contains_key(name)
+  pub fn _has(&self, name: &str) -> bool {
+    self.0.borrow()._has(name)
   }
   pub fn resolve(&self, name: &str, node: &parser::Node) -> RefEnvironment {
-    if !self.has(name) && self.has_parent() {
+    if !self._has(name) && self.has_parent() {
       let a = self.get_parent();
       return a.resolve(name, node);
     }
     return self.clone();
+  }
+  pub fn delete(&self, name: &str) -> bool {
+    self.0.borrow().delete(name)
   }
   pub fn assign(
     &mut self,

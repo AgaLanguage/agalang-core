@@ -11,4 +11,5 @@ lista[1] = x::remplaza('\r\n','');
 lista[2] = x::remplaza('\r\n','');
 
 csl << lista::__cad__() + '\n';
+borra lista;
 Consola::pintar(lista);

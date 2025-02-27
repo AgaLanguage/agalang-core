@@ -273,7 +273,7 @@ pub fn interpreter(
     }) => {
       let env = stack.env();
       let valid_variable =
-        env.has(identifier) && !(env.is_constant(identifier) || env.is_keyword(identifier));
+        env._has(identifier) && !(env.is_constant(identifier) || env.is_keyword(identifier));
       if !valid_variable {
         return internal::AgalThrow::Params {
           type_error: parser::ErrorNames::EnvironmentError,
@@ -303,7 +303,7 @@ pub fn interpreter(
     parser::Node::Console(parser::ast::NodeConsole::Input { identifier, .. }) => {
       let env = stack.env();
       let valid_variable =
-        env.has(identifier) && !(env.is_constant(identifier) || env.is_keyword(identifier));
+        env._has(identifier) && !(env.is_constant(identifier) || env.is_keyword(identifier));
       if !valid_variable {
         return internal::AgalThrow::Params {
           type_error: parser::ErrorNames::EnvironmentError,
@@ -700,7 +700,14 @@ pub fn interpreter(
       }
       Ok(value)
     }
-    _ => Err(AgalThrow::Params {
+    parser::Node::VarDel(node_identifier) => {
+      let with_variable = stack.env().resolve(&node_identifier.name, node.as_ref()).delete(&node_identifier.name);
+      AgalValue::default().to_result()
+    }
+    parser::Node::Import(_)
+    | parser::Node::Await(_)
+    | parser::Node::Block(_, true)
+    | parser::Node::Program(_) => Err(AgalThrow::Params {
       type_error: parser::ErrorNames::SyntaxError,
       message: "Se intento ejecutar codigo asincrono en un bloque sincrono".into(),
       stack,
