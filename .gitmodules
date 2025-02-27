@@ -1,3 +1,0 @@
-[submodule "agalang-parser"]
-	path = parser
-	url = https://github.com/AgaLanguage/agalang-parser.git
