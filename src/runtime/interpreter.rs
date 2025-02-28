@@ -25,8 +25,7 @@ pub fn call_function_interpreter(
   Box::pin(async move {
     let mut result = AgalValue::Never.as_ref();
     for statement in &block.body {
-      result =
-        async_interpreter(statement.to_box(), stack.clone(), modules.clone()).await?;
+      result = async_interpreter(statement.to_box(), stack.clone(), modules.clone()).await?;
       if (result.is_return()) {
         break;
       }
@@ -404,11 +403,15 @@ pub fn async_interpreter(
       },
       parser::Node::For(for_node) => {
         let mut value = AgalValue::Never.as_ref();
-        let mut condition = Ok(primitive::AgalBoolean::True);
         let stack = pre_stack.crate_child(false, node);
-        async_interpreter(for_node.init.clone(), stack.clone(), modules.clone()).await?; // init value
+        async_interpreter(for_node.init.clone(), stack.clone(), modules.clone()).await?; // init value: def i = 0;
         loop {
-          if !condition?.as_bool() {
+          if async_interpreter(for_node.condition.clone(), stack.clone(), modules.clone())
+            .await?
+            .to_agal_boolean(stack.clone(), modules.clone())?
+            .not()
+            .as_bool() // condition value: i < 10
+          {
             break;
           }
           let node = for_node.body.clone().to_node().to_box();
@@ -417,7 +420,7 @@ pub fn async_interpreter(
             stack.crate_child(false, node),
             modules.clone(),
           )
-          .await?;
+          .await?;// Block {..}
           let v = value.un_ref();
           if v.is_return() {
             return value.to_result();
@@ -425,11 +428,7 @@ pub fn async_interpreter(
           if v.is_break() {
             break;
           }
-          let pre_condition =
-            async_interpreter(for_node.condition.clone(), stack.clone(), modules.clone()).await?;
-          condition = pre_condition.to_agal_boolean(stack.clone(), modules.clone());
-          let pre_update =
-            async_interpreter(for_node.update.clone(), stack.clone(), modules.clone()).await?;
+          async_interpreter(for_node.update.clone(), stack.clone(), modules.clone()).await?; // advance value: i+=1
         }
         value.to_result()
       }

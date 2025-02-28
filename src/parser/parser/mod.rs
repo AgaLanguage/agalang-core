@@ -259,7 +259,7 @@ impl Parser {
         | super::KeywordsType::Function
         | super::KeywordsType::Try
         | super::KeywordsType::Class
-        | super::KeywordsType::Para
+        | super::KeywordsType::For
         | super::KeywordsType::Async => {
           self.parse_keyword_value(is_function, is_loop, is_async, false)
         }
@@ -281,7 +281,7 @@ impl Parser {
         }
         super::KeywordsType::Return
         | super::KeywordsType::Continue
-        | super::KeywordsType::Romper => self.parse_simple_decl(is_function, is_loop),
+        | super::KeywordsType::Break => self.parse_simple_decl(is_function, is_loop),
         super::KeywordsType::Export => self.parse_export_decl(is_global_scope),
         super::KeywordsType::Import => self.parse_import_decl(is_global_scope),
         super::KeywordsType::Throw => self.parse_throw_decl(),
@@ -532,7 +532,7 @@ impl Parser {
     let name = self.expect(super::TokenType::Identifier, "Se esperaba un identificador")?;
 
     let extend_of =
-      if self.at().token_type == super::TokenType::Keyword(super::KeywordsType::Extender) {
+      if self.at().token_type == super::TokenType::Keyword(super::KeywordsType::Extend) {
         self.eat();
         let class_node = self.parse_literal_expr("")?;
         if let ast::Node::Identifier(id) = class_node {
@@ -655,7 +655,7 @@ impl Parser {
         })
         .into()
       }
-      super::TokenType::Keyword(super::KeywordsType::Romper | super::KeywordsType::Continue) => {
+      super::TokenType::Keyword(super::KeywordsType::Break | super::KeywordsType::Continue) => {
         if !is_loop {
           let line = self.source.lines().nth(token.location.start.line).unwrap();
           return Err(ast::NodeError {
@@ -704,7 +704,7 @@ impl Parser {
   ) -> Result<ast::Node, NodeError> {
     let token = self.at();
     match token.token_type {
-      super::TokenType::Keyword(super::KeywordsType::Para) => {
+      super::TokenType::Keyword(super::KeywordsType::For) => {
         self.parse_for_decl(is_function, is_async)
       }
       super::TokenType::Keyword(super::KeywordsType::While) => {
@@ -1306,7 +1306,7 @@ impl Parser {
     }
   }
   fn parse_math_exponential_expr(&mut self) -> Result<ast::Node, NodeError> {
-    let left = self.parse_literal_expr("Token inesperado (exponencial iz)")?;
+    let left = self.parse_simple_expr("Token inesperado (exponencial iz)")?;
     let token = self.at();
     if token.token_type != super::TokenType::Operator(super::OperatorType::Exponential)
       || self.next().token_type == super::TokenType::Operator(super::OperatorType::Equals)
@@ -1319,7 +1319,7 @@ impl Parser {
     } else {
       return left.into();
     };
-    let right = self.parse_literal_expr("Token inesperado (exponencial de)")?.to_box();
+    let right = self.parse_simple_expr("Token inesperado (exponencial de)")?.to_box();
     ast::Node::Binary(ast::NodeBinary {
       operator,
       left: left.clone().to_box(),
@@ -1328,6 +1328,10 @@ impl Parser {
       file: left.get_file(),
     })
     .into()
+  }
+  fn parse_simple_expr(&mut self, message: &str) -> Result<ast::Node, NodeError> {
+    let value = self.parse_literal_expr(message)?;
+    self.parse_back_unary_expr(value)
   }
   fn parse_complex_expr(&mut self, left: ast::Node) -> Result<ast::Node, NodeError> {
     let left = self.parse_back_unary_expr(left.clone())?;
