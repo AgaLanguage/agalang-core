@@ -147,6 +147,9 @@ impl traits::AgalValuable for AgalChar {
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct AgalString(Vec<AgalChar>);
 impl AgalString {
+  pub fn to_string(&self) -> String {
+    self.0.iter().map(|c| c.0).collect()
+  }
   pub fn from_string(value: String) -> Self {
     Self(value.chars().map(|c| AgalChar::new(c)).collect())
   }
@@ -184,6 +187,9 @@ impl traits::ToAgalValue for AgalString {
 impl traits::AgalValuable for AgalString {
   fn get_name(&self) -> String {
     "Cadena".to_string()
+  }
+  fn as_string(&self) -> String {
+    format!("[{} {}]", self.get_name(), self.to_string())
   }
   fn try_to_string(
     &self,
@@ -311,6 +317,7 @@ impl traits::AgalValuable for AgalString {
           stack: stack.clone(),
         })?
         .get_instance_property(stack, key, modules),
+      "longitud" => super::AgalNumber::Integer(self.0.len() as i32).to_result(),
       _ => internal::AgalThrow::Params {
         type_error: parser::ErrorNames::TypeError,
         message: error_message::GET_INSTANCE_PROPERTY.to_owned(),
@@ -329,8 +336,8 @@ impl traits::AgalValuable for AgalString {
   }
 }
 
-impl ToString for AgalString {
-  fn to_string(&self) -> String {
-    self.0.iter().map(|c| c.0).collect()
+impl<T: ToString> From<T> for AgalString {
+  fn from(value: T) -> Self {
+    Self::from_string(value.to_string())
   }
 }

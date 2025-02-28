@@ -150,6 +150,9 @@ impl traits::AgalValuable for AgalNumber {
       AgalNumber::NegInfinity => "<Infinito Negativo>".to_string(),
     }
   }
+  fn as_string(&self) -> String {
+    format!("[{} {}]", self.get_name(), self.to_string())
+  }
   fn to_agal_string(
     &self,
     stack: runtime::RefStack,

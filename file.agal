@@ -2,18 +2,22 @@
 importa ':consola' como Consola;
 importa ':tmp' como Tmp;
 
-asinc fn funcion(){
-  
-  espera Tmp::esperar(10);
-  Consola::pintar("Adentro");
+asinc fn funcion(t){
+  def i=0;
+  def dif = ' ' * t::__cad__()::longitud;
+  haz {
+    def cad = (t-i)::__cad__();
+    csl << '\r' + dif + '\r' + cad;
+    espera Tmp::esperar(1);
+    i+=1;
+  } mien i <= t;
+  csl << '\n';
 }
 
-def a = funcion()::luego(fn (){
-  Consola::pintar("Adentro luego");
-  lanza ":D";
-})::atrapa(fn (){
-  Consola::pintar("Adentro atrapa");
-  ret ":C";
+def a = funcion(10)::luego(fn (){
+  lanza ">:D";
+})::atrapa(fn (e){
+  ret ":)";
 });
 Consola::pintar("Afuera");
 def b = espera a;

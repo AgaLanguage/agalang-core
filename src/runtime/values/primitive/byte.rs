@@ -1,23 +1,23 @@
+use std::fmt::Display;
+
 use crate::{
-  libraries, parser,
-  runtime::{
+  functions_names, libraries, parser, runtime::{
     self,
     values::{
       error_message, internal,
       traits::{self, AgalValuable as _, ToAgalValue as _},
       AgalValue,
     },
-  },
-  util,
+  }, util
 };
 
 use super::{string::AgalString, AgalPrimitive};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct AgalByte(u8, bool);
+pub struct AgalByte(u8);
 impl AgalByte {
   pub fn new(value: u8) -> AgalByte {
-    AgalByte(value, false)
+    AgalByte(value)
   }
   pub fn to_u8(&self) -> u8 {
     self.0
@@ -32,15 +32,15 @@ impl traits::AgalValuable for AgalByte {
   fn get_name(&self) -> String {
     "Byte".to_string()
   }
+  fn as_string(&self) -> String {
+    format!("[{} {}]", self.get_name(), self.to_string())
+  }
   fn to_agal_string(
     &self,
     stack: runtime::RefStack,
     modules: libraries::RefModules,
-  ) -> Result<super::string::AgalString, internal::AgalThrow> {
-    Ok(super::string::AgalString::from_string(format!(
-      "0by{:08b}",
-      self.0
-    )))
+  ) -> Result<super::AgalString, internal::AgalThrow> {
+    Ok(super::AgalString::from(self))
   }
   fn to_agal_byte(
     &self,
@@ -133,7 +133,22 @@ impl traits::AgalValuable for AgalByte {
     key: &str,
     modules: libraries::RefModules,
   ) -> Result<runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
-    todo!()
+    match key {
+      functions_names::TO_AGAL_STRING => modules
+        .get_module(":proto/Byte")
+        .ok_or_else(|| internal::AgalThrow::Params {
+          type_error: parser::ErrorNames::TypeError,
+          message: error_message::GET_INSTANCE_PROPERTY.to_owned(),
+          stack: stack.clone(),
+        })?
+        .get_instance_property(stack, key, modules),
+      _ => internal::AgalThrow::Params {
+        type_error: parser::ErrorNames::TypeError,
+        message: error_message::GET_INSTANCE_PROPERTY.to_owned(),
+        stack,
+      }
+      .to_result(),
+    }
   }
 
   fn to_agal_number(
@@ -150,5 +165,10 @@ impl traits::AgalValuable for AgalByte {
 
   fn less_than(&self, other: &Self) -> bool {
     self < other
+  }
+}
+impl Display for AgalByte {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "0b{:08b}", self.0)
   }
 }

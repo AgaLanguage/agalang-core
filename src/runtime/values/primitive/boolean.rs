@@ -1,6 +1,5 @@
 use crate::{
-  libraries, parser,
-  runtime::{
+  functions_names, libraries, parser, runtime::{
     self,
     values::{
       error_message,
@@ -9,8 +8,7 @@ use crate::{
       AgalValue,
     },
     FALSE_KEYWORD, TRUE_KEYWORD,
-  },
-  util,
+  }, util
 };
 
 use super::{string::AgalString, AgalPrimitive};
@@ -60,15 +58,15 @@ impl traits::AgalValuable for AgalBoolean {
   fn get_name(&self) -> String {
     "Buleano".to_string()
   }
+  fn as_string(&self) -> String {
+    format!("[{} {}]", self.get_name(), self.to_string())
+  }
   fn to_agal_string(
     &self,
     stack: runtime::RefStack,
     modules: libraries::RefModules,
   ) -> Result<AgalString, internal::AgalThrow> {
-    Ok(super::AgalString::from_string(match self {
-      Self::False => FALSE_KEYWORD.to_string(),
-      Self::True => TRUE_KEYWORD.to_string(),
-    }))
+    Ok(super::AgalString::from(self))
   }
   fn to_agal_console(
     &self,
@@ -130,7 +128,22 @@ impl traits::AgalValuable for AgalBoolean {
     key: &str,
     modules: libraries::RefModules,
   ) -> Result<runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
-    todo!()
+    match key {
+      functions_names::TO_AGAL_STRING => modules
+        .get_module(":proto/Buleano")
+        .ok_or_else(|| internal::AgalThrow::Params {
+          type_error: parser::ErrorNames::TypeError,
+          message: error_message::GET_INSTANCE_PROPERTY.to_owned(),
+          stack: stack.clone(),
+        })?
+        .get_instance_property(stack, key, modules),
+      _ => internal::AgalThrow::Params {
+        type_error: parser::ErrorNames::TypeError,
+        message: error_message::GET_INSTANCE_PROPERTY.to_owned(),
+        stack,
+      }
+      .to_result(),
+    }
   }
 
   fn to_agal_number(
@@ -147,5 +160,14 @@ impl traits::AgalValuable for AgalBoolean {
 
   fn less_than(&self, other: &Self) -> bool {
     self.as_bool() < other.as_bool()
+  }
+}
+
+impl std::fmt::Display for AgalBoolean {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "{}", match self {
+      Self::False => FALSE_KEYWORD.to_string(),
+      Self::True => TRUE_KEYWORD.to_string()
+    })
   }
 }
