@@ -109,3 +109,5 @@ impl ToString for AgalThrow {
     parser::error_to_string(&type_error, message)
   }
 }
+
+unsafe impl Send for AgalThrow {}

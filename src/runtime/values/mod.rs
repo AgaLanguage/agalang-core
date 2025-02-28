@@ -1,4 +1,4 @@
-use std::{cell::RefCell, future::Future, pin::Pin, rc::Rc};
+use std::{cell::RefCell, future::Future, pin::Pin, rc::Rc, sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard}};
 
 use crate::{parser, util};
 use error_message::TO_AGAL_CONSOLE;
@@ -17,16 +17,16 @@ use crate::libraries;
 
 use super::RefStack;
 #[derive(Debug)]
-pub struct RefAgalValue<T: traits::AgalValuable + traits::ToAgalValue>(Rc<RefCell<T>>);
+pub struct RefAgalValue<T: traits::AgalValuable + traits::ToAgalValue>(Arc<RwLock<T>>);
 impl<T: traits::AgalValuable + traits::ToAgalValue> RefAgalValue<T> {
   pub fn new(value: T) -> Self {
-    Self(Rc::new(RefCell::new(value)))
+    Self(Arc::new(RwLock::new(value)))
   }
-  pub fn borrow(&self) -> std::cell::Ref<T> {
-    self.0.as_ref().borrow()
+  pub fn borrow(&self) -> RwLockReadGuard<'_, T>{
+    self.0.read().unwrap()
   }
-  pub fn borrow_mut(&self) -> std::cell::RefMut<T> {
-    self.0.borrow_mut()
+  pub fn borrow_mut(&self) -> RwLockWriteGuard<'_, T> {
+    self.0.write().unwrap()
   }
   pub fn ptr(&self) -> *const T {
     let b = &*self.borrow();
@@ -35,7 +35,7 @@ impl<T: traits::AgalValuable + traits::ToAgalValue> RefAgalValue<T> {
 }
 impl<T: traits::AgalValuable + traits::ToAgalValue> Clone for RefAgalValue<T> {
   fn clone(&self) -> Self {
-    Self(Rc::clone(&self.0))
+    Self(self.0.clone())
   }
 }
 impl<T: traits::AgalValuable + traits::ToAgalValue + Clone> traits::ToAgalValue
@@ -58,7 +58,10 @@ impl<T: traits::AgalValuable + traits::ToAgalValue + Clone> RefAgalValue<T> {
 }
 impl<T: traits::AgalValuable + traits::ToAgalValue> traits::AgalValuable for RefAgalValue<T> {
   fn get_name(&self) -> String {
-    self.borrow().get_name().to_string()
+    self.borrow().get_name()
+  }
+  fn as_string(&self) -> String {
+    self.borrow().as_string()
   }
   fn to_agal_string(
     &self,
@@ -192,6 +195,7 @@ impl Default for RefAgalValue<AgalValue> {
     Self::new(AgalValue::default())
   }
 }
+unsafe impl<T: traits::AgalValuable + traits::ToAgalValue> Send for RefAgalValue<T>{}
 
 #[derive(Clone, Debug, Default)]
 pub enum AgalValue {
@@ -274,6 +278,19 @@ impl traits::AgalValuable for AgalValue {
       Self::Never => "Ninguno".to_string(),
       Self::Null => "Nulo".to_string(),
       Self::Export(_, v) | Self::Return(v) => v.get_name(),
+      Self::Continue => "<Palabra clave Continuar>".to_string(),
+      Self::Break => "<Palabra clave Romper>".to_string(),
+      Self::Console => "<Palabra clave Consola>".to_string(),
+    }
+  }
+  fn as_string(&self) -> String {
+    match self {
+      Self::Complex(c) => c.as_string(),
+      Self::Primitive(p) => p.as_string(),
+      Self::Internal(i) => i.as_string(),
+      Self::Never => "Ninguno".to_string(),
+      Self::Null => "Nulo".to_string(),
+      Self::Export(_, v) | Self::Return(v) => v.as_string(),
       Self::Continue => "<Palabra clave Continuar>".to_string(),
       Self::Break => "<Palabra clave Romper>".to_string(),
       Self::Console => "<Palabra clave Consola>".to_string(),

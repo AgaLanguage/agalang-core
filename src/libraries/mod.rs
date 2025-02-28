@@ -1,7 +1,7 @@
 use std::{
   cell::{Ref, RefCell},
   collections::HashMap,
-  rc::Rc,
+  rc::Rc, sync::{Arc, Mutex, RwLock},
 };
 
 use crate::runtime::values::{self, DefaultRefAgalValue};
@@ -15,33 +15,33 @@ type EvalResult = Option<values::DefaultRefAgalValue>;
 pub const PREFIX_NATIVE_MODULES: &str = ":";
 
 #[derive(Clone, Debug)]
-struct Modules(Rc<RefCell<HashMap<String, DefaultRefAgalValue>>>);
+struct Modules(Arc<RwLock<HashMap<String, DefaultRefAgalValue>>>);
 impl Modules {
   fn has(&self, key: &str) -> bool {
-    self.0.borrow().contains_key(key)
+    self.0.read().unwrap().contains_key(key)
   }
   fn get(&self, key: &str) -> EvalResult {
-    let v = self.0.borrow();
+    let v = self.0.read().unwrap();
     v.get(key).cloned()
   }
   fn add(&self, key: &str, value: DefaultRefAgalValue) -> DefaultRefAgalValue {
     if self.has(key) {
       return self.get(key).unwrap_or_else(|| value);
     }
-    let mut v = self.0.borrow_mut();
+    let mut v = self.0.write().unwrap();
     v.insert(key.to_string(), value.clone());
     value
   }
   fn as_ref(self) -> RefModules {
-    RefModules(Rc::new(RefCell::new(self)))
+    RefModules(Arc::new(RwLock::new(self)))
   }
 }
 
 #[derive(Clone, Debug)]
-pub struct RefModules(Rc<RefCell<Modules>>);
+pub struct RefModules(Arc<RwLock<Modules>>);
 impl RefModules {
   pub fn new() -> Self {
-    RefModules(Rc::new(RefCell::new(Modules(Rc::new(RefCell::new(
+    RefModules(Arc::new(RwLock::new(Modules(Arc::new(RwLock::new(
       HashMap::new(),
     ))))))
   }
@@ -49,19 +49,19 @@ impl RefModules {
     get_module(key, self.clone())
   }
   pub fn try_get(&self, key: &str) -> EvalResult {
-    match self.0.borrow().get(key) {
+    match self.0.read().unwrap().get(key) {
       Some(value) => Some(value.clone()),
       None => None,
     }
   }
   pub fn has(&self, key: &str) -> bool {
-    self.0.borrow().has(key)
+    self.0.read().unwrap().has(key)
   }
   fn get(&self, key: &str) -> DefaultRefAgalValue {
-    self.0.borrow().get(key).unwrap()
+    self.0.read().unwrap().get(key).unwrap()
   }
   pub fn add(&self, key: &str, value: DefaultRefAgalValue) -> DefaultRefAgalValue {
-    self.0.borrow().add(key, value)
+    self.0.read().unwrap().add(key, value)
   }
 }
 pub fn get_module(key: &str, modules_manager: RefModules) -> EvalResult {

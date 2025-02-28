@@ -37,6 +37,15 @@ impl traits::AgalValuable for AgalPrimitive {
       Self::Byte(b) => b.get_name(),
     }
   }
+  fn as_string(&self) -> String {
+    match self {
+      Self::Boolean(b) => b.as_string(),
+      Self::Number(n) => n.as_string(),
+      Self::String(s) => s.as_string(),
+      Self::Char(c) => c.as_string(),
+      Self::Byte(b) => b.as_string(),
+    }
+  }
   fn to_agal_number(
     &self,
     stack: runtime::RefStack,

@@ -21,7 +21,7 @@ pub fn call_function_interpreter(
   block: parser::NodeBlock,
   stack: RefStack,
   modules: libraries::RefModules,
-) -> Pin<Box<dyn Future<Output = ResultAgalValue>>> {
+) -> Pin<Box<dyn Future<Output = ResultAgalValue> + Send>> {
   Box::pin(async move {
     let mut result = AgalValue::Never.as_ref();
     for statement in &block.body {
@@ -116,14 +116,12 @@ pub fn async_interpreter(
           if let AgalPromiseData::Resolved(r) = &value.data {
             return r.clone();
           }
-          if let AgalPromiseData::Unresolved(future) = std::mem::replace(
+          let agal_value = std::mem::replace(
             &mut value.data,
             AgalPromiseData::Resolved(AgalValue::Never.to_result()),
-          ) {
-            let agal_value = future.await;
-            value.data = AgalPromiseData::Resolved(agal_value.clone());
-            return agal_value;
-          }
+          ).resolve().await;
+          value.data = AgalPromiseData::Resolved(agal_value.clone());
+          return agal_value;
         }
         Ok(value)
       }
@@ -293,15 +291,14 @@ pub fn async_interpreter(
       }
       parser::Node::DoWhile(do_while) => {
         let mut value = AgalValue::Never.as_ref();
-        let mut condition: Result<primitive::AgalBoolean, internal::AgalThrow> =
-          Ok(primitive::AgalBoolean::True);
+        let mut condition = Ok(primitive::AgalBoolean::True);
         loop {
           if !condition.clone()?.as_bool() {
             break;
           }
           value = async_interpreter(
             do_while.body.clone().to_node().to_box(),
-            stack.clone(),
+            stack.crate_child(false, node.clone()),
             modules.clone(),
           )
           .await?;
@@ -410,7 +407,8 @@ pub fn async_interpreter(
             .await?
             .to_agal_boolean(stack.clone(), modules.clone())?
             .not()
-            .as_bool() // condition value: i < 10
+            .as_bool()
+          // condition value: i < 10
           {
             break;
           }
@@ -420,7 +418,7 @@ pub fn async_interpreter(
             stack.crate_child(false, node),
             modules.clone(),
           )
-          .await?;// Block {..}
+          .await?; // Block {..}
           let v = value.un_ref();
           if v.is_return() {
             return value.to_result();
@@ -428,7 +426,8 @@ pub fn async_interpreter(
           if v.is_break() {
             break;
           }
-          async_interpreter(for_node.update.clone(), stack.clone(), modules.clone()).await?; // advance value: i+=1
+          async_interpreter(for_node.update.clone(), stack.clone(), modules.clone()).await?;
+          // advance value: i+=1
         }
         value.to_result()
       }

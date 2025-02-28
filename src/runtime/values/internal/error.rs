@@ -53,6 +53,13 @@ impl traits::AgalValuable for AgalError {
     let message = parser::error_to_string(&type_error, message);
     Ok(primitive::AgalString::from_string(message))
   }
+  fn to_agal_console(
+      &self,
+      stack: runtime::RefStack,
+      modules: libraries::RefModules,
+    ) -> Result<primitive::AgalString, super::AgalThrow> {
+      Ok(self.to_agal_string(stack, modules)?.set_color(crate::util::Color::RED))
+  }
 
   fn to_agal_boolean(
     &self,

@@ -6,7 +6,6 @@ use std::{
   ops::{Deref, DerefMut},
   pin::Pin,
   rc::Rc,
-  sync::{Arc, Mutex},
   task::{Context, Poll},
 };
 
@@ -32,22 +31,20 @@ type Callback = Box<dyn FnOnce(Resolver, Resolver)>;
 
 type ResultFuture = Result<values::DefaultRefAgalValue, internal::AgalThrow>;
 pub enum AgalPromiseData {
-  Unresolved(Pin<Box<dyn Future<Output = ResultFuture>>>),
+  Unresolved(tokio::task::JoinHandle<ResultFuture>),
   Resolved(ResultFuture),
 }
 impl AgalPromiseData {
-  pub fn new(inner: Pin<Box<dyn Future<Output = ResultFuture>>>) -> Self {
-    Self::Unresolved(inner)
+  pub fn new(inner: Pin<Box<dyn Future<Output = ResultFuture> + Send>>) -> Self {
+    Self::Unresolved(tokio::spawn(inner))
   }
-}
-impl IntoFuture for AgalPromiseData {
-  type Output = ResultFuture;
-  type IntoFuture = Pin<Box<dyn Future<Output = ResultFuture>>>;
-
-  fn into_future(self) -> Self::IntoFuture {
+  pub async fn resolve(self) -> ResultFuture {
     match self {
-      Self::Unresolved(inner) => inner,
-      Self::Resolved(value) => Box::pin(async move { value }),
+      AgalPromiseData::Unresolved(handle) => match handle.await {
+        Ok(result) => result,
+        Err(e) => Err(internal::AgalThrow::Params { type_error: parser::ErrorNames::CustomError("ERROR PROMESA"), message: "sin informacion".into(), stack:runtime::RefStack::get_default() }),
+      },
+      AgalPromiseData::Resolved(value) => value.clone(),
     }
   }
 }
@@ -66,9 +63,9 @@ impl std::fmt::Debug for AgalPromise {
   }
 }
 impl AgalPromise {
-  pub fn new(inner: Pin<Box<dyn Future<Output = ResultFuture>>>) -> Self {
+  pub fn new(inner: Pin<Box<dyn Future<Output = ResultFuture> + Send>>) -> Self {
     Self {
-      data: AgalPromiseData::Unresolved(inner),
+      data: AgalPromiseData::new(inner),
     }
   }
 }
@@ -82,7 +79,7 @@ impl traits::AgalValuable for AgalPromise {
     match &self.data {
       AgalPromiseData::Unresolved(_) => "Promesa".to_string(),
       AgalPromiseData::Resolved(value) => format!(
-        "{}",
+        "Promesa <{}>",
         match value {
           Ok(value) => value.get_name(),
           Err(value) => value.get_name(),
