@@ -13,17 +13,18 @@ use std::{
 use tokio::task::JoinHandle;
 
 use crate::{
-  libraries,
+  functions_names, libraries, parser,
   runtime::{
     self,
     values::{
-      self, internal, primitive,
+      self, error_message, internal, primitive,
       traits::{self, AgalValuable, ToAgalValue as _},
       AgalValue,
     },
   },
 };
-
+pub const PROMISE_THEN: &str = "luego";
+pub const PROMISE_CATCH: &str = "atrapa";
 use super::AgalComplex;
 
 type Resolver = dyn FnOnce(values::DefaultRefAgalValue);
@@ -31,17 +32,17 @@ type Callback = Box<dyn FnOnce(Resolver, Resolver)>;
 
 type ResultFuture = Result<values::DefaultRefAgalValue, internal::AgalThrow>;
 pub enum AgalPromiseData {
-  Unresolved(Pin<Box<dyn Future<Output = ResultFuture> + 'static>>),
+  Unresolved(Pin<Box<dyn Future<Output = ResultFuture>>>),
   Resolved(ResultFuture),
 }
 impl AgalPromiseData {
-  pub fn new(inner: Pin<Box<dyn Future<Output = ResultFuture> + 'static>>) -> Self {
+  pub fn new(inner: Pin<Box<dyn Future<Output = ResultFuture>>>) -> Self {
     Self::Unresolved(inner)
   }
 }
 impl IntoFuture for AgalPromiseData {
   type Output = ResultFuture;
-  type IntoFuture = Pin<Box<dyn Future<Output = ResultFuture> + 'static>>;
+  type IntoFuture = Pin<Box<dyn Future<Output = ResultFuture>>>;
 
   fn into_future(self) -> Self::IntoFuture {
     match self {
@@ -65,7 +66,7 @@ impl std::fmt::Debug for AgalPromise {
   }
 }
 impl AgalPromise {
-  pub fn new(inner: Pin<Box<dyn Future<Output = ResultFuture> + 'static>>) -> Self {
+  pub fn new(inner: Pin<Box<dyn Future<Output = ResultFuture>>>) -> Self {
     Self {
       data: AgalPromiseData::Unresolved(inner),
     }
@@ -104,7 +105,22 @@ impl traits::AgalValuable for AgalPromise {
     key: &str,
     modules: libraries::RefModules,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
-    todo!()
+    match key {
+      functions_names::TO_AGAL_STRING | PROMISE_THEN | PROMISE_CATCH => modules
+        .get_module(":proto/Promesa")
+        .ok_or_else(|| internal::AgalThrow::Params {
+          type_error: parser::ErrorNames::TypeError,
+          message: error_message::GET_INSTANCE_PROPERTY.to_owned(),
+          stack: stack.clone(),
+        })?
+        .get_instance_property(stack, key, modules),
+      _ => internal::AgalThrow::Params {
+        type_error: parser::ErrorNames::TypeError,
+        message: error_message::GET_INSTANCE_PROPERTY.to_owned(),
+        stack,
+      }
+      .to_result(),
+    }
   }
 
   fn equals(&self, other: &Self) -> bool {

@@ -66,8 +66,8 @@ impl traits::AgalValuable for AgalObject {
     match hashmap.get(key) {
       Some(v) => Ok(v.clone()),
       None => internal::AgalThrow::Params {
-        type_error: parser::ErrorNames::LexerError,
-        message: error_message::INVALID_INSTANCE_PROPERTIES.to_string(),
+        type_error: parser::ErrorNames::TypeError,
+        message: error_message::GET_INSTANCE_PROPERTY.to_string(),
         stack,
       }
       .to_result(),
@@ -102,8 +102,8 @@ impl traits::AgalValuable for AgalObject {
       return Ok(v.value);
     }
     internal::AgalThrow::Params {
-      type_error: parser::ErrorNames::LexerError,
-      message: error_message::INVALID_INSTANCE_PROPERTIES.to_string(),
+      type_error: parser::ErrorNames::TypeError,
+      message: error_message::GET_INSTANCE_PROPERTY.to_string(),
       stack,
     }
     .to_result()

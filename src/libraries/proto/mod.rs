@@ -5,7 +5,9 @@ use crate::runtime::values::{
 use std::{cell::RefCell, rc::Rc};
 
 mod array;
+mod function;
 mod number;
+mod promise;
 mod string;
 
 pub fn get_name(prefix: &str) -> String {
@@ -24,6 +26,12 @@ pub fn get_dir_module(
   }
   if string::get_name() == args {
     return string::get_sub_module(prefix, args, modules_manager);
+  }
+  if promise::get_name() == args {
+    return promise::get_sub_module(prefix, args, modules_manager);
+  }
+  if function::get_name() == args {
+    return function::get_sub_module(prefix, args, modules_manager);
   }
   let mut module_name = get_name(prefix);
 
@@ -45,11 +53,27 @@ pub fn get_dir_module(
     },
   );
   hashmap.insert(
-    array::get_name(),
+    string::get_name(),
     complex::AgalClassProperty {
       is_public: true,
       is_static: true,
       value: string::get_sub_module(prefix, args, modules_manager.clone()),
+    },
+  );
+  hashmap.insert(
+    promise::get_name(),
+    complex::AgalClassProperty {
+      is_public: true,
+      is_static: true,
+      value: promise::get_sub_module(prefix, args, modules_manager.clone()),
+    },
+  );
+  hashmap.insert(
+    function::get_name(),
+    complex::AgalClassProperty {
+      is_public: true,
+      is_static: true,
+      value: function::get_sub_module(prefix, args, modules_manager.clone()),
     },
   );
   let prototype = complex::AgalPrototype::new(Rc::new(RefCell::new(hashmap)), None);

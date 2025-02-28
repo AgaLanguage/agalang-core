@@ -24,22 +24,7 @@ pub enum AgalInternal {
   Lazy(AgalLazy),
   Error(AgalError),
   Immutable(AgalImmutable),
-  Return(super::DefaultRefAgalValue),
   NativeFunction(native_function::AgalNativeFunction),
-}
-impl AgalInternal {
-  pub fn is_return(&self) -> bool {
-    match self {
-      AgalInternal::Return(_) => true,
-      _ => false,
-    }
-  }
-  pub fn into_return(self) -> Option<super::DefaultRefAgalValue> {
-    match self {
-      AgalInternal::Return(val) => Some(val),
-      _ => None,
-    }
-  }
 }
 impl traits::ToAgalValue for AgalInternal {
   fn to_value(self) -> AgalValue {
@@ -51,7 +36,6 @@ impl traits::AgalValuable for AgalInternal {
     match self {
       Self::Lazy(lazy) => lazy.get_name(),
       Self::Error(error) => error.get_name(),
-      Self::Return(value) => value.get_name(),
       Self::NativeFunction(func) => func.get_name(),
       Self::Immutable(immutable) => immutable.get_name(),
     }
@@ -64,7 +48,6 @@ impl traits::AgalValuable for AgalInternal {
     match self {
       Self::Lazy(lazy) => lazy.to_agal_string(stack, modules),
       Self::Error(error) => error.to_agal_string(stack, modules),
-      Self::Return(val) => val.to_agal_string(stack, modules),
       Self::NativeFunction(func) => func.to_agal_string(stack, modules),
       Self::Immutable(immutable) => immutable.to_agal_string(stack, modules),
     }
@@ -77,7 +60,6 @@ impl traits::AgalValuable for AgalInternal {
     match self {
       Self::Lazy(lazy) => lazy.to_agal_console(stack, modules),
       Self::Error(error) => error.to_agal_console(stack, modules),
-      Self::Return(val) => val.to_agal_console(stack, modules),
       Self::NativeFunction(func) => func.to_agal_console(stack, modules),
       Self::Immutable(immutable) => immutable.to_agal_console(stack, modules),
     }
@@ -92,7 +74,6 @@ impl traits::AgalValuable for AgalInternal {
     match self {
       Self::Lazy(lazy) => lazy.call(stack, this, args, modules),
       Self::Error(error) => error.call(stack, this, args, modules),
-      Self::Return(val) => val.call(stack, this, args, modules),
       Self::NativeFunction(func) => func.call(stack, this, args, modules),
       Self::Immutable(immutable) => immutable.call(stack, this, args, modules),
     }
@@ -102,7 +83,6 @@ impl traits::AgalValuable for AgalInternal {
     match self {
       Self::Lazy(l) => l.get_keys(),
       Self::Error(e) => e.get_keys(),
-      Self::Return(r) => r.get_keys(),
       Self::NativeFunction(f) => f.get_keys(),
       Self::Immutable(i) => i.get_keys(),
     }
@@ -116,7 +96,6 @@ impl traits::AgalValuable for AgalInternal {
     match self {
       Self::Error(e) => e.to_agal_byte(stack, modules),
       Self::Lazy(l) => l.to_agal_byte(stack, modules),
-      Self::Return(r) => r.to_agal_byte(stack, modules),
       Self::NativeFunction(f) => f.to_agal_byte(stack, modules),
       Self::Immutable(i) => i.to_agal_byte(stack, modules),
     }
@@ -130,7 +109,6 @@ impl traits::AgalValuable for AgalInternal {
     match self {
       Self::Error(e) => e.to_agal_boolean(stack, modules),
       Self::Lazy(l) => l.to_agal_boolean(stack, modules),
-      Self::Return(r) => r.to_agal_boolean(stack, modules),
       Self::NativeFunction(f) => f.to_agal_boolean(stack, modules),
       Self::Immutable(i) => i.to_agal_boolean(stack, modules),
     }
@@ -144,7 +122,6 @@ impl traits::AgalValuable for AgalInternal {
     match self {
       Self::Error(e) => e.to_agal_array(stack, modules),
       Self::Lazy(l) => l.to_agal_array(stack, modules),
-      Self::Return(r) => r.to_agal_array(stack, modules),
       Self::NativeFunction(f) => f.to_agal_array(stack, modules),
       Self::Immutable(i) => i.to_agal_array(stack, modules),
     }
@@ -160,7 +137,6 @@ impl traits::AgalValuable for AgalInternal {
     match self {
       Self::Error(e) => e.binary_operation(stack, operator, right, modules),
       Self::Lazy(l) => l.binary_operation(stack, operator, right, modules),
-      Self::Return(r) => r.binary_operation(stack, operator, right, modules),
       Self::NativeFunction(f) => f.binary_operation(stack, operator, right, modules),
       Self::Immutable(i) => i.binary_operation(stack, operator, right, modules),
     }
@@ -174,7 +150,6 @@ impl traits::AgalValuable for AgalInternal {
     match self {
       Self::Error(e) => e.get_object_property(stack, key),
       Self::Lazy(l) => l.get_object_property(stack, key),
-      Self::Return(r) => r.get_object_property(stack, key),
       Self::NativeFunction(f) => f.get_object_property(stack, key),
       Self::Immutable(i) => i.get_object_property(stack, key),
     }
@@ -189,7 +164,6 @@ impl traits::AgalValuable for AgalInternal {
     match self {
       Self::Error(e) => e.set_object_property(stack, key, value),
       Self::Lazy(l) => l.set_object_property(stack, key, value),
-      Self::Return(r) => r.set_object_property(stack, key, value),
       Self::NativeFunction(f) => f.set_object_property(stack, key, value),
       Self::Immutable(i) => i.set_object_property(stack, key, value),
     }
@@ -204,7 +178,6 @@ impl traits::AgalValuable for AgalInternal {
     match self {
       Self::Error(e) => e.get_instance_property(stack, key, modules),
       Self::Lazy(l) => l.get_instance_property(stack, key, modules),
-      Self::Return(r) => r.get_instance_property(stack, key, modules),
       Self::NativeFunction(f) => f.get_instance_property(stack, key, modules),
       Self::Immutable(i) => i.get_instance_property(stack, key, modules),
     }
@@ -218,7 +191,6 @@ impl traits::AgalValuable for AgalInternal {
     match self {
       Self::Error(e) => e.to_agal_number(stack, modules),
       Self::Lazy(l) => l.to_agal_number(stack, modules),
-      Self::Return(r) => r.to_agal_number(stack, modules),
       Self::NativeFunction(f) => f.to_agal_number(stack, modules),
       Self::Immutable(i) => i.to_agal_number(stack, modules),
     }
@@ -228,7 +200,6 @@ impl traits::AgalValuable for AgalInternal {
     match (self, other) {
       (Self::Error(e1), Self::Error(e2)) => e1.equals(e2),
       (Self::Lazy(l1), Self::Lazy(l2)) => l1.equals(l2),
-      (Self::Return(r1), Self::Return(r2)) => r1.equals(r2),
       (Self::NativeFunction(f1), Self::NativeFunction(f2)) => f1.equals(f2),
       (Self::Immutable(i1), Self::Immutable(i2)) => i1.equals(i2),
       (Self::Immutable(i), o) => i.get_value().equals(&o.clone().to_ref_value()),
@@ -241,7 +212,6 @@ impl traits::AgalValuable for AgalInternal {
     match (self, other) {
       (Self::Error(e1), Self::Error(e2)) => e1.less_than(e2),
       (Self::Lazy(l1), Self::Lazy(l2)) => l1.less_than(l2),
-      (Self::Return(r1), Self::Return(r2)) => r1.less_than(r2),
       (Self::NativeFunction(f1), Self::NativeFunction(f2)) => f1.less_than(f2),
       (Self::Immutable(i1), Self::Immutable(i2)) => i1.less_than(i2),
       (Self::Immutable(i), o) => i.get_value().less_than(&o.clone().to_ref_value()),

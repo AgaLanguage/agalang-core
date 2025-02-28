@@ -115,7 +115,7 @@ impl Environment {
     if self._has(name) {
       return Err(internal::AgalThrow::Params {
         type_error: parser::ErrorNames::EnvironmentError,
-        message: format!("La variable {} ya ha sido declarada", name),
+        message: format!("La variable '{}' ya ha sido declarada", name),
         stack,
       });
     }

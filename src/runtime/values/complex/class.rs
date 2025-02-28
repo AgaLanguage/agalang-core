@@ -1,5 +1,6 @@
 use std::{cell::RefCell, collections::HashMap, fmt::format, rc::Rc};
 
+use super::{AgalComplex, AgalObject};
 use crate::{
   functions_names, libraries, parser,
   runtime::{
@@ -12,8 +13,6 @@ use crate::{
   },
   util::{self, OnError as _},
 };
-
-use super::AgalComplex;
 
 type RefHasMap<Value> = Rc<RefCell<HashMap<String, Value>>>;
 fn ref_hash_map<T: Clone>() -> RefHasMap<T> {
@@ -245,11 +244,11 @@ impl traits::AgalValuable for AgalPrototype {
   }
 
   fn equals(&self, other: &Self) -> bool {
-    todo!()
+    Rc::ptr_eq(&self.instance_properties, &other.instance_properties)
   }
 
   fn less_than(&self, other: &Self) -> bool {
-    todo!()
+    false
   }
 }
 
@@ -300,20 +299,13 @@ impl AgalClass {
   pub fn constructor(
     &self,
     stack: runtime::RefStack,
-    env: runtime::RefEnvironment,
     this: values::RefAgalValue<super::AgalObject>,
     args: Vec<values::DefaultRefAgalValue>,
-    modules_manager: libraries::RefModules,
+    modules: libraries::RefModules,
   ) -> values::DefaultRefAgalValue {
     if let Some(class) = &self.extend_of {
       let value = class.un_ref();
-      value.constructor(
-        stack.clone(),
-        env.clone(),
-        this.clone(),
-        args.clone(),
-        modules_manager.clone(),
-      );
+      value.constructor(stack.clone(), this.clone(), args.clone(), modules.clone());
     }
     let instance = self.instance.borrow();
     let instance_properties = instance.instance_properties.borrow();
@@ -323,7 +315,7 @@ impl AgalClass {
       let property_value = property.value.un_ref();
       property_value
         .clone()
-        .call(stack, this_value.clone(), args, modules_manager);
+        .call(stack, this_value.clone(), args, modules);
     }
     this_value
   }
@@ -374,7 +366,12 @@ impl traits::AgalValuable for AgalClass {
     right: values::DefaultRefAgalValue,
     modules: libraries::RefModules,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
-    todo!()
+    internal::AgalThrow::Params {
+      type_error: parser::ErrorNames::TypeError,
+      message: error_message::BINARY_OPERATION(self.get_name(), operator, right.get_name()),
+      stack,
+    }
+    .to_result()
   }
 
   fn get_instance_property(
@@ -383,7 +380,15 @@ impl traits::AgalValuable for AgalClass {
     key: &str,
     modules: libraries::RefModules,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
-    todo!()
+    match self.static_properties.borrow().get(key) {
+      Some(property) => Ok(property.value.clone()),
+      None => internal::AgalThrow::Params {
+        type_error: parser::ErrorNames::TypeError,
+        message: error_message::GET_INSTANCE_PROPERTY.into(),
+        stack,
+      }
+      .to_result(),
+    }
   }
 
   fn call(
@@ -393,14 +398,19 @@ impl traits::AgalValuable for AgalClass {
     args: Vec<values::DefaultRefAgalValue>,
     modules: libraries::RefModules,
   ) -> Result<crate::runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
-    todo!()
+    Ok(self.constructor(
+      stack,
+      AgalObject::from_prototype(self.instance.clone()).as_ref(),
+      args,
+      modules,
+    ))
   }
 
   fn equals(&self, other: &Self) -> bool {
-    Rc::as_ptr(&self.static_properties) == Rc::as_ptr(&self.static_properties)
+    Rc::ptr_eq(&self.static_properties, &self.static_properties)
   }
 
   fn less_than(&self, other: &Self) -> bool {
-    todo!()
+    false
   }
 }

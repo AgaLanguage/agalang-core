@@ -1,14 +1,17 @@
+use std::rc::Rc;
+
 use crate::{
   libraries, parser,
   runtime::{
-    self, async_interpreter, interpreter,
+    self, async_interpreter, call_function_interpreter, interpreter,
     values::{
-      internal, primitive,
+      error_message, internal, primitive,
       traits::{self, AgalValuable, ToAgalValue},
     },
   },
   util,
 };
+pub const FUNCTION_CALL: &str = "llamar";
 
 #[derive(Clone, Debug)]
 pub struct AgalFunction {
@@ -102,14 +105,10 @@ impl traits::AgalValuable for AgalFunction {
       );
     }
     if self.is_async {
-      super::promise::AgalPromise::new(Box::pin(async_interpreter(
-        self.body.clone().to_node().to_box(),
-        stack,
-        modules,
-      )))
-      .to_result()
+      super::promise::AgalPromise::new(call_function_interpreter(self.body.clone(), stack, modules))
+        .to_result()
     } else {
-      interpreter(self.body.clone().to_node().to_box(), stack, modules)
+      Ok(interpreter(self.body.clone().to_node().to_box(), stack, modules)?.into_return())
     }
   }
 
@@ -128,7 +127,12 @@ impl traits::AgalValuable for AgalFunction {
     right: runtime::values::DefaultRefAgalValue,
     modules: libraries::RefModules,
   ) -> Result<runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
-    todo!()
+    internal::AgalThrow::Params {
+      type_error: parser::ErrorNames::TypeError,
+      message: error_message::BINARY_OPERATION(self.get_name(), operator, right.get_name()),
+      stack,
+    }
+    .to_result()
   }
 
   fn get_instance_property(
@@ -137,14 +141,32 @@ impl traits::AgalValuable for AgalFunction {
     key: &str,
     modules: libraries::RefModules,
   ) -> Result<runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
-    todo!()
+    match key {
+      FUNCTION_CALL => modules
+        .get_module(":proto/Funcion")
+        .ok_or_else(|| internal::AgalThrow::Params {
+          type_error: parser::ErrorNames::TypeError,
+          message: error_message::GET_INSTANCE_PROPERTY.to_owned(),
+          stack: stack.clone(),
+        })?
+        .get_instance_property(stack, key, modules),
+      _ => internal::AgalThrow::Params {
+        type_error: parser::ErrorNames::TypeError,
+        message: error_message::GET_INSTANCE_PROPERTY.to_owned(),
+        stack,
+      }
+      .to_result(),
+    }
   }
 
   fn equals(&self, other: &Self) -> bool {
-    todo!()
+    (self.name == other.name)
+      && (self.is_async == other.is_async)
+      && (self.body == other.body)
+      && (self.args == other.args)
   }
 
   fn less_than(&self, other: &Self) -> bool {
-    todo!()
+    false
   }
 }

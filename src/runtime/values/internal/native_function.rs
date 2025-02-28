@@ -7,7 +7,7 @@ use crate::{
     env::RefEnvironment,
     stack::RefStack,
     values::{
-      self, error_message, internal, primitive,
+      self, complex, error_message, internal, primitive,
       traits::{self, AgalValuable as _, ToAgalValue as _},
       AgalValue,
     },
@@ -124,7 +124,22 @@ impl traits::AgalValuable for AgalNativeFunction {
     key: &str,
     modules: libraries::RefModules,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
-    todo!()
+    match key {
+      complex::FUNCTION_CALL => modules
+        .get_module(":proto/Funcion")
+        .ok_or_else(|| internal::AgalThrow::Params {
+          type_error: parser::ErrorNames::TypeError,
+          message: error_message::GET_INSTANCE_PROPERTY.to_owned(),
+          stack: stack.clone(),
+        })?
+        .get_instance_property(stack, key, modules),
+      _ => internal::AgalThrow::Params {
+        type_error: parser::ErrorNames::TypeError,
+        message: error_message::GET_INSTANCE_PROPERTY.to_owned(),
+        stack,
+      }
+      .to_result(),
+    }
   }
 
   fn equals(&self, other: &Self) -> bool {

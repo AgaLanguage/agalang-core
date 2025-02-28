@@ -11,7 +11,7 @@ pub mod internal;
 pub mod primitive;
 pub mod traits;
 use primitive::AgalBoolean;
-use traits::{AgalValuable as _, ToAgalValue};
+use traits::{AgalValuable, ToAgalValue};
 
 use crate::libraries;
 
@@ -166,25 +166,25 @@ impl<T: traits::AgalValuable + traits::ToAgalValue + ToString> ToString for RefA
 }
 impl RefAgalValue<AgalValue> {
   pub fn is_return(&self) -> bool {
-    self.un_ref().is_return()
+    self.borrow().is_return()
   }
   pub fn is_break(&self) -> bool {
-    self.un_ref().is_break()
+    self.borrow().is_break()
   }
   pub fn is_continue(&self) -> bool {
-    self.un_ref().is_continue()
+    self.borrow().is_continue()
   }
   pub fn is_stop(&self) -> bool {
-    self.un_ref().is_stop()
+    self.borrow().is_stop()
   }
   pub fn is_never(&self) -> bool {
-    self.un_ref().is_never()
+    self.borrow().is_never()
   }
   pub fn to_result(&self) -> Result<RefAgalValue<AgalValue>, internal::AgalThrow> {
     self.un_ref().to_result()
   }
-  pub fn into_return(&self) -> Option<DefaultRefAgalValue> {
-    self.un_ref().into_return()
+  pub fn into_return(&self) -> DefaultRefAgalValue {
+    self.borrow().into_return()
   }
 }
 impl Default for RefAgalValue<AgalValue> {
@@ -199,6 +199,7 @@ pub enum AgalValue {
   Primitive(RefAgalValue<primitive::AgalPrimitive>),
   Internal(RefAgalValue<internal::AgalInternal>),
   Export(String, DefaultRefAgalValue),
+  Return(DefaultRefAgalValue),
   Continue,
   #[default]
   Never,
@@ -209,25 +210,25 @@ pub enum AgalValue {
 impl AgalValue {
   pub fn is_return(&self) -> bool {
     match self {
-      AgalValue::Internal(i) => i.un_ref().is_return(),
+      Self::Return(_) => true,
       _ => false,
     }
   }
   pub fn is_never(&self) -> bool {
     match self {
-      AgalValue::Never => true,
+      Self::Never => true,
       _ => false,
     }
   }
   pub fn is_break(&self) -> bool {
     match self {
-      AgalValue::Break => true,
+      Self::Break => true,
       _ => false,
     }
   }
   pub fn is_continue(&self) -> bool {
     match self {
-      AgalValue::Continue => true,
+      Self::Continue => true,
       _ => false,
     }
   }
@@ -236,15 +237,16 @@ impl AgalValue {
   }
   pub fn to_result(&self) -> ResultAgalValue {
     match self {
-      AgalValue::Internal(i) => i.un_ref().to_result(),
-      AgalValue::Continue | AgalValue::Break | AgalValue::Never => Ok(AgalValue::Never.as_ref()),
+      Self::Internal(i) => i.un_ref().to_result(),
+      Self::Continue | Self::Break | Self::Never => Ok(Self::Never.as_ref()),
       _ => Ok(self.clone().as_ref()),
     }
   }
-  pub fn into_return(&self) -> Option<DefaultRefAgalValue> {
+  pub fn into_return(&self) -> DefaultRefAgalValue {
     match self {
-      AgalValue::Internal(i) => i.un_ref().into_return(),
-      _ => None,
+      Self::Return(value) => value.clone(),
+      Self::Continue | Self::Break | Self::Never => Self::Never.as_ref(),
+      value => value.clone().as_ref(),
     }
   }
 }
@@ -271,7 +273,7 @@ impl traits::AgalValuable for AgalValue {
       Self::Internal(i) => i.get_name(),
       Self::Never => "Ninguno".to_string(),
       Self::Null => "Nulo".to_string(),
-      Self::Export(_, v) => v.get_name(),
+      Self::Export(_, v) | Self::Return(v) => v.get_name(),
       Self::Continue => "<Palabra clave Continuar>".to_string(),
       Self::Break => "<Palabra clave Romper>".to_string(),
       Self::Console => "<Palabra clave Consola>".to_string(),
@@ -321,7 +323,7 @@ impl traits::AgalValuable for AgalValue {
       Self::Complex(c) => c.to_agal_byte(stack, modules),
       Self::Primitive(p) => p.to_agal_byte(stack, modules),
       Self::Internal(i) => i.to_agal_byte(stack, modules),
-      Self::Export(_, v) => v.to_agal_byte(stack, modules),
+      Self::Export(_, v) | Self::Return(v) => v.to_agal_byte(stack, modules),
       Self::Never | Self::Null => Ok(primitive::AgalByte::new(0)),
       Self::Break | Self::Console | Self::Continue => Err(internal::AgalThrow::Params {
         type_error: parser::ErrorNames::TypeError,
@@ -339,7 +341,7 @@ impl traits::AgalValuable for AgalValue {
       Self::Complex(c) => c.to_agal_boolean(stack, modules),
       Self::Primitive(p) => p.to_agal_boolean(stack, modules),
       Self::Internal(i) => i.to_agal_boolean(stack, modules),
-      Self::Export(_, v) => v.to_agal_boolean(stack, modules),
+      Self::Export(_, v) | Self::Return(v) => v.to_agal_boolean(stack, modules),
       Self::Never | Self::Null | Self::Break | Self::Continue | Self::Console => {
         Ok(primitive::AgalBoolean::False)
       }
@@ -354,7 +356,7 @@ impl traits::AgalValuable for AgalValue {
       Self::Complex(c) => c.to_agal_console(stack, modules),
       Self::Primitive(p) => p.to_agal_console(stack, modules),
       Self::Internal(i) => i.to_agal_console(stack, modules),
-      Self::Export(_, v) => v.to_agal_console(stack, modules),
+      Self::Export(_, v) | Self::Return(v) => v.to_agal_console(stack, modules),
       Self::Null => Ok(primitive::AgalString::from_string(
         util::Color::BRIGHT_WHITE.apply(super::NULL_KEYWORD),
       )),
@@ -378,7 +380,7 @@ impl traits::AgalValuable for AgalValue {
       Self::Complex(c) => c.get_instance_property(stack, key, modules),
       Self::Primitive(p) => p.get_instance_property(stack, key, modules),
       Self::Internal(i) => i.get_instance_property(stack, key, modules),
-      Self::Export(_, v) => v.get_instance_property(stack, key, modules),
+      Self::Export(_, v) | Self::Return(v) => v.get_instance_property(stack, key, modules),
       Self::Never | Self::Null | Self::Break | Self::Continue | Self::Console => {
         internal::AgalThrow::Params {
           type_error: parser::ErrorNames::TypeError,
@@ -404,7 +406,7 @@ impl traits::AgalValuable for AgalValue {
       Self::Complex(c) => c.call(stack, this, args, modules),
       Self::Primitive(p) => p.call(stack, this, args, modules),
       Self::Internal(i) => i.call(stack, this, args, modules),
-      Self::Export(_, v) => v.call(stack, this, args, modules),
+      Self::Export(_, v) | Self::Return(v) => v.call(stack, this, args, modules),
       Self::Never | Self::Null | Self::Break | Self::Continue | Self::Console => {
         internal::AgalThrow::Params {
           type_error: parser::ErrorNames::TypeError,
@@ -421,7 +423,7 @@ impl traits::AgalValuable for AgalValue {
       Self::Complex(c) => self.get_keys(),
       Self::Internal(i) => self.get_keys(),
       Self::Primitive(p) => self.get_keys(),
-      Self::Export(_, v) => v.get_keys(),
+      Self::Export(_, v) | Self::Return(v) => v.get_keys(),
       Self::Never | Self::Null | Self::Break | Self::Continue | Self::Console => vec![],
     }
   }
@@ -435,7 +437,7 @@ impl traits::AgalValuable for AgalValue {
       Self::Complex(c) => c.to_agal_array(stack, modules),
       Self::Primitive(p) => p.to_agal_array(stack, modules),
       Self::Internal(i) => i.to_agal_array(stack, modules),
-      Self::Export(_, v) => v.to_agal_array(stack, modules),
+      Self::Export(_, v) | Self::Return(v) => v.to_agal_array(stack, modules),
       Self::Never | Self::Null | Self::Break | Self::Continue | Self::Console => {
         Err(internal::AgalThrow::Params {
           type_error: parser::ErrorNames::TypeError,

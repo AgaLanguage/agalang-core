@@ -1,15 +1,20 @@
 #importa ':proto' como PT; #al cargar proto se carga automaticamente proto/Numero para no repetir
 importa ':consola' como Consola;
+importa ':tmp' como Tmp;
 
-def lista = [];
-def x;
-'escribe el primer elemento: ' >> csl >> x;
-lista[0] = x::remplaza('\r\n','');
-'escribe el segundo elemento: ' >> csl >> x;
-lista[1] = x::remplaza('\r\n','');
-'escribe el tercer elemento: ' >> csl >> x;
-lista[2] = x::remplaza('\r\n','');
+asinc fn funcion(){
+  
+  espera Tmp::esperar(10);
+  Consola::pintar("Adentro");
+}
 
-csl << lista::__cad__() + '\n';
-borra lista;
-Consola::pintar(lista);
+def a = funcion()::luego(fn (){
+  Consola::pintar("Adentro luego");
+  lanza ":D";
+})::atrapa(fn (){
+  Consola::pintar("Adentro atrapa");
+  ret ":C";
+});
+Consola::pintar("Afuera");
+def b = espera a;
+Consola::pintar(b);
