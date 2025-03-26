@@ -1,9 +1,8 @@
 use std::{
-  cell::RefCell,
   fs,
   io::{self, Read as _, Write as _},
   path::Path,
-  rc::Rc,
+   sync::{Arc, RwLock},
 };
 
 use crate::{
@@ -25,7 +24,7 @@ fn get_path(
   modules: RefModules,
 ) -> Result<primitive::AgalString, internal::AgalThrow> {
   let string = this.get_object_property(stack.clone(), "@ruta");
-  string?.borrow().to_agal_string(stack, modules)
+  string?.get().to_agal_string(stack, modules)
 }
 
 pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
@@ -43,7 +42,7 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
           is_static: false,
           value: internal::AgalNativeFunction {
             name: format!("{path_name}::es_archivo"),
-            func: Rc::new(|_, stack, modules, this| {
+            func: Arc::new(|_, stack, modules, this| {
               let string = get_path(stack.clone(), this, modules)?;
               let binding = string.to_string();
               let path = std::path::Path::new(&binding);
@@ -60,7 +59,7 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
           is_static: false,
           value: internal::AgalNativeFunction {
             name: format!("{path_name}::es_carpeta"),
-            func: Rc::new(|_, stack, modules, this| {
+            func: Arc::new(|_, stack, modules, this| {
               let string = get_path(stack, this, modules)?;
               let binding = string.to_string();
               let path = std::path::Path::new(&binding);
@@ -77,7 +76,7 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
           is_static: false,
           value: internal::AgalNativeFunction {
             name: format!("{path_name}::nombre"),
-            func: Rc::new(|_, stack, modules, this| get_path(stack, this, modules)?.to_result()),
+            func: Arc::new(|_, stack, modules, this| get_path(stack, this, modules)?.to_result()),
           }
           .to_ref_value(),
         },
@@ -89,7 +88,7 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
           is_static: false,
           value: internal::AgalNativeFunction {
             name: format!("{path_name}::obtener_padre"),
-            func: Rc::new(|_, stack, modules, this| {
+            func: Arc::new(|_, stack, modules, this| {
               let string = get_path(stack, this, modules)?;
               let binding = string.to_string();
               let path = std::path::Path::new(&binding);
@@ -113,7 +112,7 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
       is_static: true,
       value: internal::AgalNativeFunction {
         name: format!("{module_name}::leer_archivo"),
-        func: Rc::new(|arguments, stack, modules, this| {
+        func: Arc::new(|arguments, stack, modules, this| {
           let path: Option<&values::DefaultRefAgalValue> = arguments.get(0);
           if !path.is_some() {
             return internal::AgalThrow::Params {
@@ -149,7 +148,7 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
       is_static: true,
       value: internal::AgalNativeFunction {
         name: format!("{module_name}::leer_carpeta"),
-        func: Rc::new(|arguments, stack, modules, this| {
+        func: Arc::new(|arguments, stack, modules, this| {
           let path: Option<&values::DefaultRefAgalValue> = arguments.get(0);
           if !path.is_some() {
             return AgalValue::Never.to_result();
@@ -188,7 +187,7 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
       is_static: true,
       value: internal::AgalNativeFunction {
         name: format!("{module_name}::obtener_ruta"),
-        func: Rc::new(move |arguments, stack, modules, this| {
+        func: Arc::new(move |arguments, stack, modules, this| {
           let p: Option<&values::DefaultRefAgalValue> = arguments.get(0);
           if !p.is_some() {
             return AgalValue::Never.to_result();
@@ -214,7 +213,7 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
       is_static: true,
       value: internal::AgalNativeFunction {
         name: format!("{module_name}::escribir_archivo"),
-        func: Rc::new(|arguments, stack, modules, this| {
+        func: Arc::new(|arguments, stack, modules, this| {
           let path: Option<&values::DefaultRefAgalValue> = arguments.get(0);
           if !path.is_some() {
             return AgalValue::Never.to_result();
@@ -253,7 +252,7 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
           let binding = content
             .unwrap()
             .to_agal_array(stack.clone(), modules.clone())?;
-          let content = &*binding.borrow();
+          let content = &*binding.get();
           let mut buf: &[u8] = &content.to_buffer(stack.clone(), modules)?;
           let f = file.write_all(buf);
           if let Err(error) = f {
@@ -277,7 +276,7 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
       is_static: true,
       value: internal::AgalNativeFunction {
         name: format!("{module_name}::crear_archivo"),
-        func: Rc::new(|arguments, stack, modules, this| {
+        func: Arc::new(|arguments, stack, modules, this| {
           let path: Option<&values::DefaultRefAgalValue> = arguments.get(0);
           if !path.is_some() {
             return AgalValue::Never.to_result();
@@ -315,7 +314,7 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
       is_static: true,
       value: internal::AgalNativeFunction {
         name: format!("{module_name}::crear_carpeta"),
-        func: Rc::new(|arguments, stack, modules, this| {
+        func: Arc::new(|arguments, stack, modules, this| {
           let path: Option<&values::DefaultRefAgalValue> = arguments.get(0);
           if !path.is_some() {
             return AgalValue::Never.to_result();
@@ -347,7 +346,7 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
     },
   );
 
-  let prototype = complex::AgalPrototype::new(Rc::new(RefCell::new(hashmap)), None);
+  let prototype = complex::AgalPrototype::new(Arc::new(RwLock::new(hashmap)), None);
   complex::AgalObject::from_prototype(prototype.as_ref()).to_ref_value()
 }
 pub fn get_name(prefix: &str) -> String {

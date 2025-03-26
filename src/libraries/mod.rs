@@ -1,7 +1,6 @@
 use std::{
-  cell::{Ref, RefCell},
   collections::HashMap,
-  rc::Rc, sync::{Arc, Mutex, RwLock},
+  sync::{Arc, RwLock},
 };
 
 use crate::runtime::values::{self, DefaultRefAgalValue};
@@ -28,8 +27,7 @@ impl Modules {
     if self.has(key) {
       return self.get(key).unwrap_or_else(|| value);
     }
-    let mut v = self.0.write().unwrap();
-    v.insert(key.to_string(), value.clone());
+    self.0.write().unwrap().insert(key.to_string(), value.clone());
     value
   }
   fn as_ref(self) -> RefModules {

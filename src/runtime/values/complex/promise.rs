@@ -1,14 +1,12 @@
 use std::{
-  borrow::BorrowMut,
-  cell::RefCell,
   fmt::format,
   future::{self, Future, IntoFuture},
   ops::{Deref, DerefMut},
   pin::Pin,
-  rc::Rc,
   task::{Context, Poll},
 };
 
+use futures_util::FutureExt;
 use tokio::task::JoinHandle;
 
 use crate::{
@@ -18,7 +16,7 @@ use crate::{
     values::{
       self, error_message, internal, primitive,
       traits::{self, AgalValuable, ToAgalValue as _},
-      AgalValue,
+      AgalValue, ResultAgalValue,
     },
   },
 };
@@ -29,22 +27,27 @@ use super::AgalComplex;
 type Resolver = dyn FnOnce(values::DefaultRefAgalValue);
 type Callback = Box<dyn FnOnce(Resolver, Resolver)>;
 
-type ResultFuture = Result<values::DefaultRefAgalValue, internal::AgalThrow>;
 pub enum AgalPromiseData {
-  Unresolved(tokio::task::JoinHandle<ResultFuture>),
-  Resolved(ResultFuture),
+  Unresolved(tokio::task::JoinHandle<ResultAgalValue>),
+  Resolved(ResultAgalValue),
 }
 impl AgalPromiseData {
-  pub fn new(inner: Pin<Box<dyn Future<Output = ResultFuture> + Send>>) -> Self {
+  pub fn new(inner: Pin<Box<dyn Future<Output = ResultAgalValue> + Send>>) -> Self {
     Self::Unresolved(tokio::spawn(inner))
   }
-  pub async fn resolve(self) -> ResultFuture {
+  pub fn resolve(self) -> Pin<Box<dyn Future<Output = ResultAgalValue> + Send>> {
     match self {
-      AgalPromiseData::Unresolved(handle) => match handle.await {
-        Ok(result) => result,
-        Err(e) => Err(internal::AgalThrow::Params { type_error: parser::ErrorNames::CustomError("ERROR PROMESA"), message: "sin informacion".into(), stack:runtime::RefStack::get_default() }),
-      },
-      AgalPromiseData::Resolved(value) => value.clone(),
+      AgalPromiseData::Unresolved(handle) => async move {
+        match handle.await {
+          Ok(result) => result,
+          Err(_) => Err(internal::AgalThrow::Params {
+            type_error: parser::ErrorNames::CustomError("ERROR PROMESA"),
+            message: "sin informacion".into(),
+            stack: runtime::RefStack::get_default(),
+          }),
+        }
+      }.boxed(),
+      AgalPromiseData::Resolved(value) => future::ready(value).boxed(),
     }
   }
 }
@@ -63,7 +66,7 @@ impl std::fmt::Debug for AgalPromise {
   }
 }
 impl AgalPromise {
-  pub fn new(inner: Pin<Box<dyn Future<Output = ResultFuture> + Send>>) -> Self {
+  pub fn new(inner: Pin<Box<dyn Future<Output = ResultAgalValue> + Send>>) -> Self {
     Self {
       data: AgalPromiseData::new(inner),
     }

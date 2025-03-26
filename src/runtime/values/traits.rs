@@ -20,7 +20,7 @@ pub trait ToAgalValue: AgalValuable {
     Ok(self.to_ref_value())
   }
 }
-pub trait AgalValuable {
+pub trait AgalValuable: Send {
   fn get_name(&self) -> String;
   fn as_ref(self) -> RefAgalValue<Self>
   where

@@ -2,7 +2,7 @@ use crate::runtime::values::{
   self, complex,
   traits::{AgalValuable as _, ToAgalValue as _},
 };
-use std::{cell::RefCell, rc::Rc};
+use std::sync::{RwLock, Arc};
 
 mod byte;
 mod array;
@@ -100,7 +100,7 @@ pub fn get_dir_module(
       value: function::get_sub_module(prefix, args, modules_manager.clone()),
     },
   );
-  let prototype = complex::AgalPrototype::new(Rc::new(RefCell::new(hashmap)), None);
+  let prototype = complex::AgalPrototype::new(Arc::new(RwLock::new(hashmap)), None);
   modules_manager.add(
     &module_name,
     complex::AgalObject::from_prototype(prototype.as_ref()).to_ref_value(),

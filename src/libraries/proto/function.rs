@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc};
+use std::sync::{RwLock, Arc};
 
 use crate::{
   functions_names, libraries, parser,
@@ -35,7 +35,7 @@ pub fn get_sub_module(
       is_static: true,
       value: internal::AgalNativeFunction {
         name: format!("{module_name}::{}", functions_names::TO_AGAL_STRING),
-        func: Rc::new(|arguments, stack, modules, this| {
+        func: Arc::new(|arguments, stack, modules, this| {
           arguments
             .get(0)
             .or_else(|| Some(&this))
@@ -58,7 +58,7 @@ pub fn get_sub_module(
       is_static: true,
       value: internal::AgalNativeFunction {
         name: format!("{module_name}::{FUNCTION_CALL}"),
-        func: Rc::new(|arguments, stack, modules, real_this| {
+        func: Arc::new(|arguments, stack, modules, real_this| {
           let this = arguments
             .get(0)
             .ok_or_else(|| internal::AgalThrow::Params {
@@ -75,9 +75,9 @@ pub fn get_sub_module(
               stack: stack.clone(),
             })?
             .to_agal_array(stack.clone(), modules.clone())?
-            .borrow()
+            .get()
             .to_vec()
-            .borrow()
+            .read().unwrap()
             .clone();
           real_this.call(stack, this, args, modules)
         }),
@@ -86,7 +86,7 @@ pub fn get_sub_module(
     },
   );
 
-  let prototype = complex::AgalPrototype::new(Rc::new(RefCell::new(hashmap)), None);
+  let prototype = complex::AgalPrototype::new(Arc::new(RwLock::new(hashmap)), None);
   modules_manager.add(
     &module_name,
     complex::AgalObject::from_prototype(prototype.as_ref()).to_ref_value(),

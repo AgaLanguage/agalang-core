@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashMap, fmt::format, rc::Rc};
+use std::{collections::HashMap, fmt::format, sync::{Arc, RwLock}};
 
 use super::{AgalComplex, AgalObject};
 use crate::{
@@ -14,9 +14,9 @@ use crate::{
   util::{self, OnError as _},
 };
 
-type RefHasMap<Value> = Rc<RefCell<HashMap<String, Value>>>;
+type RefHasMap<Value> = Arc<RwLock<HashMap<String, Value>>>;
 fn ref_hash_map<T: Clone>() -> RefHasMap<T> {
-  Rc::new(RefCell::new(HashMap::new()))
+  Arc::new(RwLock::new(HashMap::new()))
 }
 #[derive(Clone, Debug)]
 pub struct AgalClassProperty {
@@ -41,10 +41,10 @@ impl AgalPrototype {
     }
   }
   pub fn get(&self, key: &str) -> Option<AgalClassProperty> {
-    if self.instance_properties.borrow().contains_key(key) {
-      self.instance_properties.borrow().get(key).cloned()
+    if self.instance_properties.read().unwrap().contains_key(key) {
+      self.instance_properties.read().unwrap().get(key).cloned()
     } else if let Some(p) = &self.super_instance {
-      p.borrow().get(key)
+      p.get().get(key)
     } else {
       None
     }
@@ -244,7 +244,7 @@ impl traits::AgalValuable for AgalPrototype {
   }
 
   fn equals(&self, other: &Self) -> bool {
-    Rc::ptr_eq(&self.instance_properties, &other.instance_properties)
+    Arc::ptr_eq(&self.instance_properties, &other.instance_properties)
   }
 
   fn less_than(&self, other: &Self) -> bool {
@@ -273,9 +273,9 @@ impl AgalClass {
         continue;
       }
       let mut properties = if property.1.is_static {
-        static_properties.as_ref().borrow_mut()
+        static_properties.as_ref().write().unwrap()
       } else {
-        instance_properties.as_ref().borrow_mut()
+        instance_properties.as_ref().write().unwrap()
       };
 
       properties.insert(property.0.clone(), property.1.clone());
@@ -307,10 +307,10 @@ impl AgalClass {
       let value = class.un_ref();
       value.constructor(stack.clone(), this.clone(), args.clone(), modules.clone());
     }
-    let instance = self.instance.borrow();
-    let instance_properties = instance.instance_properties.borrow();
+    let instance = self.instance.get();
+    let instance_properties = instance.instance_properties.read().unwrap();
     let constructor = instance_properties.get(functions_names::CONSTRUCTOR);
-    let this_value = this.borrow().clone().to_ref_value();
+    let this_value = this.get().clone().to_ref_value();
     if let Some(property) = constructor {
       let property_value = property.value.un_ref();
       property_value
@@ -380,7 +380,7 @@ impl traits::AgalValuable for AgalClass {
     key: &str,
     modules: libraries::RefModules,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
-    match self.static_properties.borrow().get(key) {
+    match self.static_properties.read().unwrap().get(key) {
       Some(property) => Ok(property.value.clone()),
       None => internal::AgalThrow::Params {
         type_error: parser::ErrorNames::TypeError,
@@ -407,7 +407,7 @@ impl traits::AgalValuable for AgalClass {
   }
 
   fn equals(&self, other: &Self) -> bool {
-    Rc::ptr_eq(&self.static_properties, &self.static_properties)
+    Arc::ptr_eq(&self.static_properties, &self.static_properties)
   }
 
   fn less_than(&self, other: &Self) -> bool {

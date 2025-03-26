@@ -1,8 +1,7 @@
 use std::{
-  cell::RefCell,
   collections::{HashMap, HashSet},
   fmt::Debug,
-  rc::Rc,
+  sync::{Arc, RwLock},
 };
 
 use crate::parser;
@@ -21,8 +20,8 @@ use super::{
 pub struct Environment {
   in_class: bool,
   parent: Option<RefEnvironment>,
-  variables: Rc<RefCell<HashMap<String, DefaultRefAgalValue>>>,
-  constants: Rc<RefCell<HashSet<String>>>,
+  variables: Arc<RwLock<HashMap<String, DefaultRefAgalValue>>>,
+  constants: Arc<RwLock<HashSet<String>>>,
 }
 pub const TRUE_KEYWORD: &str = "cierto";
 pub const FALSE_KEYWORD: &str = "falso";
@@ -43,24 +42,26 @@ impl Environment {
     let mut env = Environment {
       in_class: false,
       parent: None,
-      variables: Rc::new(RefCell::new(HashMap::new())),
-      constants: Rc::new(RefCell::new(HashSet::new())),
+      variables: Arc::new(RwLock::new(HashMap::new())),
+      constants: Arc::new(RwLock::new(HashSet::new())),
     };
-    env.variables.borrow_mut().insert(
+    env.variables.write().unwrap().insert(
       TRUE_KEYWORD.to_string(),
       primitive::AgalBoolean::True.to_ref_value(),
     );
-    env.variables.borrow_mut().insert(
+    env.variables.write().unwrap().insert(
       FALSE_KEYWORD.to_string(),
       primitive::AgalBoolean::False.to_ref_value(),
     );
     env
       .variables
-      .borrow_mut()
+      .write()
+      .unwrap()
       .insert(NULL_KEYWORD.to_string(), AgalValue::Null.as_ref());
     env
       .variables
-      .borrow_mut()
+      .write()
+      .unwrap()
       .insert(NOTHING_KEYWORD.to_string(), AgalValue::Never.as_ref());
     env
   }
@@ -72,7 +73,7 @@ impl Environment {
     env
   }
   pub fn as_ref(self) -> RefEnvironment {
-    RefEnvironment(Rc::new(RefCell::new(self)))
+    RefEnvironment(Arc::new(RwLock::new(self)))
   }
   pub fn get_this(&self, stack: RefStack, node: &parser::Node) -> ResultAgalValue {
     self.get(stack, THIS_KEYWORD, node)
@@ -90,8 +91,8 @@ impl Environment {
     Self {
       in_class,
       parent: Some(self.as_ref()),
-      variables: Rc::new(RefCell::new(HashMap::new())),
-      constants: Rc::new(RefCell::new(HashSet::new())),
+      variables: Arc::new(RwLock::new(HashMap::new())),
+      constants: Arc::new(RwLock::new(HashSet::new())),
     }
   }
   pub fn is_keyword(&self, ref name: &str) -> bool {
@@ -120,19 +121,20 @@ impl Environment {
       });
     }
     if is_constant {
-      self.constants.borrow_mut().insert(name.to_string());
+      self.constants.write().unwrap().insert(name.to_string());
     }
     self
       .variables
-      .borrow_mut()
+      .write()
+      .unwrap()
       .insert(name.to_string(), value.clone());
     Ok(value)
   }
   pub fn is_constant(&self, name: &str) -> bool {
-    self.constants.borrow().contains(name)
+    self.constants.read().unwrap().contains(name)
   }
   pub fn delete(&self, name: &str) -> bool {
-    self.variables.borrow_mut().remove(name).is_some()
+    self.variables.write().unwrap().remove(name).is_some()
   }
   pub fn assign(
     &mut self,
@@ -165,7 +167,7 @@ impl Environment {
     Ok(self.resolve(name, node).set(name, value))
   }
   pub fn set(&mut self, name: &str, value: DefaultRefAgalValue) -> DefaultRefAgalValue {
-    let mut hashmap = self.variables.borrow_mut();
+    let mut hashmap = self.variables.write().unwrap();
     if hashmap.contains_key(name) {
       hashmap.remove(name);
     }
@@ -184,7 +186,7 @@ impl Environment {
     Ok(env.get_key(name).clone())
   }
   fn _has(&self, name: &str) -> bool {
-    self.variables.borrow_mut().contains_key(name)
+    self.variables.write().unwrap().contains_key(name)
   }
   pub fn has(&self, name: &str, node: &parser::Node) -> bool {
     self.resolve(name, node)._has(name)
@@ -199,32 +201,38 @@ impl Environment {
 }
 
 #[derive(Clone, Debug)]
-pub struct RefEnvironment(Rc<RefCell<Environment>>);
+pub struct RefEnvironment(Arc<RwLock<Environment>>);
 
 impl RefEnvironment {
   pub fn get_default() -> RefEnvironment {
-    RefEnvironment(Rc::new(RefCell::new(Environment::get_default())))
+    RefEnvironment(Arc::new(RwLock::new(Environment::get_default())))
   }
   pub fn un_ref(&self) -> Environment {
-    self.0.borrow().clone()
+    self.0.read().unwrap().clone()
   }
   pub fn get_global(&self) -> RefEnvironment {
-    self.0.borrow().get_global().clone()
+    self.0.read().unwrap().get_global().clone()
   }
   pub fn crate_child(&self, in_class: bool) -> Self {
-    self.0.borrow().clone().crate_child(in_class).as_ref()
+    self
+      .0
+      .read()
+      .unwrap()
+      .clone()
+      .crate_child(in_class)
+      .as_ref()
   }
   pub fn has_parent(&self) -> bool {
-    self.0.borrow().parent.is_some()
+    self.0.read().unwrap().parent.is_some()
   }
   pub fn get_parent(&self) -> RefEnvironment {
-    self.0.borrow().parent.clone().unwrap()
+    self.0.read().unwrap().parent.clone().unwrap()
   }
   pub fn use_private(&self) -> bool {
-    self.0.borrow().clone().use_private()
+    self.0.read().unwrap().clone().use_private()
   }
-  pub fn set(&mut self, name: &str, value: DefaultRefAgalValue) -> DefaultRefAgalValue {
-    self.0.borrow_mut().set(name, value)
+  pub fn set(&self, name: &str, value: DefaultRefAgalValue) -> DefaultRefAgalValue {
+    self.0.write().unwrap().set(name, value)
   }
   pub fn define(
     &mut self,
@@ -236,25 +244,28 @@ impl RefEnvironment {
   ) -> ResultAgalValue {
     self
       .0
-      .borrow_mut()
+      .write()
+      .unwrap()
       .define(stack, name, value, is_constant, node)
   }
   pub fn get_key(&self, name: &str) -> DefaultRefAgalValue {
     self
       .0
-      .borrow()
+      .read()
+      .unwrap()
       .clone()
       .variables
-      .borrow_mut()
+      .write()
+      .unwrap()
       .get(name)
       .unwrap()
       .clone()
   }
   pub fn get(&self, stack: RefStack, name: &str, node: &parser::Node) -> ResultAgalValue {
-    self.0.borrow().get(stack, name, node)
+    self.0.read().unwrap().get(stack, name, node)
   }
   pub fn _has(&self, name: &str) -> bool {
-    self.0.borrow()._has(name)
+    self.0.read().unwrap()._has(name)
   }
   pub fn resolve(&self, name: &str, node: &parser::Node) -> RefEnvironment {
     if !self._has(name) && self.has_parent() {
@@ -264,7 +275,7 @@ impl RefEnvironment {
     return self.clone();
   }
   pub fn delete(&self, name: &str) -> bool {
-    self.0.borrow().delete(name)
+    self.0.read().unwrap().delete(name)
   }
   pub fn assign(
     &mut self,
@@ -273,10 +284,10 @@ impl RefEnvironment {
     value: DefaultRefAgalValue,
     node: &parser::Node,
   ) -> ResultAgalValue {
-    self.0.borrow_mut().assign(stack, name, value, node)
+    self.0.write().unwrap().assign(stack, name, value, node)
   }
   pub fn is_constant(&self, name: &str) -> bool {
-    self.0.borrow().is_constant(name)
+    self.0.read().unwrap().is_constant(name)
   }
   pub fn is_keyword(&self, ref name: &str) -> bool {
     KEYWORDS.contains(name)

@@ -1,4 +1,4 @@
-use std::{borrow::Borrow, path::Path, rc::Rc};
+use std::path::Path;
 
 use crate::{
   libraries, parser,
@@ -30,7 +30,7 @@ pub fn full_eval(
   path: String,
   stack: RefStack,
   modules_manager: libraries::RefModules,
-) -> std::pin::Pin<Box<dyn std::future::Future<Output = EvalResult>>> {
+) -> std::pin::Pin<Box<dyn std::future::Future<Output = EvalResult> + Send>> {
   Box::pin(async move {
     if modules_manager.has(&path) {
       return modules_manager.try_get(&path);
@@ -63,7 +63,6 @@ async fn eval(
   let box_node = program.to_box();
   let new_stack = stack.crate_child(false, box_node.clone());
   let value = async_interpreter(box_node, new_stack, modules_manager).await;
-  let value = &*value.borrow();
   match value {
     Err(throw) => {
       let (type_err, err) = throw.get_data();

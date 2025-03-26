@@ -51,7 +51,7 @@ impl traits::AgalValuable for AgalError {
   ) -> Result<primitive::AgalString, super::throw::AgalThrow> {
     let (type_error, message) = self.get_data();
     let message = parser::error_to_string(&type_error, message);
-    Ok(primitive::AgalString::from_string(message))
+    Ok(primitive::AgalString::from_string(format!("error: {}", message)))
   }
   fn to_agal_console(
       &self,

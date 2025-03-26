@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::{
   libraries, parser,
@@ -20,13 +20,13 @@ use super::AgalInternal;
 #[derive(Clone)]
 pub struct AgalNativeFunction {
   pub name: String,
-  pub func: Rc<
+  pub func: Arc<
     dyn Fn(
       Vec<values::DefaultRefAgalValue>,
       RefStack,
       libraries::RefModules,
       values::DefaultRefAgalValue,
-    ) -> Result<values::DefaultRefAgalValue, super::AgalThrow>,
+    ) -> Result<values::DefaultRefAgalValue, super::AgalThrow> + Send + Sync
   >,
 }
 impl std::fmt::Debug for AgalNativeFunction {
@@ -143,7 +143,7 @@ impl traits::AgalValuable for AgalNativeFunction {
   }
 
   fn equals(&self, other: &Self) -> bool {
-    Rc::as_ptr(&self.func) == Rc::as_ptr(&other.func)
+    Arc::ptr_eq(&self.func, &other.func)
   }
 
   fn less_than(&self, other: &Self) -> bool {

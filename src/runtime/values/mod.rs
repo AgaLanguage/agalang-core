@@ -1,7 +1,13 @@
-use std::{cell::RefCell, future::Future, pin::Pin, rc::Rc, sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard}};
+use std::{
+  future::Future,
+  pin::Pin,
+  sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard},
+};
 
 use crate::{parser, util};
+use complex::{AgalPromise, AgalPromiseData};
 use error_message::TO_AGAL_CONSOLE;
+use futures_util::FutureExt;
 use internal::AgalThrow;
 
 mod error_message;
@@ -22,14 +28,17 @@ impl<T: traits::AgalValuable + traits::ToAgalValue> RefAgalValue<T> {
   pub fn new(value: T) -> Self {
     Self(Arc::new(RwLock::new(value)))
   }
-  pub fn borrow(&self) -> RwLockReadGuard<'_, T>{
+  pub fn as_arc(&self) -> Arc<RwLock<T>> {
+    self.0.clone()
+  }
+  pub fn get(&self) -> RwLockReadGuard<'_, T> {
     self.0.read().unwrap()
   }
-  pub fn borrow_mut(&self) -> RwLockWriteGuard<'_, T> {
+  pub fn get_mut(&self) -> RwLockWriteGuard<'_, T> {
     self.0.write().unwrap()
   }
   pub fn ptr(&self) -> *const T {
-    let b = &*self.borrow();
+    let b = &*self.get();
     b as *const T
   }
 }
@@ -53,43 +62,43 @@ impl<T: traits::AgalValuable + traits::ToAgalValue + Clone> traits::ToAgalValue
 }
 impl<T: traits::AgalValuable + traits::ToAgalValue + Clone> RefAgalValue<T> {
   pub fn un_ref(&self) -> T {
-    self.borrow().clone()
+    self.get().clone()
   }
 }
 impl<T: traits::AgalValuable + traits::ToAgalValue> traits::AgalValuable for RefAgalValue<T> {
   fn get_name(&self) -> String {
-    self.borrow().get_name()
+    self.get().get_name()
   }
   fn as_string(&self) -> String {
-    self.borrow().as_string()
+    self.get().as_string()
   }
   fn to_agal_string(
     &self,
     stack: super::RefStack,
     modules: libraries::RefModules,
   ) -> Result<primitive::AgalString, internal::AgalThrow> {
-    self.borrow().to_agal_string(stack, modules)
+    self.get().to_agal_string(stack, modules)
   }
   fn to_agal_byte(
     &self,
     stack: super::RefStack,
     modules: libraries::RefModules,
   ) -> Result<primitive::AgalByte, internal::AgalThrow> {
-    self.borrow().to_agal_byte(stack, modules)
+    self.get().to_agal_byte(stack, modules)
   }
   fn to_agal_boolean(
     &self,
     stack: super::RefStack,
     modules: libraries::RefModules,
   ) -> Result<primitive::AgalBoolean, internal::AgalThrow> {
-    self.borrow().to_agal_boolean(stack, modules)
+    self.get().to_agal_boolean(stack, modules)
   }
   fn to_agal_console(
     &self,
     stack: super::RefStack,
     modules: libraries::RefModules,
   ) -> Result<primitive::AgalString, internal::AgalThrow> {
-    self.borrow().to_agal_console(stack, modules)
+    self.get().to_agal_console(stack, modules)
   }
   fn get_instance_property(
     &self,
@@ -97,14 +106,14 @@ impl<T: traits::AgalValuable + traits::ToAgalValue> traits::AgalValuable for Ref
     key: &str,
     modules: libraries::RefModules,
   ) -> Result<DefaultRefAgalValue, internal::AgalThrow> {
-    self.borrow().get_instance_property(stack, key, modules)
+    self.get().get_instance_property(stack, key, modules)
   }
   fn get_object_property(
     &self,
     stack: super::RefStack,
     key: &str,
   ) -> Result<DefaultRefAgalValue, internal::AgalThrow> {
-    self.borrow().get_object_property(stack, key)
+    self.get().get_object_property(stack, key)
   }
   fn set_object_property(
     &mut self,
@@ -112,7 +121,7 @@ impl<T: traits::AgalValuable + traits::ToAgalValue> traits::AgalValuable for Ref
     key: &str,
     value: DefaultRefAgalValue,
   ) -> Result<DefaultRefAgalValue, internal::AgalThrow> {
-    self.borrow_mut().set_object_property(stack, key, value)
+    self.get_mut().set_object_property(stack, key, value)
   }
   fn call(
     &self,
@@ -121,7 +130,7 @@ impl<T: traits::AgalValuable + traits::ToAgalValue> traits::AgalValuable for Ref
     args: Vec<DefaultRefAgalValue>,
     modules: libraries::RefModules,
   ) -> ResultAgalValue {
-    self.borrow().call(stack, this, args, modules)
+    self.get().call(stack, this, args, modules)
   }
 
   fn binary_operation(
@@ -131,19 +140,17 @@ impl<T: traits::AgalValuable + traits::ToAgalValue> traits::AgalValuable for Ref
     right: DefaultRefAgalValue,
     modules: libraries::RefModules,
   ) -> Result<DefaultRefAgalValue, internal::AgalThrow> {
-    self
-      .borrow()
-      .binary_operation(stack, operator, right, modules)
+    self.get().binary_operation(stack, operator, right, modules)
   }
   fn to_agal_array(
     &self,
     stack: super::RefStack,
     modules: libraries::RefModules,
   ) -> Result<RefAgalValue<complex::AgalArray>, internal::AgalThrow> {
-    self.borrow().to_agal_array(stack, modules)
+    self.get().to_agal_array(stack, modules)
   }
   fn get_keys(&self) -> Vec<String> {
-    self.borrow().get_keys()
+    self.get().get_keys()
   }
 
   fn to_agal_number(
@@ -151,15 +158,15 @@ impl<T: traits::AgalValuable + traits::ToAgalValue> traits::AgalValuable for Ref
     stack: super::RefStack,
     modules: libraries::RefModules,
   ) -> Result<primitive::AgalNumber, internal::AgalThrow> {
-    self.borrow().to_agal_number(stack, modules)
+    self.get().to_agal_number(stack, modules)
   }
 
   fn equals(&self, other: &Self) -> bool {
-    self.borrow().equals(&*other.borrow())
+    self.get().equals(&*other.get())
   }
 
   fn less_than(&self, other: &Self) -> bool {
-    self.borrow().less_than(&*other.borrow())
+    self.get().less_than(&*other.get())
   }
 }
 impl<T: traits::AgalValuable + traits::ToAgalValue + ToString> ToString for RefAgalValue<T> {
@@ -169,25 +176,25 @@ impl<T: traits::AgalValuable + traits::ToAgalValue + ToString> ToString for RefA
 }
 impl RefAgalValue<AgalValue> {
   pub fn is_return(&self) -> bool {
-    self.borrow().is_return()
+    self.get().is_return()
   }
   pub fn is_break(&self) -> bool {
-    self.borrow().is_break()
+    self.get().is_break()
   }
   pub fn is_continue(&self) -> bool {
-    self.borrow().is_continue()
+    self.get().is_continue()
   }
   pub fn is_stop(&self) -> bool {
-    self.borrow().is_stop()
+    self.get().is_stop()
   }
   pub fn is_never(&self) -> bool {
-    self.borrow().is_never()
+    self.get().is_never()
   }
   pub fn to_result(&self) -> Result<RefAgalValue<AgalValue>, internal::AgalThrow> {
     self.un_ref().to_result()
   }
   pub fn into_return(&self) -> DefaultRefAgalValue {
-    self.borrow().into_return()
+    self.get().into_return()
   }
 }
 impl Default for RefAgalValue<AgalValue> {
@@ -195,7 +202,22 @@ impl Default for RefAgalValue<AgalValue> {
     Self::new(AgalValue::default())
   }
 }
-unsafe impl<T: traits::AgalValuable + traits::ToAgalValue> Send for RefAgalValue<T>{}
+impl RefAgalValue<AgalPromise> {
+  pub fn replace(&self) -> AgalPromiseData {
+    let mut guard_mut = self.get_mut();
+    std::mem::replace(&mut guard_mut.data, AgalPromiseData::default())
+  }
+  pub fn get_value(&self) -> Option<ResultAgalValue> {
+    let guard = self.get();
+
+    if let AgalPromiseData::Resolved(r) = &guard.data {
+      return Some(r.clone());
+    }
+    None
+  }
+}
+unsafe impl<T: traits::AgalValuable + traits::ToAgalValue> Send for RefAgalValue<T> {}
+unsafe impl<T: traits::AgalValuable + traits::ToAgalValue> Sync for RefAgalValue<T> {}
 
 #[derive(Clone, Debug, Default)]
 pub enum AgalValue {
@@ -472,10 +494,10 @@ impl traits::AgalValuable for AgalValue {
     right: DefaultRefAgalValue,
     modules: libraries::RefModules,
   ) -> Result<DefaultRefAgalValue, internal::AgalThrow> {
-    match (self, operator, &*right.clone().borrow()) {
-      (Self::Complex(c), _, _) => c.borrow().binary_operation(stack, operator, right, modules),
-      (Self::Primitive(p), _, _) => p.borrow().binary_operation(stack, operator, right, modules),
-      (Self::Internal(i), _, _) => i.borrow().binary_operation(stack, operator, right, modules),
+    match (self, operator, &*right.clone().get()) {
+      (Self::Complex(c), _, _) => c.get().binary_operation(stack, operator, right, modules),
+      (Self::Primitive(p), _, _) => p.get().binary_operation(stack, operator, right, modules),
+      (Self::Internal(i), _, _) => i.get().binary_operation(stack, operator, right, modules),
       (Self::Null, parser::ast::NodeOperator::NotEqual, Self::Null)
       | (Self::Null, parser::ast::NodeOperator::Equal, _)
       | (Self::Never, parser::ast::NodeOperator::NotEqual, Self::Never)
@@ -501,9 +523,9 @@ impl traits::AgalValuable for AgalValue {
 
   fn get_object_property(&self, stack: super::RefStack, key: &str) -> ResultAgalValue {
     match self {
-      Self::Complex(c) => c.borrow().get_object_property(stack, key),
-      Self::Internal(i) => i.borrow().get_object_property(stack, key),
-      Self::Primitive(p) => p.borrow().get_object_property(stack, key),
+      Self::Complex(c) => c.get().get_object_property(stack, key),
+      Self::Internal(i) => i.get().get_object_property(stack, key),
+      Self::Primitive(p) => p.get().get_object_property(stack, key),
       _ => AgalThrow::Params {
         type_error: parser::ErrorNames::TypeError,
         message: error_message::GET_OBJECT_PROPERTY.to_owned(),
@@ -520,9 +542,9 @@ impl traits::AgalValuable for AgalValue {
     value: DefaultRefAgalValue,
   ) -> ResultAgalValue {
     match self {
-      Self::Complex(c) => c.borrow_mut().set_object_property(stack, key, value),
-      Self::Internal(i) => i.borrow_mut().set_object_property(stack, key, value),
-      Self::Primitive(p) => p.borrow_mut().set_object_property(stack, key, value),
+      Self::Complex(c) => c.get_mut().set_object_property(stack, key, value),
+      Self::Internal(i) => i.get_mut().set_object_property(stack, key, value),
+      Self::Primitive(p) => p.get_mut().set_object_property(stack, key, value),
       _ => AgalThrow::Params {
         type_error: parser::ErrorNames::TypeError,
         message: error_message::SET_OBJECT_PROPERTY.to_owned(),

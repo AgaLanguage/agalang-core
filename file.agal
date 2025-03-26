@@ -17,6 +17,7 @@ asinc fn funcion(t){
 def a = funcion(10)::luego(fn (){
   lanza ">:D";
 })::atrapa(fn (e){
+  csl << e;
   ret ":)";
 });
 Consola::pintar("Afuera");

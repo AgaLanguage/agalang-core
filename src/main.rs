@@ -7,11 +7,10 @@ mod runtime;
 mod util;
 
 use std::{
-  cell::RefCell, collections::HashMap, process::ExitCode, rc::Rc, thread::sleep, time::Duration,
+  collections::HashMap, process::ExitCode, thread::sleep, time::Duration,
 };
 
 use runtime::values::DefaultRefAgalValue;
-
 #[tokio::main]
 async fn main() -> ExitCode {
   let modules_manager = libraries::RefModules::new();
