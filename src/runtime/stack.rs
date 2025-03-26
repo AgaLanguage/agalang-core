@@ -1,10 +1,10 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{sync::{Arc, RwLock}};
 
 use crate::parser;
 
 use super::RefEnvironment;
 #[derive(Clone, Debug)]
-pub struct RefStack(Rc<RefCell<Stack>>);
+pub struct RefStack(Arc<RwLock<Stack>>);
 impl RefStack {
   pub fn get_default() -> Self {
     Stack::new(RefEnvironment::get_default()).to_ref()
@@ -18,19 +18,19 @@ impl RefStack {
     .to_ref()
   }
   pub fn with_env(&self, env: RefEnvironment) -> Self {
-    self.0.borrow().with_env(env).to_ref()
+    self.0.read().unwrap().with_env(env).to_ref()
   }
   pub fn next(self, value: parser::BNode) -> Self {
-    self.0.borrow_mut().next(value).to_ref()
+    self.0.write().unwrap().next(value).to_ref()
   }
   pub fn pop(self) -> Option<Self> {
-    self.0.borrow_mut().pop()
+    self.0.write().unwrap().pop()
   }
   pub fn current(&self) -> parser::BNode {
-    self.0.borrow().current()
+    self.0.read().unwrap().current()
   }
   pub fn env(&self) -> RefEnvironment {
-    self.0.borrow().env()
+    self.0.read().unwrap().env()
   }
   pub fn get_global(&self) -> Self {
     Stack {
@@ -78,7 +78,7 @@ impl Stack {
     }
   }
   pub fn to_ref(self) -> RefStack {
-    RefStack(Rc::new(RefCell::new(self)))
+    RefStack(Arc::new(RwLock::new(self)))
   }
   pub fn crate_child(&self, in_class: bool, value: parser::BNode) -> Self {
     Self {

@@ -1,7 +1,5 @@
 use std::{
-  cell::{Ref, RefCell},
-  collections::HashMap,
-  rc::Rc,
+  collections::HashMap, sync::{Arc, RwLock, RwLockReadGuard},
 };
 
 use crate::{
@@ -19,7 +17,7 @@ use crate::{
 use super::AgalComplex;
 
 type AgalHashMap = HashMap<String, values::DefaultRefAgalValue>;
-type RefAgalHashMap = Rc<RefCell<AgalHashMap>>;
+type RefAgalHashMap = Arc<RwLock<AgalHashMap>>;
 type RefAgalProto = values::RefAgalValue<super::AgalPrototype>;
 #[derive(Clone, Debug)]
 pub struct AgalObject(RefAgalHashMap, Option<RefAgalProto>);
@@ -32,10 +30,10 @@ impl AgalObject {
     Self(hashmap, Some(prototype))
   }
   pub fn from_prototype(hashmap: RefAgalProto) -> AgalObject {
-    AgalObject(Rc::new(RefCell::new(HashMap::new())), Some(hashmap))
+    AgalObject(Arc::new(RwLock::new(HashMap::new())), Some(hashmap))
   }
-  pub fn get_hashmap(&self) -> Ref<AgalHashMap> {
-    self.0.as_ref().borrow()
+  pub fn get_hashmap(&self) -> RwLockReadGuard<'_, AgalHashMap> {
+    self.0.as_ref().read().unwrap()
   }
   pub fn get_prototype(&self) -> Option<RefAgalProto> {
     if let Some(a) = &self.1 {
@@ -62,7 +60,7 @@ impl traits::AgalValuable for AgalObject {
     Ok(primitive::AgalString::from_string("<Objeto>".to_string()))
   }
   fn get_object_property(&self, stack: runtime::RefStack, key: &str) -> values::ResultAgalValue {
-    let hashmap = &mut *self.0.as_ref().borrow_mut();
+    let hashmap = &mut *self.0.as_ref().write().unwrap();
     match hashmap.get(key) {
       Some(v) => Ok(v.clone()),
       None => internal::AgalThrow::Params {
@@ -79,7 +77,7 @@ impl traits::AgalValuable for AgalObject {
     key: &str,
     value: values::DefaultRefAgalValue,
   ) -> values::ResultAgalValue {
-    let mut hashmap = self.0.as_ref().borrow_mut();
+    let mut hashmap = self.0.as_ref().write().unwrap();
     if hashmap.contains_key(key) {
       hashmap.remove(key);
     }
@@ -94,7 +92,7 @@ impl traits::AgalValuable for AgalObject {
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
     if let Some(v) = {
       if let Some(v) = self.get_prototype() {
-        v.borrow().get(key)
+        v.get().get(key)
       } else {
         None
       }

@@ -1,4 +1,12 @@
-use std::{cell::RefCell, collections::HashMap, future::Future, path::Path, pin::Pin, rc::Rc};
+use std::{
+  collections::HashMap,
+  future::Future,
+  path::Path,
+  pin::Pin,
+  sync::{Arc, RwLock},
+};
+
+use futures_util::FutureExt;
 
 use crate::{libraries, parser, path::absolute_path};
 
@@ -21,8 +29,8 @@ pub fn call_function_interpreter(
   block: parser::NodeBlock,
   stack: RefStack,
   modules: libraries::RefModules,
-) -> Pin<Box<dyn Future<Output = ResultAgalValue>>> {
-  Box::pin(async move {
+) -> Pin<Box<dyn Future<Output = ResultAgalValue> + Send>> {
+  async move {
     let mut result = AgalValue::Never.as_ref();
     for statement in &block.body {
       result = async_interpreter(statement.to_box(), stack.clone(), modules.clone()).await?;
@@ -31,18 +39,23 @@ pub fn call_function_interpreter(
       }
     }
     Ok(result.into_return())
-  })
+  }
+  .boxed()
 }
+
+
 pub fn async_interpreter(
   node: parser::BNode,
   stack: RefStack,
   modules: libraries::RefModules,
-) -> Pin<Box<dyn Future<Output = ResultAgalValue>>> {
+) -> Pin<Box<dyn Future<Output = ResultAgalValue> + Send>> {
   let pre_stack = stack;
   let stack = pre_stack.clone().next(node.clone());
-  Box::pin(async move {
-    match node.clone().as_ref() {
-      parser::Node::Array(list) => {
+  let node = node.as_ref().clone();
+  match &node {
+    parser::Node::Array(list) => {
+      let list = list.clone();
+      async move {
         let mut vec = vec![];
         for n in &list.elements {
           match n {
@@ -54,7 +67,7 @@ pub fn async_interpreter(
               let data =
                 async_interpreter(iter.clone().to_box(), stack.clone(), modules.clone()).await?;
               let list = data.to_agal_array(stack.clone(), modules.clone())?.un_ref();
-              for n in list.to_vec().borrow().iter() {
+              for n in list.to_vec().read().unwrap().iter() {
                 vec.push(n.clone());
               }
             }
@@ -63,77 +76,97 @@ pub fn async_interpreter(
         }
         Ok(AgalArray::from(vec).to_value().as_ref())
       }
-      parser::Node::Assignment(assignment) => {
+      .boxed()
+    }
+    parser::Node::Assignment(assignment) => {
+      let assignment = assignment.clone();
+      async move {
         let value =
           async_interpreter(assignment.value.clone(), stack.clone(), modules.clone()).await?;
-        if value.borrow().is_never() {
-          return Err(internal::AgalThrow::Params {
+        if value.is_never() {
+          Err(internal::AgalThrow::Params {
             type_error: parser::ErrorNames::TypeError,
             message: "No se puede asignar \"nada\" a una variable".to_string(),
             stack,
-          });
-        }
-        match assignment.identifier.as_ref() {
-          parser::Node::Identifier(identifier) => {
-            stack
-              .env()
-              .assign(stack.clone(), &identifier.name, value, node.as_ref())
-          }
-          parser::Node::Member(member) => {
-            if member.instance {
-              return Err(internal::AgalThrow::Params {
-                type_error: parser::ErrorNames::TypeError,
-                message: "No se puede asignar una propiedad de instancia".to_string(),
-                stack,
-              });
+          })
+        } else {
+          match assignment.identifier.as_ref() {
+            parser::Node::Identifier(identifier) => {
+              stack
+                .env()
+                .assign(stack.clone(), &identifier.name, value, &node)
             }
-            let key = if !member.computed && member.member.is_identifier() {
-              member.member.get_identifier().unwrap().name.clone()
-            } else {
-              async_interpreter(member.member.clone(), stack.clone(), modules.clone())
-                .await?
-                .to_agal_string(stack.clone(), modules.clone())?
-                .to_string()
-            };
+            parser::Node::Member(member) => {
+              if member.instance {
+                Err(internal::AgalThrow::Params {
+                  type_error: parser::ErrorNames::TypeError,
+                  message: "No se puede asignar una propiedad de instancia".to_string(),
+                  stack,
+                })
+              } else {
+                let key = if !member.computed && member.member.is_identifier() {
+                  member.member.get_identifier().unwrap().name.clone()
+                } else {
+                  async_interpreter(member.member.clone(), stack.clone(), modules.clone())
+                    .await?
+                    .to_agal_string(stack.clone(), modules.clone())?
+                    .to_string()
+                };
 
-            async_interpreter(member.object.clone(), stack.clone(), modules.clone())
-              .await?
-              .set_object_property(stack, &key, value)
+                async_interpreter(member.object.clone(), stack.clone(), modules.clone())
+                  .await?
+                  .set_object_property(stack, &key, value)
+              }
+            }
+            _ => Ok(AgalValue::Never.as_ref()),
           }
-          _ => Ok(AgalValue::Never.as_ref()),
         }
       }
-      parser::Node::Await(a) => {
-        let value = async_interpreter(a.expression.clone(), stack.clone(), modules.clone()).await?;
-        if let AgalComplex::Promise(a) = {
+      .boxed()
+    }
+    parser::Node::Await(value) => {
+      let value = value.clone();
+      async move {
+        let value =
+          async_interpreter(value.expression.clone(), stack.clone(), modules.clone()).await?;
+
+        if let AgalComplex::Promise(value) = {
           if let AgalValue::Complex(c) = value.un_ref() {
             c.un_ref()
           } else {
-            return Ok(value);
+            return value.to_result();
           }
         } {
-          let mut value = a.borrow_mut();
-          if let AgalPromiseData::Resolved(r) = &value.data {
-            return r.clone();
+          if let Some(value) = value.get_value() {
+            return value;
           }
-          if let AgalPromiseData::Unresolved(future) = std::mem::replace(
-            &mut value.data,
-            AgalPromiseData::Resolved(AgalValue::Never.to_result()),
-          ) {
-            let agal_value = future.await;
-            value.data = AgalPromiseData::Resolved(agal_value.clone());
-            return agal_value;
-          }
+          let value_data = value.replace();
+
+          let agal_value_future = value_data.resolve();
+          let agal_value = agal_value_future.await;
+
+          let mut guard_mut = value.get_mut();
+          guard_mut.data = AgalPromiseData::Resolved(agal_value.clone());
+
+          return agal_value;
         }
+
         Ok(value)
-      }
-      parser::Node::Binary(binary) => {
+      }.boxed()
+    }
+    parser::Node::Binary(binary) => {
+      let binary = binary.clone();
+      async move {
         let operator = binary.operator;
         let left = async_interpreter(binary.left.clone(), stack.clone(), modules.clone()).await?;
         let right = async_interpreter(binary.right.clone(), stack.clone(), modules.clone()).await?;
         left.binary_operation(stack.clone(), operator, right, modules)
       }
-      parser::Node::Block(block, true) => {
+      .boxed()
+    }
+    parser::Node::Block(block, true) => {
+      let block = block.clone();
+      async move {
         let mut result = AgalValue::Never.as_ref();
         for statement in &block.body {
           result =
@@ -144,7 +177,11 @@ pub fn async_interpreter(
         }
         Ok(result)
       }
-      parser::Node::Import(import) => {
+      .boxed()
+    }
+    parser::Node::Import(import) => {
+      let import = import.clone();
+      async move {
         let module = if import
           .path
           .starts_with(crate::libraries::PREFIX_NATIVE_MODULES)
@@ -171,7 +208,11 @@ pub fn async_interpreter(
         }
         AgalValue::Never.to_result()
       }
-      parser::Node::Call(call) => {
+      .boxed()
+    }
+    parser::Node::Call(call) => {
+      let call = call.clone();
+      async move {
         let callee = call.callee.clone();
         let (mut callee, this) = if let parser::Node::Member(member) = callee.as_ref() {
           let this =
@@ -204,7 +245,11 @@ pub fn async_interpreter(
           .into_return()
           .to_result()
       }
-      parser::Node::Class(class) => {
+      .boxed()
+    }
+    parser::Node::Class(class) => {
+      let class = class.clone();
+      async move {
         let extend_of_value = if let AgalComplex::Class(class) = {
           if let AgalValue::Complex(c) = {
             if let Some(extend) = &class.extend_of {
@@ -231,7 +276,7 @@ pub fn async_interpreter(
           None
         };
         let mut properties = Vec::new();
-        let class_stack = pre_stack.crate_child(true, node.clone());
+        let class_stack = pre_stack.crate_child(true, node.clone().to_box());
         for property in &class.body {
           let is_static = (property.meta & 1) != 0;
           let is_public = (property.meta & 2) != 0;
@@ -259,12 +304,17 @@ pub fn async_interpreter(
           .env()
           .define(class_stack, &class.name, class_value, true, &node)
       }
-      parser::Node::Console(parser::ast::NodeConsole::Full {
-        identifier, value, ..
-      }) => {
+      .boxed()
+    }
+    parser::Node::Console(parser::ast::NodeConsole::Full {
+      identifier, value, ..
+    }) => {
+      let identifier = identifier.clone();
+      let value = value.clone();
+      async move {
         let env = stack.env();
         let valid_variable =
-          env._has(identifier) && !(env.is_constant(identifier) || env.is_keyword(identifier));
+          env._has(&identifier) && !(env.is_constant(&identifier) || env.is_keyword(&identifier));
         if !valid_variable {
           return internal::AgalThrow::Params {
             type_error: parser::ErrorNames::EnvironmentError,
@@ -283,7 +333,11 @@ pub fn async_interpreter(
         let value = primitive::AgalString::from_string(buf.to_string()).to_ref_value();
         stack.env().assign(stack, &identifier, value, &node)
       }
-      parser::Node::Console(parser::ast::NodeConsole::Output { value, .. }) => {
+      .boxed()
+    }
+    parser::Node::Console(parser::ast::NodeConsole::Output { value, .. }) => {
+      let value = value.clone();
+      async move {
         let value = async_interpreter(value.clone(), stack.clone(), modules.clone()).await?;
         let value = value.to_agal_string(stack.clone(), modules)?.to_string();
         print!("{value}");
@@ -291,17 +345,20 @@ pub fn async_interpreter(
         std::io::stdout().flush();
         Ok(AgalValue::Never.as_ref())
       }
-      parser::Node::DoWhile(do_while) => {
+      .boxed()
+    }
+    parser::Node::DoWhile(do_while) => {
+      let do_while = do_while.clone();
+      async move {
         let mut value = AgalValue::Never.as_ref();
-        let mut condition: Result<primitive::AgalBoolean, internal::AgalThrow> =
-          Ok(primitive::AgalBoolean::True);
+        let mut condition = Ok(primitive::AgalBoolean::True);
         loop {
           if !condition.clone()?.as_bool() {
             break;
           }
           value = async_interpreter(
             do_while.body.clone().to_node().to_box(),
-            stack.clone(),
+            stack.crate_child(false, node.clone().to_box()),
             modules.clone(),
           )
           .await?;
@@ -321,96 +378,108 @@ pub fn async_interpreter(
         }
         Ok(value)
       }
-      parser::Node::Export(export) => match export.value.as_ref() {
-        parser::Node::VarDecl(var) => {
-          let value = async_interpreter(var.value.clone().unwrap(), stack.clone(), modules).await?;
-          stack
-            .env()
-            .define(stack.clone(), &var.name, value.clone(), var.is_const, &node);
-          AgalValue::Export(var.name.clone(), value).to_result()
-        }
-        parser::Node::Function(func) => {
-          let (name, function) = interpreter_function(func, stack, node);
-          AgalValue::Export(name, function).to_result()
-        }
-        parser::Node::Name(name) => {
-          let value = stack.env().get(stack, &name.name, &node)?;
-          AgalValue::Export(name.name.clone(), value).to_result()
-        }
-        parser::Node::Class(class) => {
-          let extend_of_value = if let AgalComplex::Class(class) = {
-            if let AgalValue::Complex(c) = {
-              if let Some(extend) = &class.extend_of {
-                stack
-                  .env()
-                  .get(stack.clone(), &extend.name, &node)?
-                  .un_ref()
+      .boxed()
+    }
+    parser::Node::Export(export) => {
+      let export = export.clone();
+      async move {
+        match export.value.as_ref() {
+          parser::Node::VarDecl(var) => {
+            let value =
+              async_interpreter(var.value.clone().unwrap(), stack.clone(), modules).await?;
+            stack
+              .env()
+              .define(stack.clone(), &var.name, value.clone(), var.is_const, &node);
+            AgalValue::Export(var.name.clone(), value).to_result()
+          }
+          parser::Node::Function(func) => {
+            let (name, function) = interpreter_function(func, stack, node.to_box());
+            AgalValue::Export(name, function).to_result()
+          }
+          parser::Node::Name(name) => {
+            let value = stack.env().get(stack, &name.name, &node)?;
+            AgalValue::Export(name.name.clone(), value).to_result()
+          }
+          parser::Node::Class(class) => {
+            let extend_of_value = if let AgalComplex::Class(class) = {
+              if let AgalValue::Complex(c) = {
+                if let Some(extend) = &class.extend_of {
+                  stack
+                    .env()
+                    .get(stack.clone(), &extend.name, &node)?
+                    .un_ref()
+                } else {
+                  AgalValue::Never
+                }
+              } {
+                c.un_ref()
               } else {
-                AgalValue::Never
+                return internal::AgalThrow::Params {
+                  type_error: parser::ErrorNames::TypeError,
+                  message: "Solo se puede extender de otras clases".to_string(),
+                  stack,
+                }
+                .to_result();
               }
             } {
-              c.un_ref()
+              Some(class)
             } else {
-              return internal::AgalThrow::Params {
-                type_error: parser::ErrorNames::TypeError,
-                message: "Solo se puede extender de otras clases".to_string(),
-                stack,
-              }
-              .to_result();
-            }
-          } {
-            Some(class)
-          } else {
-            None
-          };
-          let mut properties = Vec::new();
-          let class_stack = pre_stack.crate_child(true, node.clone());
-          for property in &class.body {
-            let is_static = (property.meta & 1) != 0;
-            let is_public = (property.meta & 2) != 0;
-
-            let value = if let Some(b) = &property.value {
-              async_interpreter(b.clone(), class_stack.clone(), modules.clone()).await?
-            } else {
-              AgalValue::Never.to_ref_value()
+              None
             };
+            let mut properties = Vec::new();
+            let class_stack = pre_stack.crate_child(true, node.clone().to_box());
+            for property in &class.body {
+              let is_static = (property.meta & 1) != 0;
+              let is_public = (property.meta & 2) != 0;
 
-            properties.push((
-              property.name.clone(),
-              AgalClassProperty {
-                is_public,
-                is_static,
-                value,
-              },
-            ));
+              let value = if let Some(b) = &property.value {
+                async_interpreter(b.clone(), class_stack.clone(), modules.clone()).await?
+              } else {
+                AgalValue::Never.to_ref_value()
+              };
+
+              properties.push((
+                property.name.clone(),
+                AgalClassProperty {
+                  is_public,
+                  is_static,
+                  value,
+                },
+              ));
+            }
+
+            let class_value =
+              AgalClass::new(class.name.clone(), properties, extend_of_value).to_ref_value();
+            class_stack.env().set(THIS_KEYWORD, class_value.clone());
+            stack
+              .env()
+              .define(stack, &class.name, class_value.clone(), true, &node);
+
+            AgalValue::Export(class.name.clone(), class_value).to_result()
           }
-
-          let class_value =
-            AgalClass::new(class.name.clone(), properties, extend_of_value).to_ref_value();
-          class_stack.env().set(THIS_KEYWORD, class_value.clone());
-          stack
-            .env()
-            .define(stack, &class.name, class_value.clone(), true, &node);
-
-          AgalValue::Export(class.name.clone(), class_value).to_result()
+          _ => internal::AgalThrow::Params {
+            type_error: parser::ErrorNames::SyntaxError,
+            message: "Se nesesita un nombre para las exportaciones".to_string(),
+            stack,
+          }
+          .to_result(),
         }
-        _ => internal::AgalThrow::Params {
-          type_error: parser::ErrorNames::SyntaxError,
-          message: "Se nesesita un nombre para las exportaciones".to_string(),
-          stack,
-        }
-        .to_result(),
-      },
-      parser::Node::For(for_node) => {
+      }
+      .boxed()
+    }
+    parser::Node::For(for_node) => {
+      let for_node = for_node.clone();
+      async move {
         let mut value = AgalValue::Never.as_ref();
-        let stack = pre_stack.crate_child(false, node);
+        let stack = pre_stack.crate_child(false, node.to_box());
         async_interpreter(for_node.init.clone(), stack.clone(), modules.clone()).await?; // init value: def i = 0;
         loop {
           if async_interpreter(for_node.condition.clone(), stack.clone(), modules.clone())
             .await?
             .to_agal_boolean(stack.clone(), modules.clone())?
             .not()
-            .as_bool() // condition value: i < 10
+            .as_bool()
+          // condition value: i < 10
           {
             break;
           }
@@ -420,7 +489,7 @@ pub fn async_interpreter(
             stack.crate_child(false, node),
             modules.clone(),
           )
-          .await?;// Block {..}
+          .await?; // Block {..}
           let v = value.un_ref();
           if v.is_return() {
             return value.to_result();
@@ -428,11 +497,16 @@ pub fn async_interpreter(
           if v.is_break() {
             break;
           }
-          async_interpreter(for_node.update.clone(), stack.clone(), modules.clone()).await?; // advance value: i+=1
+          async_interpreter(for_node.update.clone(), stack.clone(), modules.clone()).await?;
+          // advance value: i+=1
         }
         value.to_result()
       }
-      parser::Node::If(if_node) => {
+      .boxed()
+    }
+    parser::Node::If(if_node) => {
+      let if_node = if_node.clone();
+      async move {
         let condition =
           async_interpreter(if_node.condition.clone(), stack.clone(), modules.clone())
             .await?
@@ -446,7 +520,11 @@ pub fn async_interpreter(
         }
         return AgalValue::Never.to_result();
       }
-      parser::Node::Member(member) => {
+      .boxed()
+    }
+    parser::Node::Member(member) => {
+      let member = member.clone();
+      async move {
         let mut object =
           async_interpreter(member.object.clone(), stack.clone(), modules.clone()).await?;
         if member.instance && !member.computed && member.member.is_identifier() {
@@ -464,7 +542,11 @@ pub fn async_interpreter(
           object.get_object_property(stack, &key)
         }
       }
-      parser::Node::Object(obj) => {
+      .boxed()
+    }
+    parser::Node::Object(obj) => {
+      let obj = obj.clone();
+      async move {
         let mut hashmap = HashMap::new();
         for prop in &obj.properties {
           match prop {
@@ -495,23 +577,36 @@ pub fn async_interpreter(
             _ => {}
           }
         }
-        AgalObject::from_hashmap(Rc::new(RefCell::new(hashmap))).to_result()
+        AgalObject::from_hashmap(Arc::new(RwLock::new(hashmap))).to_result()
       }
-      parser::Node::Program(program) => {
-        async_interpreter(program.body.clone().to_node().to_box(), stack, modules).await
-      }
-      parser::Node::Return(ret) => {
+      .boxed()
+    }
+    parser::Node::Program(program) => {
+      let program = program.clone();
+      async move{ async_interpreter(program.body.clone().to_node().to_box(), stack, modules).await }.boxed()
+    }
+    parser::Node::Return(ret) => {
+      let ret = ret.clone();
+      async move {
         let value = match &ret.value {
           None => AgalValue::Never.to_ref_value(),
           Some(value) => async_interpreter(value.clone(), stack, modules).await?,
         };
         AgalValue::Return(value).to_result()
       }
-      parser::Node::Throw(throw) => {
+      .boxed()
+    }
+    parser::Node::Throw(throw) => {
+      let throw = throw.clone();
+      async move {
         let value = async_interpreter(throw.value.clone(), stack.clone(), modules).await?;
         internal::AgalThrow::Value(value).to_result()
       }
-      parser::Node::Try(try_node) => {
+      .boxed()
+    }
+    parser::Node::Try(try_node) => {
+      let try_node = try_node.clone();
+      async move {
         let try_box_node = try_node.body.clone().to_node().to_box();
         let try_stack = stack.crate_child(false, try_box_node.clone());
         let try_val = async_interpreter(try_box_node, try_stack.clone(), modules.clone()).await;
@@ -543,7 +638,11 @@ pub fn async_interpreter(
         }
         .to_result()
       }
-      parser::Node::UnaryBack(unary) => {
+      .boxed()
+    }
+    parser::Node::UnaryBack(unary) => {
+      let unary = unary.clone();
+      async move {
         let value = async_interpreter(unary.operand.clone(), stack.clone(), modules).await;
         if unary.operator == parser::ast::NodeOperator::QuestionMark {
           match &value {
@@ -562,7 +661,11 @@ pub fn async_interpreter(
           .to_result()
         }
       }
-      parser::Node::UnaryFront(unary) => {
+      .boxed()
+    }
+    parser::Node::UnaryFront(unary) => {
+      let unary = unary.clone();
+      async move {
         let value =
           async_interpreter(unary.operand.clone(), stack.clone(), modules.clone()).await?;
         if unary.operator == parser::ast::NodeOperator::QuestionMark {
@@ -589,30 +692,40 @@ pub fn async_interpreter(
           .to_result()
         }
       }
-      parser::Node::VarDecl(var) => match &var.value {
-        Some(value) => {
-          let value = async_interpreter(value.clone(), stack.clone(), modules).await?;
-          if value.is_never() {
-            return internal::AgalThrow::Params {
-              type_error: parser::ErrorNames::TypeError,
-              message: "No se puede asignar \"nada\" a una variable".to_string(),
-              stack: stack.clone(),
+      .boxed()
+    }
+    parser::Node::VarDecl(var) => {
+      let var = var.clone();
+      async move {
+        match &var.value {
+          Some(value) => {
+            let value = async_interpreter(value.clone(), stack.clone(), modules).await?;
+            if value.is_never() {
+              return internal::AgalThrow::Params {
+                type_error: parser::ErrorNames::TypeError,
+                message: "No se puede asignar \"nada\" a una variable".to_string(),
+                stack: stack.clone(),
+              }
+              .to_result();
             }
-            .to_result();
+            stack
+              .env()
+              .define(stack, &var.name, value, var.is_const, &node)
           }
-          stack
-            .env()
-            .define(stack, &var.name, value, var.is_const, &node)
+          None => stack.env().define(
+            stack.clone(),
+            &var.name,
+            AgalValue::Never.as_ref(),
+            var.is_const,
+            &node,
+          ),
         }
-        None => stack.env().define(
-          stack.clone(),
-          &var.name,
-          AgalValue::Never.as_ref(),
-          var.is_const,
-          &node,
-        ),
-      },
-      parser::Node::While(while_node) => {
+      }
+      .boxed()
+    }
+    parser::Node::While(while_node) => {
+      let while_node = while_node.clone();
+      async move {
         let mut value = AgalValue::Never.as_ref();
         let body = &while_node.body.clone().to_node();
         loop {
@@ -635,9 +748,10 @@ pub fn async_interpreter(
         }
         Ok(value)
       }
-      _ => interpreter(node, stack, modules),
+      .boxed()
     }
-  })
+    _ => async move { interpreter(node.clone().to_box(), stack, modules) }.boxed(),
+  }
 }
 pub fn interpreter(
   node: parser::BNode,
@@ -658,7 +772,7 @@ pub fn interpreter(
           parser::NodeProperty::Iterable(iter) => {
             let data = interpreter(iter.clone().to_box(), stack.clone(), modules.clone())?;
             let list = data.to_agal_array(stack.clone(), modules.clone())?.un_ref();
-            for n in list.to_vec().borrow().iter() {
+            for n in list.to_vec().read().unwrap().iter() {
               vec.push(n.clone());
             }
           }
@@ -669,7 +783,7 @@ pub fn interpreter(
     }
     parser::Node::Assignment(assignment) => {
       let value = interpreter(assignment.value.clone(), stack.clone(), modules.clone())?;
-      if value.borrow().is_never() {
+      if value.get().is_never() {
         return Err(internal::AgalThrow::Params {
           type_error: parser::ErrorNames::TypeError,
           message: "No se puede asignar \"nada\" a una variable".to_string(),
@@ -1063,7 +1177,7 @@ pub fn interpreter(
           _ => {}
         }
       }
-      AgalObject::from_hashmap(Rc::new(RefCell::new(hashmap))).to_result()
+      AgalObject::from_hashmap(Arc::new(RwLock::new(hashmap))).to_result()
     }
     parser::Node::Return(ret) => {
       if ret.value.is_none() {

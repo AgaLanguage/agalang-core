@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc};
+use std::sync::{Arc, RwLock};
 
 use crate::{
   functions_names, libraries, parser,
@@ -18,13 +18,13 @@ use crate::{
 use super::AgalComplex;
 
 #[derive(Clone, Debug)]
-pub struct AgalArray(Rc<RefCell<Vec<values::DefaultRefAgalValue>>>);
+pub struct AgalArray(Arc<RwLock<Vec<values::DefaultRefAgalValue>>>);
 
 impl AgalArray {
   fn new(vec: Vec<values::DefaultRefAgalValue>) -> Self {
-    Self(Rc::new(RefCell::new(vec)))
+    Self(Arc::new(RwLock::new(vec)))
   }
-  pub fn to_vec(&self) -> Rc<RefCell<Vec<values::DefaultRefAgalValue>>> {
+  pub fn to_vec(&self) -> Arc<RwLock<Vec<values::DefaultRefAgalValue>>> {
     self.0.clone()
   }
   pub fn to_buffer(
@@ -33,7 +33,7 @@ impl AgalArray {
     modules: libraries::RefModules,
   ) -> Result<Vec<u8>, internal::AgalThrow> {
     let mut buffer = vec![];
-    let vec = &*self.0.as_ref().borrow();
+    let vec = &*self.0.as_ref().read().unwrap();
     for value in vec {
       let byte = value.to_agal_byte(stack.clone(), modules.clone());
       if let Err(value) = byte {
@@ -48,7 +48,7 @@ impl AgalArray {
     index: usize,
     value: values::DefaultRefAgalValue,
   ) -> values::DefaultRefAgalValue {
-    let mut borrowed = &mut *self.0.borrow_mut();
+    let mut borrowed = &mut *self.0.write().unwrap();
     if index >= borrowed.len() {
       borrowed.extend(
         std::iter::repeat(values::AgalValue::Never.to_ref_value())
@@ -103,7 +103,7 @@ impl traits::AgalValuable for AgalArray {
   ) -> Result<primitive::AgalString, internal::AgalThrow> {
     let mut result = String::new();
     let vec = self.to_vec();
-    let vec = &*vec.borrow();
+    let vec = &*vec.read().unwrap();
     for (i, value) in vec.iter().enumerate() {
       let str = value.try_to_string(stack.clone(), modules.clone())?;
       result.push_str(&str);
@@ -120,7 +120,7 @@ impl traits::AgalValuable for AgalArray {
   ) -> Result<primitive::AgalString, internal::AgalThrow> {
     let mut result = String::new();
     let vec = self.to_vec();
-    let vec = &*vec.borrow();
+    let vec = &*vec.read().unwrap();
     result.push_str("[");
     for (i, value) in vec.iter().enumerate() {
       let str = value
@@ -137,7 +137,7 @@ impl traits::AgalValuable for AgalArray {
   }
 
   fn get_keys(&self) -> Vec<String> {
-    (0..self.0.borrow().len()).map(|i| format!("{i}")).collect()
+    (0..self.0.read().unwrap().len()).map(|i| format!("{i}")).collect()
   }
 
   fn to_agal_boolean(
@@ -145,7 +145,7 @@ impl traits::AgalValuable for AgalArray {
     stack: runtime::RefStack,
     modules: libraries::RefModules,
   ) -> Result<primitive::AgalBoolean, internal::AgalThrow> {
-    Ok(if (self.0.borrow().len() == 0) {
+    Ok(if (self.0.read().unwrap().len() == 0) {
       primitive::AgalBoolean::False
     } else {
       primitive::AgalBoolean::True
@@ -186,7 +186,7 @@ impl traits::AgalValuable for AgalArray {
       (AgalComplex::Array(a), parser::NodeOperator::Plus) => {
         let vec = self.to_vec();
         let other_vec = a.un_ref().to_vec();
-        let result = vec![vec.borrow().clone(), other_vec.borrow().clone()].concat();
+        let result = vec![vec.read().unwrap().clone(), other_vec.read().unwrap().clone()].concat();
         AgalArray::new(result).to_result()
       }
       (AgalComplex::Array(a), parser::NodeOperator::GreaterThanOrEqual) => {
@@ -246,7 +246,7 @@ impl traits::AgalValuable for AgalArray {
     })?;
     self
       .to_vec()
-      .borrow()
+      .read().unwrap()
       .get(is_number)
       .on_error(|_| AgalThrow::Params {
         type_error: parser::ErrorNames::TypeError,
@@ -268,7 +268,7 @@ impl traits::AgalValuable for AgalArray {
       message: error_message::TO_AGAL_NUMBER.to_string(),
       stack: stack.clone(),
     })?;
-    let len = self.to_vec().borrow().len();
+    let len = self.to_vec().read().unwrap().len();
     let index = if index <= 0 {
       0
     } else if index < len {
@@ -295,7 +295,7 @@ impl traits::AgalValuable for AgalArray {
         })?
         .get_instance_property(stack, key, modules),
       "longitud" => {
-        let length = self.to_vec().borrow().len();
+        let length = self.to_vec().read().unwrap().len();
         AgalNumber::Integer(length as i32).to_result()
       }
       _ => internal::AgalThrow::Params {
@@ -316,15 +316,15 @@ impl traits::AgalValuable for AgalArray {
     stack: runtime::RefStack,
     modules: libraries::RefModules,
   ) -> Result<primitive::AgalNumber, internal::AgalThrow> {
-    let len = self.to_vec().borrow().len();
+    let len = self.to_vec().read().unwrap().len();
     Ok(primitive::AgalNumber::Integer(len as i32))
   }
 
   fn equals(&self, other: &Self) -> bool {
     let vec = self.to_vec();
-    let vec = vec.borrow();
+    let vec = vec.read().unwrap();
     let other_vec = other.to_vec();
-    let other_vec = other_vec.borrow();
+    let other_vec = other_vec.read().unwrap();
     if vec.len() != other_vec.len() {
       return false;
     }
@@ -339,7 +339,7 @@ impl traits::AgalValuable for AgalArray {
   fn less_than(&self, other: &Self) -> bool {
     let vec = self.to_vec();
     let other_vec = other.to_vec();
-    let x = vec.borrow().clone().len() < other_vec.borrow().clone().len();
+    let x = vec.read().unwrap().clone().len() < other_vec.read().unwrap().clone().len();
     x
   }
 }
@@ -348,6 +348,6 @@ impl IntoIterator for AgalArray {
   type Item = values::DefaultRefAgalValue;
   type IntoIter = std::vec::IntoIter<Self::Item>;
   fn into_iter(self) -> Self::IntoIter {
-    self.0.borrow().clone().into_iter()
+    self.0.read().unwrap().clone().into_iter()
   }
 }

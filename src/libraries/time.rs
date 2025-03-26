@@ -1,4 +1,6 @@
-use std::{cell::RefCell, rc::Rc};
+use std::sync::{Arc, RwLock};
+
+use futures_util::FutureExt;
 
 use crate::runtime::values::{
   self,
@@ -20,9 +22,9 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
       is_static: true,
       value: internal::AgalNativeFunction {
         name: format!("{module_name}::esperar"),
-        func: Rc::new(|arguments, stack, modules, this| {
+        func: Arc::new(|arguments, stack, modules, this| {
           let arg_clone = arguments.clone();
-          AgalPromise::new(Box::pin(async move {
+          AgalPromise::new(async move {
             let secs = if let Some(value) = arg_clone.get(0) {
               value.to_agal_number(stack, modules)?.to_float()
             } else {
@@ -30,14 +32,14 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
             };
             tokio::time::sleep(std::time::Duration::from_secs_f32(secs)).await;
             AgalValue::Never.to_result()
-          }))
+          }.boxed())
           .to_result()
         }),
       }
       .to_ref_value(),
     },
   );
-  let prototype = complex::AgalPrototype::new(Rc::new(RefCell::new(hashmap)), None);
+  let prototype = complex::AgalPrototype::new(Arc::new(RwLock::new(hashmap)), None);
   complex::AgalObject::from_prototype(prototype.as_ref()).to_ref_value()
 }
 pub fn get_name(prefix: &str) -> String {

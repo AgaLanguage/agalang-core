@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc};
+use std::sync::{Arc, RwLock};
 
 use crate::{
   parser,
@@ -25,7 +25,7 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
       is_static: true,
       value: internal::AgalNativeFunction {
         name: format!("{module_name}::suelo"),
-        func: Rc::new(|arguments, stack, modules, this| {
+        func: Arc::new(|arguments, stack, modules, this| {
           arguments
             .get(0)
             .on_error(|_| AgalThrow::Params {
@@ -48,7 +48,7 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
       is_static: true,
       value: internal::AgalNativeFunction {
         name: format!("{module_name}::min"),
-        func: Rc::new(|arguments, stack, modules, this| {
+        func: Arc::new(|arguments, stack, modules, this| {
           let mut val = AgalNumber::Infinity;
           for argument in arguments {
             let n = argument.to_agal_number(stack.clone(), modules.clone())?;
@@ -69,7 +69,7 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
       is_static: true,
       value: internal::AgalNativeFunction {
         name: format!("{module_name}::max"),
-        func: Rc::new(|arguments, stack, modules, this| {
+        func: Arc::new(|arguments, stack, modules, this| {
           let mut val = AgalNumber::NegInfinity;
           for argument in arguments {
             let n = argument.to_agal_number(stack.clone(), modules.clone())?;
@@ -83,7 +83,7 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
       .to_ref_value(),
     },
   );
-  let prototype = complex::AgalPrototype::new(Rc::new(RefCell::new(hashmap)), None);
+  let prototype = complex::AgalPrototype::new(Arc::new(RwLock::new(hashmap)), None);
   complex::AgalObject::from_prototype(prototype.as_ref()).to_ref_value()
 }
 pub fn get_name(prefix: &str) -> String {

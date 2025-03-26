@@ -95,9 +95,9 @@ impl traits::AgalValuable for AgalBoolean {
     modules: libraries::RefModules,
   ) -> Result<runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
     let x = right.clone();
-    let x = x.borrow();
+    let x = x.get();
     let prim = if let AgalValue::Primitive(p) = &*x {
-      &*p.borrow()
+      &*p.get()
     } else {
       return Err(AgalThrow::Params {
         type_error: parser::ErrorNames::TypeError,
