@@ -15,7 +15,7 @@ use super::{
   values::{
     complex::{
       AgalArray, AgalClass, AgalClassProperty, AgalComplex, AgalFunction, AgalObject,
-      AgalPromiseData,
+      AgalPromiseData, AgalPrototype,
     },
     internal::{self, AgalImmutable, AgalThrow},
     primitive,
@@ -42,7 +42,6 @@ pub fn call_function_interpreter(
   }
   .boxed()
 }
-
 
 pub fn async_interpreter(
   node: parser::BNode,
@@ -152,7 +151,8 @@ pub fn async_interpreter(
         }
 
         Ok(value)
-      }.boxed()
+      }
+      .boxed()
     }
     parser::Node::Binary(binary) => {
       let binary = binary.clone();
@@ -583,7 +583,31 @@ pub fn async_interpreter(
     }
     parser::Node::Program(program) => {
       let program = program.clone();
-      async move{ async_interpreter(program.body.clone().to_node().to_box(), stack, modules).await }.boxed()
+      let block = program.body;
+      async move {
+        let mut exports = HashMap::new();
+        for statement in &block.body {
+          let result =
+            async_interpreter(statement.clone().to_box(), stack.clone(), modules.clone()).await?;
+          if let AgalValue::Export(name, value) = result.un_ref() {
+            exports.insert(name.clone(), AgalClassProperty{
+              is_public: true,
+              is_static: true,
+              value,
+            });
+          }
+          if (result.is_stop()) {
+            return Ok(result);
+          }
+        }
+        Ok(
+          AgalObject::from_prototype(
+            AgalPrototype::new(Arc::new(RwLock::new(exports)), None).as_ref(),
+          )
+          .to_ref_value(),
+        )
+      }
+      .boxed()
     }
     parser::Node::Return(ret) => {
       let ret = ret.clone();
@@ -996,86 +1020,6 @@ pub fn interpreter(
       }
       Ok(value)
     }
-    parser::Node::Export(export) => match export.value.as_ref() {
-      parser::Node::VarDecl(var) => {
-        let value = interpreter(var.value.clone().unwrap(), stack.clone(), modules)?;
-        stack
-          .env()
-          .define(stack.clone(), &var.name, value.clone(), var.is_const, &node);
-        AgalValue::Export(var.name.clone(), value).to_result()
-      }
-      parser::Node::Function(func) => {
-        let (name, function) = interpreter_function(func, stack, node);
-        AgalValue::Export(name, function).to_result()
-      }
-      parser::Node::Name(name) => {
-        let value = stack.env().get(stack, &name.name, &node)?;
-        AgalValue::Export(name.name.clone(), value).to_result()
-      }
-      parser::Node::Class(class) => {
-        let extend_of_value = if let AgalComplex::Class(class) = {
-          if let AgalValue::Complex(c) = {
-            if let Some(extend) = &class.extend_of {
-              stack
-                .env()
-                .get(stack.clone(), &extend.name, &node)?
-                .un_ref()
-            } else {
-              AgalValue::Never
-            }
-          } {
-            c.un_ref()
-          } else {
-            return internal::AgalThrow::Params {
-              type_error: parser::ErrorNames::TypeError,
-              message: "Solo se puede extender de otras clases".to_string(),
-              stack,
-            }
-            .to_result();
-          }
-        } {
-          Some(class)
-        } else {
-          None
-        };
-        let mut properties = Vec::new();
-        let class_stack = pre_stack.crate_child(true, node.clone());
-        for property in &class.body {
-          let is_static = (property.meta & 1) != 0;
-          let is_public = (property.meta & 2) != 0;
-
-          let value = if let Some(b) = &property.value {
-            interpreter(b.clone(), class_stack.clone(), modules.clone())?
-          } else {
-            AgalValue::Never.to_ref_value()
-          };
-
-          properties.push((
-            property.name.clone(),
-            AgalClassProperty {
-              is_public,
-              is_static,
-              value,
-            },
-          ));
-        }
-
-        let class_value =
-          AgalClass::new(class.name.clone(), properties, extend_of_value).to_ref_value();
-        class_stack.env().set(THIS_KEYWORD, class_value.clone());
-        stack
-          .env()
-          .define(stack, &class.name, class_value.clone(), true, &node);
-
-        AgalValue::Export(class.name.clone(), class_value).to_result()
-      }
-      _ => internal::AgalThrow::Params {
-        type_error: parser::ErrorNames::SyntaxError,
-        message: "Se nesesita un nombre para las exportaciones".to_string(),
-        stack,
-      }
-      .to_result(),
-    },
     parser::Node::For(for_node) => {
       let mut value = AgalValue::Never.as_ref();
       let mut condition = Ok(primitive::AgalBoolean::True);
@@ -1337,10 +1281,7 @@ pub fn interpreter(
         .delete(&node_identifier.name);
       AgalValue::default().to_result()
     }
-    parser::Node::Import(_)
-    | parser::Node::Await(_)
-    | parser::Node::Block(_, true)
-    | parser::Node::Program(_) => Err(AgalThrow::Params {
+    _ => Err(AgalThrow::Params {
       type_error: parser::ErrorNames::SyntaxError,
       message: "Se intento ejecutar codigo asincrono en un bloque sincrono".into(),
       stack,
