@@ -14,13 +14,9 @@ use super::{
   full_eval,
   values::{
     complex::{
-      AgalArray, AgalClass, AgalClassProperty, AgalComplex, AgalFunction, AgalObject,
+      AgalArray, AgalClass, AgalClassProperty, AgalComplex, AgalFunction, AgalObject, AgalPromise,
       AgalPromiseData, AgalPrototype,
-    },
-    internal::{self, AgalImmutable, AgalThrow},
-    primitive,
-    traits::{AgalValuable as _, ToAgalValue as _},
-    AgalValue, ResultAgalValue,
+    }, internal::{self, AgalImmutable, AgalThrow}, primitive, traits::{AgalValuable as _, ToAgalValue as _}, AgalValue, DefaultRefAgalValue, RefAgalValue, ResultAgalValue
   },
   RefStack, THIS_KEYWORD,
 };
@@ -39,6 +35,35 @@ pub fn call_function_interpreter(
       }
     }
     Ok(result.into_return())
+  }
+  .boxed()
+}
+
+pub fn await_result(
+  value: DefaultRefAgalValue,
+) -> Pin<Box<dyn Future<Output = ResultAgalValue> + Send>> {
+  async move {
+    if let AgalComplex::Promise(value) = {
+      if let AgalValue::Complex(c) = value.un_ref() {
+        c.un_ref()
+      } else {
+        return value.to_result();
+      }
+    } {
+      if let Some(value) = value.get_value() {
+        return value;
+      }
+      let value_data = value.replace();
+
+      let agal_value_future = value_data.resolve();
+      let agal_value = agal_value_future.await;
+
+      let mut guard_mut = value.get_mut();
+      guard_mut.data = AgalPromiseData::Resolved(agal_value.clone());
+
+      return agal_value;
+    }
+    Ok(value)
   }
   .boxed()
 }
@@ -126,31 +151,10 @@ pub fn async_interpreter(
     parser::Node::Await(value) => {
       let value = value.clone();
       async move {
-        let value =
-          async_interpreter(value.expression.clone(), stack.clone(), modules.clone()).await?;
-
-        if let AgalComplex::Promise(value) = {
-          if let AgalValue::Complex(c) = value.un_ref() {
-            c.un_ref()
-          } else {
-            return value.to_result();
-          }
-        } {
-          if let Some(value) = value.get_value() {
-            return value;
-          }
-          let value_data = value.replace();
-
-          let agal_value_future = value_data.resolve();
-          let agal_value = agal_value_future.await;
-
-          let mut guard_mut = value.get_mut();
-          guard_mut.data = AgalPromiseData::Resolved(agal_value.clone());
-
-          return agal_value;
-        }
-
-        Ok(value)
+        let value = async_interpreter(value.expression.clone(), stack.clone(), modules.clone())
+          .await
+          .map_err(|e| e)?;
+        await_result(value).await
       }
       .boxed()
     }
@@ -590,11 +594,14 @@ pub fn async_interpreter(
           let result =
             async_interpreter(statement.clone().to_box(), stack.clone(), modules.clone()).await?;
           if let AgalValue::Export(name, value) = result.un_ref() {
-            exports.insert(name.clone(), AgalClassProperty{
-              is_public: true,
-              is_static: true,
-              value,
-            });
+            exports.insert(
+              name.clone(),
+              AgalClassProperty {
+                is_public: true,
+                is_static: true,
+                value,
+              },
+            );
           }
           if (result.is_stop()) {
             return Ok(result);

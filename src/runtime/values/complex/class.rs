@@ -209,7 +209,7 @@ impl traits::AgalValuable for AgalPrototype {
       Some(prop) => prop.value.call(
         stack.clone(),
         self.clone().to_ref_value(),
-        vec![],
+        args,
         modules.clone(),
       ),
       None => Err(internal::AgalThrow::Params {

@@ -8,6 +8,7 @@ mod fs;
 mod math;
 mod print;
 mod time;
+mod net;
 
 type EvalResult = Option<values::DefaultRefAgalValue>;
 
@@ -84,6 +85,11 @@ pub fn get_module(key: &str, modules_manager: RefModules) -> EvalResult {
   }
   if key == math::get_name(PREFIX_NATIVE_MODULES) {
     let value = math::get_module(PREFIX_NATIVE_MODULES);
+    modules_manager.add(key, value.clone());
+    return Some(value);
+  }
+  if key == net::get_name(PREFIX_NATIVE_MODULES) {
+    let value = net::get_module(PREFIX_NATIVE_MODULES);
     modules_manager.add(key, value.clone());
     return Some(value);
   }

@@ -1,25 +1,19 @@
-#importa ':proto' como PT; #al cargar proto se carga automaticamente proto/Numero para no repetir
 importa ':consola' como Consola;
-importa ':tmp' como Tmp;
+importa ':red' como Red;
+importa ':proto/Cadena' como Cadena;
 
-asinc fn funcion(t){
-  def i=0;
-  def dif = ' ' * t::__cad__()::longitud;
-  haz {
-    def cad = (t-i)::__cad__();
-    csl << '\r' + dif + '\r' + cad;
-    espera Tmp::esperar(1);
-    i+=1;
-  } mien i <= t;
-  csl << '\n';
+asinc fn servidorHTTP(servidor, puerto){
+  espera Red::servidor("127.0.0.1:{puerto}", asinc fn (req){
+    def res = espera servidor(espera req::leer());
+    espera req::escribir(res);
+  });
 }
 
-def a = funcion(10)::luego(fn (){
-  lanza ">:D";
-})::atrapa(fn (e){
-  csl << e;
-  ret ":)";
-});
-Consola::pintar("Afuera");
-def b = espera a;
-Consola::pintar(b);
+espera servidorHTTP(asinc fn(req){
+  const peticion_cruda = Cadena(req);
+  const r = peticion_cruda::remplaza('\r','')::partir('\n');
+  Consola::pintar(peticion_cruda);
+  def data = r[0];
+  si(data=='GET /favicon.ico HTTP/1.1') ret 'HTTP/1.1 301\nLocation: https://aga-mca.pages.dev/favicon.ico'::bytes();
+  ret "HTTP/1.1 200\nContent-Type: text/plain; charset=utf-8\n\n¡Hola {data}!"::bytes();
+}, 80);

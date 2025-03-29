@@ -21,7 +21,7 @@ use super::AgalComplex;
 pub struct AgalArray(Arc<RwLock<Vec<values::DefaultRefAgalValue>>>);
 
 impl AgalArray {
-  fn new(vec: Vec<values::DefaultRefAgalValue>) -> Self {
+  pub fn new(vec: Vec<values::DefaultRefAgalValue>) -> Self {
     Self(Arc::new(RwLock::new(vec)))
   }
   pub fn to_vec(&self) -> Arc<RwLock<Vec<values::DefaultRefAgalValue>>> {
@@ -79,6 +79,15 @@ impl From<Vec<values::DefaultRefAgalValue>> for AgalArray {
 
 impl From<&[u8]> for AgalArray {
   fn from(buffer: &[u8]) -> Self {
+    let mut vec = Vec::new();
+    for byte in buffer {
+      vec.push(primitive::AgalByte::new(*byte).to_ref_value());
+    }
+    Self::new(vec)
+  }
+}
+impl From<&Vec<u8>> for AgalArray {
+  fn from(buffer: &Vec<u8>) -> Self {
     let mut vec = Vec::new();
     for byte in buffer {
       vec.push(primitive::AgalByte::new(*byte).to_ref_value());
