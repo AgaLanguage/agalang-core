@@ -54,29 +54,6 @@ pub fn get_sub_module(
       .to_ref_value(),
     },
   );
-  hashmap.insert(
-    functions_names::CALL.into(),
-    complex::AgalClassProperty {
-      is_public: true,
-      is_static: true,
-      value: internal::AgalNativeFunction {
-        name: format!("{module_name}::{}", functions_names::CALL),
-        func: Arc::new(|arguments, stack, modules, this| {
-          arguments
-            .get(0)
-            .ok_or_else(|| internal::AgalThrow::Params {
-              type_error: parser::ErrorNames::TypeError,
-              message: "Se esperaba un argumento".into(),
-              stack: stack.clone(),
-            })?
-            .to_agal_number(stack.clone(), modules.clone())
-            .unwrap_or_default()
-            .to_result()
-        }),
-      }
-      .to_ref_value(),
-    },
-  );
 
   let prototype = complex::AgalPrototype::new(Arc::new(RwLock::new(hashmap)), None);
   modules_manager.add(

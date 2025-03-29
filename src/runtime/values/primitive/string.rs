@@ -12,6 +12,8 @@ use crate::{
   util,
 };
 pub const STRING_REPLACE: &str = "remplaza";
+pub const STRING_BYTES: &str = "bytes";
+pub const STRING_SPLIT: &str = "partir";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct AgalChar(char);
@@ -309,7 +311,7 @@ impl traits::AgalValuable for AgalString {
     modules: libraries::RefModules,
   ) -> Result<values::DefaultRefAgalValue, internal::AgalThrow> {
     match key {
-      functions_names::TO_AGAL_STRING | STRING_REPLACE => modules
+      functions_names::TO_AGAL_STRING | STRING_REPLACE | STRING_BYTES | STRING_SPLIT => modules
         .get_module(":proto/Cadena")
         .ok_or_else(|| internal::AgalThrow::Params {
           type_error: parser::ErrorNames::TypeError,

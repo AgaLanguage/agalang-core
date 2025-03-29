@@ -56,7 +56,6 @@ impl Default for AgalPromiseData {
     Self::Resolved(AgalValue::Never.to_result())
   }
 }
-
 pub struct AgalPromise {
   pub data: AgalPromiseData,
 }
