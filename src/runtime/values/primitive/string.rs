@@ -11,7 +11,7 @@ use crate::{
   },
   util,
 };
-pub const STRING_REPLACE: &str = "remplaza";
+pub const STRING_REPLACE: &str = "reemplaza";
 pub const STRING_BYTES: &str = "bytes";
 pub const STRING_SPLIT: &str = "partir";
 

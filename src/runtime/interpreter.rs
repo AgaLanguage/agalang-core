@@ -16,11 +16,63 @@ use super::{
     complex::{
       AgalArray, AgalClass, AgalClassProperty, AgalComplex, AgalFunction, AgalObject, AgalPromise,
       AgalPromiseData, AgalPrototype,
-    }, internal::{self, AgalImmutable, AgalThrow}, primitive, traits::{AgalValuable as _, ToAgalValue as _}, AgalValue, DefaultRefAgalValue, RefAgalValue, ResultAgalValue
+    },
+    internal::{self, AgalImmutable, AgalThrow},
+    primitive,
+    traits::{AgalValuable as _, ToAgalValue as _},
+    AgalValue, DefaultRefAgalValue, RefAgalValue, ResultAgalValue,
   },
   RefStack, THIS_KEYWORD,
 };
+#[macro_export]
+macro_rules! log_fn {
+    (
+        $(#[$meta:meta])*
+        $vis:vis fn $name:ident $sig:tt -> $ret:ty $body:block
+    ) => {
+        $(#[$meta])*
+        $vis fn $name $sig -> $ret {
+            use std::time::Instant;
+            use std::fs::OpenOptions;
+            use std::io::Write;
 
+            let mut file = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open("log.txt")
+                .expect("No se pudo abrir el archivo de log");
+
+            let _ = writeln!(file, "[LOG] Iniciando '{}'", stringify!($name));
+            let __result = (|| $body)();
+            let _ = writeln!(file, "[LOG] Finalizó '{}'", stringify!($name));
+            __result
+        }
+    };
+
+    (
+        $(#[$meta:meta])*
+        $vis:vis fn $name:ident $sig:tt $body:block
+    ) => {
+        $(#[$meta])*
+        $vis fn $name $sig {
+            use std::time::Instant;
+            use std::fs::OpenOptions;
+            use std::io::Write;
+
+            let mut file = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open("log.txt")
+                .expect("No se pudo abrir el archivo de log");
+
+            let _ = writeln!(file, "[LOG] Iniciando '{}'", stringify!($name));
+            let __result = (|| $body)();
+            let _ = writeln!(file, "[LOG] Finalizó '{}'", stringify!($name));
+            __result
+        }
+    };
+}
+log_fn! {
 pub fn call_function_interpreter(
   block: parser::NodeBlock,
   stack: RefStack,
@@ -38,8 +90,8 @@ pub fn call_function_interpreter(
   }
   .boxed()
 }
-
-pub fn await_result(
+}
+log_fn! {pub fn await_result(
   value: DefaultRefAgalValue,
 ) -> Pin<Box<dyn Future<Output = ResultAgalValue> + Send>> {
   async move {
@@ -67,8 +119,8 @@ pub fn await_result(
   }
   .boxed()
 }
-
-pub fn async_interpreter(
+}
+log_fn! {pub fn async_interpreter(
   node: parser::BNode,
   stack: RefStack,
   modules: libraries::RefModules,
@@ -784,7 +836,7 @@ pub fn async_interpreter(
     _ => async move { interpreter(node.clone().to_box(), stack, modules) }.boxed(),
   }
 }
-pub fn interpreter(
+}log_fn! {pub fn interpreter(
   node: parser::BNode,
   stack: RefStack,
   modules: libraries::RefModules,
@@ -1295,7 +1347,7 @@ pub fn interpreter(
     }),
   }
 }
-
+}
 fn interpreter_function(
   func: &parser::NodeFunction,
   stack: RefStack,

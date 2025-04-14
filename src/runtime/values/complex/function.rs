@@ -140,7 +140,7 @@ impl traits::AgalValuable for AgalFunction {
     modules: libraries::RefModules,
   ) -> Result<runtime::values::DefaultRefAgalValue, internal::AgalThrow> {
     match key {
-      FUNCTION_CALL => modules
+      FUNCTION_CALL | crate::functions_names::TO_AGAL_STRING => modules
         .get_module(":proto/Funcion")
         .ok_or_else(|| internal::AgalThrow::Params {
           type_error: parser::ErrorNames::TypeError,

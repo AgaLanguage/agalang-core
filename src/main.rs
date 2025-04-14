@@ -1,37 +1,47 @@
 #![allow(warnings)]
-mod functions_names;
-mod libraries;
+use std::process::ExitCode;
+
+mod bytecode;
 mod parser;
-mod path;
-mod runtime;
 mod util;
 
-use std::{
-  collections::HashMap, process::ExitCode, thread::sleep, time::Duration,
-};
+fn main() -> ExitCode {
+  let file_name = match file() {
+    None => return ExitCode::FAILURE,
+    Some(value) => value,
+  };
+  let file = match code(&file_name) {
+    None => return ExitCode::FAILURE,
+    Some(value) => value,
+  };
 
-use runtime::values::DefaultRefAgalValue;
-#[tokio::main]
-async fn main() -> ExitCode {
-  let modules_manager = libraries::RefModules::new();
-  let filename = file();
-  if filename.is_none() {
-    return ExitCode::FAILURE;
-  }
-  let filename = filename.unwrap();
-  let stack = runtime::RefStack::get_default();
+  let ast = match parser::Parser::new(file, &file_name).produce_ast() {
+    Err(a) => {eprintln!("{a:?}");return ExitCode::FAILURE},
+    Ok(value) => value,
+  };
 
-  let program = runtime::full_eval(filename, stack, modules_manager).await;
-  if program.is_none() {
-    return ExitCode::FAILURE;
+  match bytecode::main(&ast) {
+    Err(e) => eprintln!("{e}"),
+    _=>{}
+  };
+  ExitCode::SUCCESS
+}
+fn code(path: &str) -> Option<String> {
+  let contents = std::fs::read_to_string(path);
+  match contents {
+    Ok(contents) => Some(contents),
+    Err(err) => {
+      let ref type_err = parser::ErrorNames::PathError;
+      let err = parser::ErrorTypes::IoError(err);
+      parser::show_error(type_err, err);
+      None
+    }
   }
-  return ExitCode::SUCCESS;
 }
 
 fn file() -> Option<String> {
   let mut args: Vec<String> = std::env::args().collect();
-  args.push("./file.agal".to_string());
-  let args = args;
+  println!("{args:?}");
   if args.len() < 2 {
     let blue_usage = "\x1b[94m\x1b[1mUsage\x1b[39m:\x1b[0m";
     println!("{} {} <filename>", blue_usage, args[0]);

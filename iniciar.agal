@@ -1,11 +1,11 @@
-importar 'consola' como consola;
-importar 'sab' como sab;
-importar 'clases/Cadena' como Cadena;
-importar 'clases/Dicionario' como Dicionario;
+importa 'consola' como consola;
+importa 'sab' como sab;
+importa 'clases/Cadena' como Cadena;
+importa 'clases/Dicionario' como Dicionario;
 
-importar './libraries/discord/cliente/Cliente.agal' como DiscordCliente;
-importar './libraries/discord/constantes/Intenciones.agal' como Intenciones;
-importar './libraries/env/inicial.agal' como envFN;
+importa './libraries/discord/cliente/Cliente.agal' como DiscordCliente;
+importa './libraries/discord/constantes/Intenciones.agal' como Intenciones;
+importa './libraries/env/inicial.agal' como envFN;
 
 const env = sab.leerArchivo('.env')
 const test = Cadena(env);

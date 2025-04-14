@@ -1,19 +1,31 @@
-importa ':consola' como Consola;
-importa ':red' como Red;
-importa ':proto/Cadena' como Cadena;
-
-asinc fn servidorHTTP(servidor, puerto){
-  espera Red::servidor("127.0.0.1:{puerto}", asinc fn (req){
-    def res = espera servidor(espera req::leer());
-    espera req::escribir(res);
-  });
+si falso {
+  csl << 'if';
+} ent si falso{
+  csl << 'else' + '\n';
 }
+csl << 'fuera\n';
 
-espera servidorHTTP(asinc fn(req){
-  const peticion_cruda = Cadena(req);
-  const r = peticion_cruda::remplaza('\r','')::partir('\n');
-  Consola::pintar(peticion_cruda);
-  def data = r[0];
-  si(data=='GET /favicon.ico HTTP/1.1') ret 'HTTP/1.1 301\nLocation: https://aga-mca.pages.dev/favicon.ico'::bytes();
-  ret "HTTP/1.1 200\nContent-Type: text/plain; charset=utf-8\n\n¡Hola {data}!"::bytes();
-}, 80);
+def a = 0;
+haz {
+  csl << a+'\n';
+  a=a+1;
+}mien a < -1;
+
+# importa ':red' como Red;
+# importa ':proto/Cadena' como Cadena;
+# 
+# asinc fn servidorHTTP(servidor, puerto){
+#   espera Red::servidorTCP("127.0.0.1:{puerto}", asinc fn (req){
+#     def res = espera servidor(espera req::leer());
+#     espera req::escribir(res);
+#   });
+# }
+# 
+# espera servidorHTTP(asinc fn(req){
+#   Consola::pintar(req);
+#   const peticion_cruda = Cadena(req);
+#   const r = peticion_cruda::remplaza('\r','')::partir('\n');
+#   def data = r[0];
+#   si(data=='GET /favicon.ico HTTP/1.1') ret 'HTTP/1.1 301\nLocation: https://aga-mca.pages.dev/favicon.ico'::bytes();
+#   ret "HTTP/1.1 200\nContent-Type: text/plain; charset=utf-8\n\n¡Hola {data}!"::bytes();
+# }, 80);

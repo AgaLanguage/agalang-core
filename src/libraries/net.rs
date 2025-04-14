@@ -6,7 +6,7 @@ use std::{
 use futures_util::{lock::Mutex, FutureExt};
 use tokio::{
   io::{AsyncReadExt, AsyncWriteExt as _},
-  net::{TcpListener, TcpStream},
+  net::{TcpListener, TcpStream, UdpSocket},
   sync::RwLock,
 };
 
@@ -136,12 +136,12 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
   let mut hashmap = std::collections::HashMap::new();
 
   hashmap.insert(
-    "servidor".to_string(),
+    "servidorTCP".to_string(),
     complex::AgalClassProperty {
       is_public: true,
       is_static: true,
       value: internal::AgalNativeFunction {
-        name: format!("{module_name}::servidor"),
+        name: format!("{module_name}::servidorTCP"),
         func: Arc::new(|arguments, stack, modules, this| {
           let addr = arguments
             .clone()
@@ -188,6 +188,65 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
                 let data = stream.read_to_end(&mut buf);
                 let data = AgalArray::from(&buf);
                 handle_client(stream, &callback, stack.clone(), modules.clone()).await?;
+              }
+            }
+            .boxed(),
+          )
+          .to_result()
+        }),
+      }
+      .to_ref_value(),
+    },
+  );
+  hashmap.insert(
+    "\0servidorUDP".to_string(),
+    complex::AgalClassProperty {
+      is_public: true,
+      is_static: true,
+      value: internal::AgalNativeFunction {
+        name: format!("{module_name}::servidorUDP"),
+        func: Arc::new(|arguments, stack, modules, this| {
+          let addr = arguments
+            .clone()
+            .get(0)
+            .on_error(|_| AgalThrow::Params {
+              type_error: parser::ErrorNames::TypeError,
+              message: "Se esperaba un acceso".into(),
+              stack: stack.clone(),
+            })?
+            .to_agal_string(stack.clone(), modules.clone())?
+            .clone();
+          let callback = arguments
+            .get(1)
+            .on_error(|_| AgalThrow::Params {
+              type_error: parser::ErrorNames::TypeError,
+              message: "Se esperaba una funcion".into(),
+              stack: stack.clone(),
+            })?
+            .clone();
+
+          let addr = addr.to_string();
+          AgalPromise::new(
+            async move {
+              let stack = &stack;
+              let listener = UdpSocket::bind(addr).await
+              .on_error(move |_| AgalThrow::Params {
+                type_error: parser::ErrorNames::TypeError,
+                message: "Error al crear el servidor UDP".into(),
+                stack: stack.clone(),
+              })?;
+              loop {
+                let mut buf = vec![];
+                let (_,mut stream) =
+                  listener
+                    .recv_from(&mut buf).await
+                    .on_error(move |_| AgalThrow::Params {
+                      type_error: parser::ErrorNames::TypeError,
+                      message: "Error al aceptar la conexión".into(),
+                      stack: stack.clone(),
+                    })?;
+                println!("{buf:?}");
+                listener.send_to(&buf, stream).await;
               }
             }
             .boxed(),

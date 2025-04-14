@@ -1,34 +1,12 @@
-# Expreciones
-  - `?(value)` transforma a valor booleano
-  - `!(value) == !?(value)` niega el valor booleano
-  - `&(value)` transforma a inmutable
-  - `+(value)` transforma a numero
-  - `-(value)` transforma a numero negativo
-  - `~(value)` transforma a numero entero
-  - `(value)?` si el valor es un error (lanzado) se transforma a nulo. Ejemplo: `1/0?` es nulo.
-  - `(value1) && (value2)` regresa el primer valor falso o el ultimo verdadero
-  - `(value1) || (value2)` regresa el primer valor verdadero o el ultimo falso
-  - `(value1) ?? (value2)` si el valor1 es nulo, devuelve el valor2
-  - `(value1) = (value2)` asigna el valor2 al valor1
-  - `(value1) == (value2)` comprueba si ambos valores son iguales
-  - `(value1) != (value2)` comprueba si ambos valores son diferentes
-  - `(value1) >= (value2)` comprueba si el valor1 es mayor o igual que el valor2
-  - `(value1) <= (value2)` comprueba si el valor1 es menor o igual que el valor2
-  - `(value1) > (value2)` comprueba si el valor1 es mayor que el valor2
-  - `(value1) < (value2)` comprueba si el valor1 es menor que el valor2
-  - `(value1) + (value2)` suma los valores
-  - `(value1) - (value2)` resta los valores
-  - `(value1) * (value2)` multiplica los valores
-  - `(value1) / (value2)` divide los valores
-  - `(value1) % (value2)` obtiene el residuo de la division
-  - `(value1) ^ (value2)` eleva el valor1 al valor2
-  - `(value1) &&= (value2)` si el valor1 es un valor verdadero, asigna el valor2
-  - `(value1) ||= (value2)` si el valor1 es un valor falso, asigna el valor2
-  - `(value1) ??= (value2)` si el valor1 es nulo, asigna el valor2
-  - `(value1) += (value2)` suma el valor2 al valor1, y asigna el resultado
-  - `(value1) -= (value2)` resta el valor2 al valor1, y asigna el resultado
-  - `(value1) *= (value2)` multiplica el valor1 por el valor2, y asigna el resultado
-  - `(value1) /= (value2)` divide el valor1 por el valor2, y asigna el resultado
-  - `(value1) %= (value2)` obtiene el residuo de la division, y asigna el resultado
-  - `(value1) ^= (value2)` eleva el valor1 al valor2, y asigna el resultado
+Definicion de variables
+Definicion de constantes
+Definicion de funciones
+Definicion de clases
 
+Estructura for
+Estructura if else
+Estructura do while
+Estructura while
+Estructura Try catch finally
+
+Modulacion exportar importar
