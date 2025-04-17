@@ -16,13 +16,16 @@ fn main() -> ExitCode {
   };
 
   let ast = match parser::Parser::new(file, &file_name).produce_ast() {
-    Err(a) => {eprintln!("{a:?}");return ExitCode::FAILURE},
+    Err(a) => {
+      parser::print_error(parser::error_to_string(&parser::ErrorNames::SyntaxError, parser::node_error(&a)));
+      return ExitCode::FAILURE;
+    }
     Ok(value) => value,
   };
 
   match bytecode::main(&ast) {
     Err(e) => eprintln!("{e}"),
-    _=>{}
+    _ => {}
   };
   ExitCode::SUCCESS
 }
@@ -41,7 +44,6 @@ fn code(path: &str) -> Option<String> {
 
 fn file() -> Option<String> {
   let mut args: Vec<String> = std::env::args().collect();
-  println!("{args:?}");
   if args.len() < 2 {
     let blue_usage = "\x1b[94m\x1b[1mUsage\x1b[39m:\x1b[0m";
     println!("{} {} <filename>", blue_usage, args[0]);

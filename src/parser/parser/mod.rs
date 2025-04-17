@@ -558,19 +558,9 @@ impl Parser {
         super::PunctuationType::RegularBracketClose,
       )))
     {
-      let modifier = self.get_modifier();
+      let (is_static, is_public) = self.get_modifier()?;
 
-      if modifier.is_err() {
-        return Err(modifier.err().unwrap());
-      }
-
-      let (is_static, is_public) = modifier.ok().unwrap();
-
-      let prop = self.parse_class_prop(is_static, is_public);
-      if prop.is_err() {
-        return Err(prop.err().unwrap());
-      }
-      let prop = prop.ok().unwrap();
+      let prop = self.parse_class_prop(is_static, is_public)?;
       body.push(prop);
     }
     ast::Node::Class(ast::NodeClass {
@@ -821,11 +811,7 @@ impl Parser {
       super::TokenType::Punctuation(super::PunctuationType::CircularBracketClose),
       "Se esperaba un paréntesis de cierre",
     );
-    let block = self.parse_block_expr(is_function, true, is_async);
-    if block.is_err() {
-      return Err(block.err().unwrap());
-    }
-    let body = block.ok().unwrap();
+    let body = self.parse_block_expr(is_function, true, is_async)?;
     ast::Node::For(ast::NodeFor {
       init,
       condition: Box::new(condition),
@@ -843,11 +829,7 @@ impl Parser {
     is_async: bool,
   ) -> Result<ast::Node, NodeError> {
     let token = self.eat(); // intentar
-    let block = self.parse_block_expr(is_function, is_loop, is_async);
-    if block.is_err() {
-      return Err(block.err().unwrap());
-    }
-    let body = block.ok().unwrap();
+    let body = self.parse_block_expr(is_function, is_loop, is_async)?;
     let catch = if self.at().token_type == super::TokenType::Keyword(super::KeywordsType::Catch) {
       self.eat();
       let open_paren = self.expect(
@@ -859,22 +841,16 @@ impl Parser {
         super::TokenType::Punctuation(super::PunctuationType::CircularBracketClose),
         "Se esperaba un paréntesis de cierre",
       )?;
-      let block = self.parse_block_expr(is_function, is_loop, is_async);
-      if block.is_err() {
-        return Err(block.err().unwrap());
-      }
-      Some((identifier.value.clone(), block.ok().unwrap()))
+      let block = self.parse_block_expr(is_function, is_loop, is_async)?;
+      Some((identifier.value.clone(), block))
     } else {
       None
     };
     let finally = if self.at().token_type == super::TokenType::Keyword(super::KeywordsType::Finally)
     {
       self.eat();
-      let block = self.parse_block_expr(is_function, is_loop, is_async);
-      if block.is_err() {
-        return Err(block.err().unwrap());
-      }
-      Some(block.ok().unwrap())
+      let block = self.parse_block_expr(is_function, is_loop, is_async)?;
+      Some(block)
     } else {
       None
     };
@@ -900,11 +876,7 @@ impl Parser {
         .expect(super::TokenType::Identifier, "Se esperaba un identificador")?
         .value
     };
-    let params = self.parse_arguments_expr();
-    if params.is_err() {
-      return Err(params.err().unwrap());
-    }
-    let params = params.ok().unwrap();
+    let params = self.parse_arguments_expr()?;
     let body = self.parse_block_expr(true, false, is_async)?;
     ast::Node::Function(ast::NodeFunction {
       is_async,
@@ -961,31 +933,19 @@ impl Parser {
     let condition = self.parse_expr()?;
     let body = self.parse_block_expr(is_function, is_loop, is_async)?;
     let else_token = self.at(); // ent
-    if else_token.token_type == super::TokenType::Keyword(super::KeywordsType::Else) {
+    let else_body =  if else_token.token_type == super::TokenType::Keyword(super::KeywordsType::Else) {
       self.eat();
-      let else_block = self.parse_block_expr(is_function, is_loop, is_async);
-      if else_block.is_err() {
-        return Err(else_block.err().unwrap());
-      }
-      let else_body = else_block.ok().unwrap();
-      let else_body = if else_body.len() == 0 {
+      let else_block = self.parse_block_expr(is_function, is_loop, is_async)?;
+      if else_block.len() == 0 {
         None
       } else {
-        Some(else_body)
-      };
-      return ast::Node::If(ast::NodeIf {
-        condition: condition.to_box(),
-        body,
-        else_body,
-        location: token.location,
-        file: token.meta,
-      })
-      .into();
-    }
+        Some(else_block)
+      }
+    }else {None};
     ast::Node::If(ast::NodeIf {
       condition: condition.to_box(),
       body,
-      else_body: None,
+      else_body,
       location: token.location,
       file: token.meta,
     })
@@ -1028,11 +988,7 @@ impl Parser {
   ) -> Result<ast::Node, NodeError> {
     let token = self.eat(); // mien
     let condition = self.parse_expr()?;
-    let block = self.parse_block_expr(is_function, true, is_async);
-    if block.is_err() {
-      return Err(block.err().unwrap());
-    }
-    let body = block.ok().unwrap();
+    let body = self.parse_block_expr(is_function, true, is_async)?;
     ast::Node::While(ast::NodeWhile {
       condition: condition.to_box(),
       body,
@@ -1829,11 +1785,7 @@ impl Parser {
         super::PunctuationType::RegularBracketClose,
       )))
     {
-      let property = self.parse_object_property();
-      if property.is_err() {
-        return Err(property.err().unwrap());
-      }
-      let property = property.ok().unwrap();
+      let property = self.parse_object_property()?;
       properties.push(property);
       if self.match_token(super::TokenType::Punctuation(super::PunctuationType::Comma)) {
         continue;
@@ -1955,12 +1907,8 @@ impl Parser {
         super::PunctuationType::QuadrateBracketClose,
       )))
     {
-      let element = self.parse_array_property();
-      if element.is_err() {
-        return Err(element.err().unwrap());
-      }
-      let property = element.ok().unwrap();
-      elements.push(property);
+      let element = self.parse_array_property()?;
+      elements.push(element);
       if self.match_token(super::TokenType::Punctuation(super::PunctuationType::Comma)) {
         continue;
       }

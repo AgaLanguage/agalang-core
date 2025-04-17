@@ -1,11 +1,12 @@
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
-use std::env::VarError;
-use std::fmt::format;
 use std::rc::Rc;
 
-use super::chunk::{Chunk, OpCode};
-use super::value::{Value, FALSE_NAME, NEVER_NAME, NULL_NAME, TRUE_NAME};
+use crate::bytecode::call_stack;
+
+use super::chunk::{ChunkGroup, OpCode};
+use super::compiler::Compiler;
+use super::value::{Function, Value, FALSE_NAME, NEVER_NAME, NULL_NAME, TRUE_NAME};
 
 const STACK_MAX: usize = 256;
 
@@ -20,6 +21,7 @@ pub enum InterpretResult {
   CompileError(String),
   RuntimeError(String),
 }
+
 struct VarsManager {
   variables: HashMap<String, Value>,
   constants: HashSet<String>,
@@ -71,38 +73,116 @@ impl VarsManager {
   }
 }
 
-pub struct VM<'a> {
-  chunk: Option<&'a Chunk>,
+struct CallFrame {
   ip: usize,
-  stack: Vec<Value>,
-  globals: RC<VarsManager>,
+  function: Function,
   locals: Vec<RC<VarsManager>>,
 }
-
-impl<'a> VM<'a> {
-  pub fn new() -> Self {
+impl CallFrame {
+  pub fn new(compiler: Compiler, vars: RC<VarsManager>) -> Self {
     Self {
-      chunk: None,
       ip: 0,
-      stack: vec![],
-      globals: rc(VarsManager::get_global()),
-      locals: vec![],
+      function: compiler.function,
+      locals: vec![rc(VarsManager::crate_child(vars))],
     }
   }
-  fn get_current_vars(&mut self) -> RC<VarsManager> {
-    self.locals.last().unwrap_or_else(|| &self.globals).clone()
+  fn current_chunk(&mut self) -> &mut ChunkGroup {
+    self.function.chunk()
   }
-  fn resolve(&mut self, name: &str) -> RC<VarsManager> {
-    for local in &self.locals {
+  pub fn current_line(&mut self) -> usize {
+    let instruction = self.ip.saturating_sub(1);
+    let instruction = if instruction > self.ip {
+      0
+    } else {
+      instruction
+    };
+    self.current_chunk().get_line(instruction)
+  }
+  pub fn read(&mut self) -> u8 {
+    let ip = self.ip;
+    let byte = self.current_chunk().read(ip);
+    self.ip += 1;
+    byte
+  }
+  pub fn back(&mut self, offset: usize) {
+    self.ip -= offset;
+  }
+  pub fn advance(&mut self, offset: usize) {
+    self.ip += offset;
+  }
+  pub fn current_vars(&self) -> RC<VarsManager> {
+    self.locals.last().unwrap().clone()
+  }
+  pub fn resolve_vars(&mut self, name: &str) -> RC<VarsManager> {
+    let mut vars = self.current_vars();
+    for local in self.locals.clone() {
       if local.borrow().has(name) {
-        return local.clone();
+        vars = local
       }
     }
-    self.globals.clone()
+    vars
+  }
+  pub fn add_vars(&mut self) {
+    self
+      .locals
+      .push(rc(VarsManager::crate_child(self.current_vars())));
+  }
+  pub fn pop_vars(&mut self) -> RC<VarsManager> {
+    self.locals.pop().unwrap()
+  }
+}
+impl std::fmt::Debug for CallFrame {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "\n\t{}", self.function.location())
+  }
+}
+fn call_stack_to_string(stack: &Vec<CallFrame>) -> String {
+  let mut string = String::new();
+  let mut index = stack.len();
+  while index > 0 {
+    index -= 1;
+    string.push_str(&format!("\n\t{}",stack[index].function.location()));
+  }
+  string
+}
+pub struct VM {
+  stack: Vec<Value>,
+  globals: RC<VarsManager>,
+  call_stack: Vec<CallFrame>,
+}
+
+impl VM {
+  pub fn new(compiler: Compiler) -> Self {
+    //compiler.current_chunk().print();
+    let globals = rc(VarsManager::get_global());
+    Self {
+      stack: vec![],
+      call_stack: vec![CallFrame::new(compiler, globals.clone())],
+      globals,
+    }
+  }
+  fn current_frame(&mut self) -> &mut CallFrame {
+    self.call_stack.last_mut().unwrap()
+  }
+  fn current_chunk(&mut self) -> &mut ChunkGroup {
+    self.current_frame().function.chunk()
+  }
+  fn current_vars(&mut self) -> RC<VarsManager> {
+    self.current_frame().current_vars()
+  }
+  fn resolve(&mut self, name: &str) -> RC<VarsManager> {
+    let mut vars = self.globals.clone();
+    for call in &mut self.call_stack {
+      let local_vars = call.resolve_vars(name);
+      if local_vars.borrow().has(name) {
+        vars = local_vars;
+      }
+    }
+    vars
   }
   fn declare(&mut self, name: &str, value: Value, is_constant: bool) -> Option<Value> {
     self
-      .get_current_vars()
+      .current_vars()
       .borrow_mut()
       .declare(name, value, is_constant)
   }
@@ -112,20 +192,13 @@ impl<'a> VM<'a> {
   fn get(&mut self, name: &str) -> Option<Value> {
     self.resolve(name).borrow().get(name).cloned()
   }
-  pub fn free(&mut self) {
-    self.chunk = None;
-    self.ip = 0;
-    self.reset_stack();
-  }
   fn runtime_error(&mut self, message: &str) {
     eprintln!("{}", message);
-
-    let chunk = self.chunk.unwrap();
-    let instruction = self.ip.saturating_sub(1);
-    if instruction < chunk.lines.len() {
-      let line = chunk.lines[instruction];
-      eprintln!("[linea {}] en script", line + 1);
-    }
+    eprintln!(
+      "[linea {}] en {}",
+      self.current_frame().current_line(),
+      self.current_frame().function.to_string()
+    );
 
     self.reset_stack();
   }
@@ -142,82 +215,113 @@ impl<'a> VM<'a> {
     let index = self.stack.len() - 1 - distance;
     self.stack[index].clone()
   }
-  pub fn interpret(&mut self, chunk: &'a Chunk) -> InterpretResult {
-    self.chunk = Some(chunk);
-    self.ip = 0;
+  pub fn interpret(&mut self) -> InterpretResult {
     let result = self.run();
     match &result {
-      InterpretResult::RuntimeError(e) => {
-        self.runtime_error(&format!("Error en tiempo de ejecucion\n\t{}", e))
+      InterpretResult::RuntimeError(e) => self.runtime_error(&format!(
+        "Error en tiempo de ejecucion\n\t{}\n\t{}\n",
+        e, call_stack_to_string(&self.call_stack)
+      )),
+      InterpretResult::CompileError(e) => {
+        self.runtime_error(&format!("Error en compilacion\n\t{}", e))
       }
-      InterpretResult::CompileError(e) => self.runtime_error(&format!("Error en compilacion\n\t{}", e)),
       _ => {}
     };
     if self.stack.len() != 0 {
-      self.runtime_error("Error de pila no vacia");
+      self.runtime_error(&format!("Error de pila no vacia | {:?}", self.stack));
     }
     result
   }
-  fn read_byte(&mut self) -> u8 {
-    let byte = self.chunk.unwrap().read(self.ip);
-    self.ip += 1;
-    byte
-  }
   fn read_constant(&mut self) -> Value {
-    let constant_index = self.read_byte();
-    self
-      .chunk
-      .unwrap()
-      .constants
-      .get(constant_index as usize)
-      .clone()
+    let constant_index = self.current_frame().read();
+    self.current_chunk().read_constant(constant_index).clone()
   }
   fn read_string(&mut self) -> String {
     self.read_constant().asObject().asString()
   }
   fn read_short(&mut self) -> u16 {
-    self.ip += 2;
-    let a = self.chunk.unwrap().read(self.ip - 2) as u16;
-    let b = self.chunk.unwrap().read(self.ip - 1) as u16;
+    let a = self.current_frame().read() as u16;
+    let b = self.current_frame().read() as u16;
     (a << 8) | b
   }
+  fn call_value(&mut self, callee: Value, arity: usize) -> bool {
+    if !callee.isObject() {
+      if !callee.isNumber() {
+        return false;
+      }
+      if arity != 1 {
+        return false;
+      }
+      let num = callee.asNumber();
+    }
+    let obj = callee.asObject();
+    if !obj.isFunction() {
+      return false;
+    }
+    let mut function = obj.asFunction();
+    self.call_stack.push(CallFrame {
+      ip: 0,
+      function,
+      locals: vec![rc(VarsManager::crate_child(self.globals.clone()))],
+    });
+    true
+  }
   fn run(&mut self) -> InterpretResult {
-    let chunk = self.chunk.unwrap();
     loop {
-      let byte_instruction = self.read_byte();
+      let byte_instruction = self.current_frame().read();
       let instruction: OpCode = byte_instruction.into();
 
-      //println!("{:?} {:?}", instruction, self.stack);
+      //println!("{:<16} | {:?}", format!("{:?}", instruction), self.stack);
 
       match instruction {
-        OpCode::OpConstant | OpCode::OpConstantLong => {
+        OpCode::OpConstant => {
           let constant = self.read_constant();
           self.push(constant);
         }
         OpCode::OpJumpIfFalse => {
           let jump = self.read_short() as usize;
-          if self.peek(0).asBoolean() == false {
-            self.ip += jump;
+          if self.pop().asBoolean() == false {
+            self.current_frame().advance(jump);
+          }
+        }
+        OpCode::OpArgDecl => {
+          let name = self.read_constant().asObject().asString();
+          let value = self.pop();
+          match self.declare(&name, value, true) {
+            None => {
+              return InterpretResult::RuntimeError(format!(
+                "No se pudo declarar la variable '{name}'"
+              ))
+            }
+            _ => {}
           }
         }
         OpCode::OpJump => {
           let jump = self.read_short() as usize;
-          self.ip += jump;
+          self.current_frame().advance(jump);
         }
         OpCode::OpLoop => {
           let offset = self.read_short() as usize;
-          self.ip -= offset;
+          self.current_frame().back(offset);
         }
         OpCode::OpRemoveLocals => {
-          self.locals.pop();
+          self.current_frame().pop_vars();
         }
         OpCode::OpNewLocals => {
-          let current = self.get_current_vars();
-          self.locals.push(rc(VarsManager::crate_child(current)))
+          let current = self.current_vars();
+          self.current_frame().add_vars()
+        }
+        OpCode::OpCall => {
+          let arity = self.current_frame().read() as usize;
+          let callee = self.pop();
+          let call = self.call_value(callee, arity);
+          if !call {
+            return InterpretResult::RuntimeError("Se esperaba llamar a una funcion".into());
+          }
         }
         OpCode::OpVarDecl => {
           let name = self.read_string();
-          let value = self.peek(0);
+          let value = self.pop();
           match self.declare(&name, value, false) {
             None => {
               return InterpretResult::RuntimeError(format!(
@@ -229,7 +333,7 @@ impl<'a> VM<'a> {
         }
         OpCode::OpConstDecl => {
           let name = self.read_string();
-          let value = self.peek(0);
+          let value = self.pop();
           match self.declare(&name, value, true) {
             None => {
               return InterpretResult::RuntimeError(format!(
@@ -256,7 +360,7 @@ impl<'a> VM<'a> {
         }
         OpCode::OpSetVar => {
           let name = self.read_string();
-          let value = self.peek(0);
+          let value = self.pop();
           match self.assign(&name, value) {
             None => {
               return InterpretResult::RuntimeError(format!(
@@ -376,7 +480,12 @@ impl<'a> VM<'a> {
           self.push(Value::Never);
         }
         OpCode::OpReturn => {
-          return InterpretResult::Ok;
+          self.call_stack.pop();
+          let value = self.pop();
+          if self.call_stack.len() == 0 {
+            return InterpretResult::Ok;
+          }
+          self.push(value);
         }
 
         OpCode::OpEquals => {
@@ -408,7 +517,9 @@ impl<'a> VM<'a> {
           self.push(value);
         }
 
-        OpCode::OpNull => return InterpretResult::CompileError(format!("Byte invalido {}",byte_instruction)),
+        OpCode::OpNull => {
+          return InterpretResult::CompileError(format!("Byte invalido {}", byte_instruction))
+        }
       }
     }
   }

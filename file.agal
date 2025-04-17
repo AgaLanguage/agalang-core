@@ -1,15 +1,8 @@
-si falso {
-  csl << 'if';
-} ent si falso{
-  csl << 'else' + '\n';
+fn fib(n) {
+  si n < 2 ret n;
+  fib(n-1) + fib(n-2);
 }
-csl << 'fuera\n';
-
-def a = 0;
-haz {
-  csl << a+'\n';
-  a=a+1;
-}mien a < -1;
+csl << fib(10);
 
 # importa ':red' como Red;
 # importa ':proto/Cadena' como Cadena;
