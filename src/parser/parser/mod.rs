@@ -1481,11 +1481,35 @@ impl Parser {
       ast::NodeOperator::Assign => (ast::NodeOperator::None, true),
       x => (x, false),
     };
+
     let right = if operator == ast::NodeOperator::None && is_assignment {
       self.parse_expr()?
     } else if operator == ast::NodeOperator::None {
       return left.into();
-    } else {
+    } else if operator == ast::NodeOperator::LessThanOrEqual || operator == ast::NodeOperator::GreaterThanOrEqual {
+      let right = self.parse_expr()?;
+      let value_than = ast::Node::Binary(ast::NodeBinary {
+        operator: if operator == ast::NodeOperator::LessThanOrEqual {NodeOperator::LessThan}else {NodeOperator::GreaterThan},
+        left: left.clone().to_box(),
+        right: right.clone().to_box(),
+        location: left.get_location(),
+        file: left.get_file(),
+      });
+      let equal = ast::Node::Binary(ast::NodeBinary {
+        operator: NodeOperator::Equal,
+        left: left.clone().to_box(),
+        right: right.to_box(),
+        location: left.get_location(),
+        file: left.get_file(),
+      });
+      ast::Node::Binary(ast::NodeBinary {
+        operator: NodeOperator::Or,
+        left: value_than.clone().to_box(),
+        right: equal.to_box(),
+        location: value_than.get_location(),
+        file: value_than.get_file(),
+      })
+    }else {
       let right = self.parse_expr()?;
       ast::Node::Binary(ast::NodeBinary {
         operator,

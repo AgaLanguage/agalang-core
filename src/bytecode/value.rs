@@ -2,7 +2,7 @@ use crate::{
   parser::{NodeFunction, NodeIdentifier},
   util::List,
 };
-use std::collections::HashMap;
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use super::chunk::ChunkGroup;
 
@@ -23,6 +23,12 @@ pub enum Function {
   },
 }
 impl Function {
+  pub const fn get_type(&self) -> &str {
+    match self {
+        Self::Function { ..} => "funcion",
+        Self::Script { .. } => "script"
+    }
+  }
   pub fn chunk(&mut self) -> &mut ChunkGroup {
     match self {
       Self::Function { chunk, .. } => chunk,
@@ -75,11 +81,20 @@ impl std::fmt::Debug for Function {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Object {
-  Object(HashMap<String, Value>),
+  Object(Rc<RefCell<HashMap<String, Value>>>),
+  Array(Rc<RefCell<Vec<Value>>>),
   String(String),
   Function(Function),
 }
 impl Object {
+  pub const fn get_type(&self) -> &str {
+    match self {
+      Self::String(_) => "cadena",
+      Self::Function(f) => f.get_type(),
+      Self::Object(_) => "objeto",
+      Self::Array(_) => "lista"
+    }
+  }
   pub fn isString(&self) -> bool {
     match self {
       Self::String(_) => true,
@@ -97,18 +112,39 @@ impl Object {
       Self::Function { .. } => true,
       _ => false,
     }
+  }  pub fn isArray(&self) -> bool {
+    match self {
+      Self::Array(_) => true,
+      _ => false,
+    }
   }
   pub fn asString(&self) -> String {
     match self {
       Self::Object(_) => "[objeto Objeto]".to_string(),
+      Self::Array(v) => {
+        let mut list = String::new();
+        list.push_str("[ ");
+        for (i, element) in v.borrow().iter().enumerate() {
+          if i != 0 {list.push_str(", ");}
+          list.push_str(&element.asObject().asString());
+        }
+        list.push_str(" ]");
+        list
+      },
       Self::String(s) => s.clone(),
       Self::Function(f) => f.to_string(),
     }
   }
-  pub fn asObject(&self) -> HashMap<String, Value> {
+  pub fn asObject(&self) -> Rc<RefCell<HashMap<String, Value>>> {
     match self {
       Self::Object(x) => x.clone(),
-      _ => HashMap::new(),
+      _ => Rc::new(RefCell::new(HashMap::new())),
+    }
+  }
+  pub fn asArray(&self) -> Rc<RefCell<Vec<Value>>> {
+    match self {
+      Self::Array(x) => x.clone(),
+      _ => Rc::new(RefCell::new(vec![])),
     }
   }
   pub fn asFunction(&self) -> Function {
@@ -134,22 +170,42 @@ impl From<Function> for Object {
     Self::Function(value)
   }
 }
+impl From<HashMap<String, Value>> for Object {
+  fn from(value: HashMap<String, Value>) -> Self {
+    Self::Object(Rc::new(RefCell::new(value)))
+  }
+}
+impl From<Vec<Value>> for Object {
+  fn from(value: Vec<Value>) -> Self {
+    Self::Array(Rc::new(RefCell::new(value)))
+  }
+}
 
 pub const NULL_NAME: &str = "nulo";
 pub const NEVER_NAME: &str = "nada";
 pub const TRUE_NAME: &str = "cierto";
 pub const FALSE_NAME: &str = "falso";
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub enum Value {
   Number(Number),
   Object(Object),
   False,
   True,
   Null,
+  #[default]
   Never,
 }
 impl Value {
+  pub const fn get_type(&self) -> &str {
+    match self {
+      Self::False | Self::True => "buleano",
+      Self::Never => "nada",
+      Self::Null => "nulo",
+      Self::Number(_) => "numero",
+      Self::Object(o) => o.get_type(),
+    }
+  }
   pub fn isNumber(&self) -> bool {
     match self {
       Self::Number(_) => true,

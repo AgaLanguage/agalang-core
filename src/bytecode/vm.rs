@@ -141,7 +141,7 @@ fn call_stack_to_string(stack: &Vec<CallFrame>) -> String {
   let mut index = stack.len();
   while index > 0 {
     index -= 1;
-    string.push_str(&format!("\n\t{}",stack[index].function.location()));
+    string.push_str(&format!("\n\t{}", stack[index].function.location()));
   }
   string
 }
@@ -152,8 +152,8 @@ pub struct VM {
 }
 
 impl VM {
-  pub fn new(compiler: Compiler) -> Self {
-    //compiler.current_chunk().print();
+  pub fn new(mut compiler: Compiler) -> Self {
+    //compiler.chunk().print();
     let globals = rc(VarsManager::get_global());
     Self {
       stack: vec![],
@@ -220,7 +220,8 @@ impl VM {
     match &result {
       InterpretResult::RuntimeError(e) => self.runtime_error(&format!(
         "Error en tiempo de ejecucion\n\t{}\n\t{}\n",
-        e, call_stack_to_string(&self.call_stack)
+        e,
+        call_stack_to_string(&self.call_stack)
       )),
       InterpretResult::CompileError(e) => {
         self.runtime_error(&format!("Error en compilacion\n\t{}", e))
@@ -232,16 +233,19 @@ impl VM {
     }
     result
   }
+  fn read(&mut self) -> u8 {
+    self.current_frame().read()
+  }
   fn read_constant(&mut self) -> Value {
-    let constant_index = self.current_frame().read();
+    let constant_index = self.read();
     self.current_chunk().read_constant(constant_index).clone()
   }
   fn read_string(&mut self) -> String {
     self.read_constant().asObject().asString()
   }
   fn read_short(&mut self) -> u16 {
-    let a = self.current_frame().read() as u16;
-    let b = self.current_frame().read() as u16;
+    let a = self.read() as u16;
+    let b = self.read() as u16;
     (a << 8) | b
   }
   fn call_value(&mut self, callee: Value, arity: usize) -> bool {
@@ -268,12 +272,115 @@ impl VM {
   }
   fn run(&mut self) -> InterpretResult {
     loop {
-      let byte_instruction = self.current_frame().read();
+      let byte_instruction = self.read();
       let instruction: OpCode = byte_instruction.into();
 
-      //println!("{:<16} | {:?}", format!("{:?}", instruction), self.stack);
+      println!("{:<16} | {:?}", format!("{:?}", instruction), self.stack);
 
       match instruction {
+        OpCode::OpApproximate => {
+          let value = self.pop();
+          if !value.isNumber() {
+            return InterpretResult::RuntimeError(format!("No se pudo operar '~x'"));
+          }
+          self.push(Value::Number(value.asNumber().round()));
+        }
+        OpCode::OpSetMember => {
+          let value = self.pop();
+          let key = self.pop();
+          let object = self.pop();
+          if !object.isObject() {
+            return InterpretResult::RuntimeError(format!(
+              "Se esperaba un objeto para obtener la propiedad"
+            ));
+          }
+          let mut obj = object.asObject();
+          if obj.isObject() {
+            let is_instance = self.read() == 1u8;
+            let map = obj.asObject();
+            let value = map
+              .borrow_mut()
+              .insert(key.asObject().asString(), value)
+              .unwrap_or_default();
+            self.stack.push(value);
+          } else if obj.isArray() {
+            let is_instance = self.read() == 1u8;
+            let vec = obj.asArray();
+            if !key.isNumber() {
+              return InterpretResult::RuntimeError(format!("Se esperaba un indice de propiedad"));
+            }
+            let key = key.asNumber();
+            let index = key.abs().ceil();
+            if key != index {
+              return InterpretResult::RuntimeError(format!(
+                "El indice debe ser un numero entero positivo"
+              ));
+            }
+            if vec.borrow().len() <= index as usize {
+              vec.borrow_mut().push(value.clone());
+            } else {
+              vec.borrow_mut()[index as usize] = value.clone();
+            };
+            self.stack.push(value);
+          } else {
+            return InterpretResult::RuntimeError(format!(
+              "Se esperaba un objeto para obtener la propiedad"
+            ));
+          }
+        }
+        OpCode::OpGetMember => {
+          let key = self.pop();
+          let object = self.pop();
+          if !object.isObject() {
+            return InterpretResult::RuntimeError(format!(
+              "Se esperaba un objeto para obtener la propiedad"
+            ));
+          }
+          let mut obj = object.asObject();
+          if obj.isObject() {
+            let map = obj.asObject();
+            let is_instance = self.read() == 1u8;
+            let value = map
+              .borrow()
+              .get(&key.asObject().asString())
+              .cloned()
+              .unwrap_or_default();
+            self.stack.push(value);
+          } else if obj.isArray() {
+            let is_instance = self.read() == 1u8;
+            let vec = obj.asArray();
+            if is_instance {
+              let key = key.asObject().asString();
+              if key == "longitud" {
+                self.push(Value::Number(vec.borrow().len() as f64));
+                continue;
+              }
+              return InterpretResult::RuntimeError(format!(
+                "No se puede obtener la propiedad de instancia '{key}'"
+              ));
+            }
+            if !key.isNumber() {
+              return InterpretResult::RuntimeError(format!("Se esperaba un indice de propiedad"));
+            }
+            let key = key.asNumber();
+            let index = key.abs().ceil();
+            if key != index {
+              return InterpretResult::RuntimeError(format!(
+                "El indice debe ser un numero entero positivo"
+              ));
+            }
+            let value = vec
+              .borrow()
+              .get(index as usize)
+              .cloned()
+              .unwrap_or_default();
+            self.stack.push(value);
+          } else {
+            return InterpretResult::RuntimeError(format!(
+              "Se esperaba un objeto para obtener la propiedad"
+            ));
+          }
+        }
         OpCode::OpConstant => {
           let constant = self.read_constant();
           self.push(constant);
@@ -312,7 +419,7 @@ impl VM {
           self.current_frame().add_vars()
         }
         OpCode::OpCall => {
-          let arity = self.current_frame().read() as usize;
+          let arity = self.read() as usize;
           let callee = self.pop();
           let call = self.call_value(callee, arity);
           if !call {

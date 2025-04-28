@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::parser::{Node, NodeFunction, NodeIdentifier};
 
 use super::{
@@ -21,8 +23,11 @@ impl Compiler {
         .chunk()
         .make_arg(param.name.clone(), param.location.start.line);
     }
-    compiler.node_to_bytes(&function.body.clone().to_node())?;
-    compiler.set_constant(Value::Never, function.location.end.line);
+    if function.body.len() > 0 {
+      compiler.node_to_bytes(&function.body.clone().to_node())?;
+    } else {
+      compiler.set_constant(Value::Never, function.location.end.line);
+    }
     compiler
       .chunk()
       .write(OpCode::OpReturn as u8, function.location.end.line);
@@ -69,7 +74,12 @@ impl Compiler {
         self.chunk().write(operator as u8, b.location.start.line);
       }
       Node::Program(p) => {
-        self.node_to_bytes(&p.body.clone().to_node())?;
+        if p.body.len() != 0 {
+          self.node_to_bytes(&p.body.clone().to_node())?;
+          self
+            .chunk()
+            .write(OpCode::OpPop as u8, p.location.start.line);
+        }
         self.set_constant(Value::Never, p.location.start.line);
         self
           .chunk()
@@ -82,7 +92,7 @@ impl Compiler {
         let last_index = b.body.len();
         for (index, node) in b.body.clone().enumerate() {
           self.node_to_bytes(&node)?;
-          if index < (last_index-1) {
+          if index < (last_index - 1) {
             self
               .chunk()
               .write(OpCode::OpPop as u8, node.get_location().end.line);
@@ -98,6 +108,7 @@ impl Compiler {
           crate::parser::NodeOperator::Minus => OpCode::OpNegate,
           crate::parser::NodeOperator::Not => OpCode::OpNot,
           crate::parser::NodeOperator::QuestionMark => OpCode::OpAsBoolean,
+          crate::parser::NodeOperator::Approximate => OpCode::OpApproximate,
           op => {
             return Err(format!(
               "NodeOperator::{op:?}: No es un nodo valido en bytecode"
@@ -180,6 +191,23 @@ impl Compiler {
               .chunk()
               .write_buffer(vec![OpCode::OpSetVar as u8, name], a.location.start.line);
           }
+          Node::Member(m) => {
+            self.node_to_bytes(&m.object)?;
+            if m.computed {
+              self.node_to_bytes(&m.member)?;
+            } else {
+              let name = match m.member.as_ref() {
+                Node::Identifier(id) => id.name.as_str(),
+                _ => return Err("Se esperaba un identificador como propiedad".to_string()),
+              };
+              self.set_constant(Value::Object(name.into()), m.location.start.line)
+            };
+            self.node_to_bytes(&a.value)?;
+            let byte = if m.instance { 1u8 } else { 0u8 };
+            self
+              .chunk()
+              .write_buffer(vec![OpCode::OpSetMember as u8, byte], m.location.start.line);
+          }
           _ => return Err("Se esperaba una assignacion valida".to_string()),
         };
       }
@@ -193,7 +221,7 @@ impl Compiler {
 
         if let Some(e) = &i.else_body {
           self.node_to_bytes(&e.clone().to_node())?;
-        }else {
+        } else {
           self.chunk().make_constant(Value::Never);
         }
         self.chunk().patch_jump(jump_else);
@@ -252,7 +280,7 @@ impl Compiler {
       }
       Node::Call(c) => {
         for arg in &c.arguments {
-          self.node_to_bytes(&arg);
+          self.node_to_bytes(&arg)?;
         }
         self.node_to_bytes(&c.callee)?;
         self.chunk().write_buffer(
@@ -273,6 +301,69 @@ impl Compiler {
           .chunk()
           .write(OpCode::OpReturn as u8, r.location.start.line);
       }
+      Node::Object(o) => {
+        let value = Value::Object(HashMap::new().into());
+        for p in o.properties.clone() {
+          self.set_constant(value.clone(), o.location.start.line);
+          match p {
+            crate::parser::NodeProperty::Dynamic(key, value) => {
+              self.node_to_bytes(&key)?;
+              self.node_to_bytes(&value)?;
+              self.chunk().write_buffer(
+                vec![OpCode::OpSetMember as u8, 0, OpCode::OpPop as u8],
+                o.location.start.line,
+              );
+            }
+            crate::parser::NodeProperty::Property(key, value) => {
+              self.set_constant(Value::Object(key.as_str().into()), o.location.start.line);
+              self.node_to_bytes(&value)?;
+              self.chunk().write_buffer(
+                vec![OpCode::OpSetMember as u8, 0, OpCode::OpPop as u8],
+                o.location.start.line,
+              );
+            }
+            _ => {}
+          };
+        }
+        self.set_constant(value, o.location.start.line);
+      }
+      Node::Member(m) => {
+        self.node_to_bytes(&m.object)?;
+        if m.computed {
+          self.node_to_bytes(&m.member)?;
+        } else {
+          let name = match m.member.as_ref() {
+            Node::Identifier(id) => id.name.as_str(),
+            _ => return Err("Se esperaba un identificador como propiedad".to_string()),
+          };
+          self.set_constant(Value::Object(name.into()), m.location.start.line)
+        };
+        let is_instance = if m.instance { 1u8 } else { 0u8 };
+        self.chunk().write_buffer(
+          vec![OpCode::OpGetMember as u8, is_instance],
+          m.location.start.line,
+        );
+      }
+      Node::Array(a) => {
+        let value = Value::Object(vec![].into());
+        let mut index = 0.0;
+        for p in a.elements.clone() {
+          self.set_constant(value.clone(), a.location.start.line);
+          match p {
+            crate::parser::NodeProperty::Indexable(value) => {
+              self.set_constant(Value::Number(index), a.location.start.line);
+              self.node_to_bytes(&value)?;
+              self.chunk().write_buffer(
+                vec![OpCode::OpSetMember as u8, 0, OpCode::OpPop as u8],
+                a.location.start.line,
+              );
+            }
+            _ => {}
+          };
+          index += 1.0;
+        }
+        self.set_constant(value, a.location.start.line);
+      }
       a => {
         return Err(format!(
           "{}: No es un nodo valido en bytecode",
@@ -289,7 +380,10 @@ impl From<&Node> for Compiler {
     let chunk = ChunkGroup::new();
     let function = Function::Script { chunk, path };
     let mut compiler = Self { function };
-    compiler.node_to_bytes(value);
+    match compiler.node_to_bytes(value) {
+      Err(e) => panic!("{e}"),
+      _ => {}
+    }
     compiler
   }
 }

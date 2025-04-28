@@ -12,10 +12,13 @@ pub enum OpCode {
   OpNegate,
   // Expr
   OpNot,
+  OpApproximate,
   OpAsBoolean,
   OpAsString,
   OpCall,
   OpArgDecl,
+  OpGetMember,
+  OpSetMember,
   // Binary
   OpAnd,
   OpOr,
@@ -47,6 +50,9 @@ impl From<&u8> for OpCode {
 impl From<u8> for OpCode {
   fn from(value: u8) -> Self {
     match value {
+      x if x == OpCode::OpApproximate as u8 => OpCode::OpApproximate,
+      x if x == OpCode::OpGetMember as u8 => OpCode::OpGetMember,
+      x if x == OpCode::OpSetMember as u8 => OpCode::OpSetMember,
       x if x == OpCode::OpConstant as u8 => OpCode::OpConstant,
       x if x == OpCode::OpCall as u8 => OpCode::OpCall,
       x if x == OpCode::OpAdd as u8 => OpCode::OpAdd,
