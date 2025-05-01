@@ -343,7 +343,7 @@ impl Parser {
   fn parse_throw_decl(&mut self) -> Result<ast::Node, NodeError> {
     let token = self.eat(); // lanzar
     let expr = self.parse_expr()?;
-    let semicolon = self.expect(
+    self.expect(
       super::TokenType::Punctuation(super::PunctuationType::SemiColon),
       &format!(
         "Se esperaba un punto y coma ({})",
@@ -374,7 +374,7 @@ impl Parser {
       let alias = self.expect(super::TokenType::Identifier, "Se esperaba un identificador")?;
       name = Some(alias.value.clone());
     }
-    let semicolon = self.expect(
+    self.expect(
       super::TokenType::Punctuation(super::PunctuationType::SemiColon),
       &format!("Se esperaba un punto y coma ({})", path.value),
     )?;
@@ -447,7 +447,7 @@ impl Parser {
   fn parse_name_decl(&mut self) -> Result<ast::Node, NodeError> {
     let token = self.eat(); // nombre
     let name = self.expect(super::TokenType::Identifier, "Se esperaba un identificador")?;
-    let semicolon = self.expect(
+    self.expect(
       super::TokenType::Punctuation(super::PunctuationType::SemiColon),
       &format!(
         "Se esperaba un punto y coma ({})",

@@ -162,7 +162,7 @@ impl Node {
       Node::Array(_) => "Lista",
       Node::Identifier(_) => "Identificador",
       Node::VarDecl(_) => "Variable",
-      Node::VarDel(node) => "VariableEliminada",
+      Node::VarDel(_) => "VariableEliminada",
       Node::Name(_) => "Nombre",
       Node::Assignment(_) => "Asignacion",
       Node::Class(_) => "Clase",

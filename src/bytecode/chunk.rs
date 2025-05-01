@@ -39,6 +39,8 @@ pub enum OpCode {
   OpJumpIfFalse,
   OpJump,
   OpReturn,
+  OpBreak,
+  OpContinue,
   // Invalid
   OpNull,
 }
@@ -87,8 +89,8 @@ impl From<u8> for OpCode {
   }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-struct Chunk {
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Chunk {
   pub code: Vec<u8>,
   pub lines: Vec<usize>,
   pub constants: ValueArray,
@@ -118,6 +120,9 @@ impl Chunk {
     }
   }
   fn add_constant(&mut self, value: Value) -> u8 {
+    if self.constants.has_value(&value) {
+      return self.constants.get_index(&value).unwrap_or(0);
+    }
     self.constants.write(value);
     self.constants.len() - 1
   }
@@ -144,11 +149,6 @@ impl Chunk {
     self.overwrite(offset, ((jump >> 8) & 0xff) as u8);
     self.overwrite(offset + 1, (jump & 0xff) as u8);
     Ok(())
-  }
-  fn clear(&mut self) {
-    self.code = vec![];
-    self.lines = vec![];
-    self.constants = ValueArray::new();
   }
   fn print(&self, name: String) {
     println!("===== {name} =====");
@@ -190,7 +190,7 @@ impl Chunk {
   }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ChunkGroup {
   chunks: Vec<Chunk>,
   aggregate_len: Vec<usize>,
@@ -281,6 +281,9 @@ impl ChunkGroup {
     self.write_constant(value, line)
   }
   pub fn write_constant(&mut self, value: Value, line: usize) -> u8 {
+    if self.current_chunk_mut().constants.has_value(&value) {
+      return self.current_chunk_mut().constants.get_index(&value).unwrap_or(0);
+    }
     if self.current_chunk_mut().constants.len() >= u8::MAX {
       self.current += 1;
       self.chunks.push(Chunk::new());

@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
-use crate::parser::{Node, NodeFunction, NodeIdentifier};
+use crate::parser::{Node, NodeFunction};
 
 use super::{
   chunk::{ChunkGroup, OpCode},
-  value::{Function, Value, NEVER_NAME},
+  value::{Function, Number, Value, NEVER_NAME},
 };
 
 pub struct Compiler {
@@ -45,10 +45,10 @@ impl Compiler {
   fn node_to_bytes(&mut self, node: &Node) -> Result<(), String> {
     match node {
       Node::Number(n) => {
-        let number = if n.base == 10u8 {
-          n.value.parse::<f64>().unwrap()
+        let number: Number = if n.base == 10u8 {
+          n.value.parse().unwrap()
         } else {
-          u32::from_str_radix(&n.value, n.base as u32).unwrap() as f64
+          Number::from_str_radix(&n.value, n.base)
         };
         self.set_constant(Value::Number(number), n.location.start.line);
       }
@@ -65,13 +65,26 @@ impl Compiler {
           crate::parser::NodeOperator::LessThan => OpCode::OpLessThan,
           crate::parser::NodeOperator::And => OpCode::OpAnd,
           crate::parser::NodeOperator::Or => OpCode::OpOr,
+          _ => OpCode::OpNull,
           a => {
             return Err(format!(
               "NodeOperator::{a:?}: No es un nodo valido en bytecode"
             ))
           }
         };
-        self.chunk().write(operator as u8, b.location.start.line);
+        if operator == OpCode::OpNull {
+          match b.operator {
+            crate::parser::NodeOperator::NotEqual => {
+              self.chunk().write_buffer(vec![OpCode::OpEquals as u8, OpCode::OpNot as u8], b.location.start.line);
+            }
+            a =>{
+              return Err(format!(
+                "NodeOperator::{a:?}: No es un nodo valido en bytecode"
+              ))
+            }
+          };
+        }else {
+        self.chunk().write(operator as u8, b.location.start.line);};
       }
       Node::Program(p) => {
         if p.body.len() != 0 {
@@ -137,7 +150,7 @@ impl Compiler {
               self.set_constant(Value::Object(val.as_str().into()), s.location.start.line)
             }
             crate::parser::StringData::Id(id) => {
-              self.set_constant(Value::Object(id.as_str().into()), s.location.start.line);
+              self.chunk().read_var(id, s.location.start.line);
             }
           }
           if i != 0 {
@@ -351,7 +364,7 @@ impl Compiler {
           self.set_constant(value.clone(), a.location.start.line);
           match p {
             crate::parser::NodeProperty::Indexable(value) => {
-              self.set_constant(Value::Number(index), a.location.start.line);
+              self.set_constant(Value::Number(index.into()), a.location.start.line);
               self.node_to_bytes(&value)?;
               self.chunk().write_buffer(
                 vec![OpCode::OpSetMember as u8, 0, OpCode::OpPop as u8],
@@ -363,6 +376,16 @@ impl Compiler {
           index += 1.0;
         }
         self.set_constant(value, a.location.start.line);
+      }
+      Node::LoopEdit(e) => {
+        let byte = match e.action {
+          crate::parser::NodeLoopEditType::Break => OpCode::OpBreak,
+          crate::parser::NodeLoopEditType::Continue => OpCode::OpContinue,
+        } as u8;
+        self.chunk().write(
+          byte,
+          e.location.start.line,
+        );
       }
       a => {
         return Err(format!(
