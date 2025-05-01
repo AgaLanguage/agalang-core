@@ -12,7 +12,7 @@ struct SemiToken {
   value: String,
   location: util::Location,
 }
-const COLOR: util::Color = util::Color::CYAN;
+const COLOR: util::Color = util::Color::Cyan;
 
 pub fn node_error(error: &ast::NodeError) -> super::ErrorTypes {
   let line: usize;
@@ -517,7 +517,7 @@ impl Parser {
         meta: format!("{}\0{}", line, token.value),
       });
     };
-    let semicolon = self.expect(
+    self.expect(
       super::TokenType::Punctuation(super::PunctuationType::SemiColon),
       &format!("Se esperaba un punto y coma ({})", name.value),
     )?;
@@ -548,7 +548,7 @@ impl Parser {
         None
       };
 
-    let open_brace = self.expect(
+    self.expect(
       super::TokenType::Punctuation(super::PunctuationType::RegularBracketOpen),
       "Se esperaba un corchete de apertura",
     )?;
@@ -631,7 +631,7 @@ impl Parser {
           });
         }
         let expr = self.parse_expr()?;
-        let semicolon = self.expect(
+        self.expect(
           super::TokenType::Punctuation(super::PunctuationType::SemiColon),
           &format!(
             "Se esperaba un punto y coma ({})",
@@ -654,7 +654,7 @@ impl Parser {
             meta: format!("{}\0{}", line, token.value),
           });
         }
-        let semicolon = self.expect(
+        self.expect(
           super::TokenType::Punctuation(super::PunctuationType::SemiColon),
           "Se esperaba un punto y coma (Modificador de Bucle)",
         )?;
@@ -796,21 +796,21 @@ impl Parser {
   }
   fn parse_for_decl(&mut self, is_function: bool, is_async: bool) -> Result<ast::Node, NodeError> {
     let token = self.eat(); // para
-    let open_paren = self.expect(
+    self.expect(
       super::TokenType::Punctuation(super::PunctuationType::CircularBracketOpen),
       "Se esperaba un paréntesis de apertura",
     )?;
     let init = self.parse_var_decl()?.to_box();
     let condition = self.parse_expr()?;
-    let semicolon = self.expect(
+    self.expect(
       super::TokenType::Punctuation(super::PunctuationType::SemiColon),
       "Se esperaba un punto y coma (Para)",
     )?;
     let update = self.parse_expr()?;
-    let close_paren = self.expect(
+    self.expect(
       super::TokenType::Punctuation(super::PunctuationType::CircularBracketClose),
       "Se esperaba un paréntesis de cierre",
-    );
+    )?;
     let body = self.parse_block_expr(is_function, true, is_async)?;
     ast::Node::For(ast::NodeFor {
       init,
@@ -832,12 +832,12 @@ impl Parser {
     let body = self.parse_block_expr(is_function, is_loop, is_async)?;
     let catch = if self.at().token_type == super::TokenType::Keyword(super::KeywordsType::Catch) {
       self.eat();
-      let open_paren = self.expect(
+      self.expect(
         super::TokenType::Punctuation(super::PunctuationType::CircularBracketOpen),
         "Se esperaba un paréntesis de apertura",
       )?;
       let identifier = self.expect(super::TokenType::Identifier, "Se esperaba un identificador")?;
-      let close_paren = self.expect(
+      self.expect(
         super::TokenType::Punctuation(super::PunctuationType::CircularBracketClose),
         "Se esperaba un paréntesis de cierre",
       )?;
@@ -889,7 +889,7 @@ impl Parser {
     .into()
   }
   fn parse_arguments_expr(&mut self) -> Result<util::List<ast::NodeIdentifier>, ast::NodeError> {
-    let open_paren = self.expect(
+    self.expect(
       super::TokenType::Punctuation(super::PunctuationType::CircularBracketOpen),
       "Se esperaba un paréntesis de apertura",
     )?;
@@ -958,7 +958,7 @@ impl Parser {
   ) -> Result<ast::Node, NodeError> {
     let token = self.eat(); // hacer
     let body = self.parse_block_expr(is_function, true, is_async)?;
-    let while_token = self.expect(
+    self.expect(
       super::TokenType::Keyword(super::KeywordsType::While),
       &format!(
         "Se esperaba la palabra clave '{}'",
@@ -966,7 +966,7 @@ impl Parser {
       ),
     )?;
     let condition = self.parse_expr()?.to_box();
-    let semicolon = self.expect(
+    self.expect(
       super::TokenType::Punctuation(super::PunctuationType::SemiColon),
       &format!(
         "Se esperaba un punto y coma ({})",
@@ -1178,7 +1178,7 @@ impl Parser {
   }
   fn parse_stmt_expr(&mut self) -> Result<ast::Node, NodeError> {
     let node = self.parse_expr();
-    let semicolon = self.expect(
+    self.expect(
       super::TokenType::Punctuation(super::PunctuationType::SemiColon),
       "Se esperaba un punto y coma (expr)",
     )?;
@@ -1648,7 +1648,7 @@ impl Parser {
         self.parse_literal_member_expr()
       }?;
       if computed {
-        let close = self.expect(
+        self.expect(
           super::TokenType::Punctuation(super::PunctuationType::QuadrateBracketClose),
           "Se esperaba un corchete cuadrado de cierre (pme)",
         )?;
@@ -1742,7 +1742,7 @@ impl Parser {
       super::TokenType::Punctuation(super::PunctuationType::CircularBracketOpen) => {
         self.eat();
         let expr = self.parse_expr()?;
-        let close_paren = self.expect(
+        self.expect(
           super::TokenType::Punctuation(super::PunctuationType::CircularBracketClose),
           "Se esperaba un paréntesis de cierre",
         )?;
@@ -1839,7 +1839,7 @@ impl Parser {
     match token.token_type {
       super::TokenType::StringLiteral => {
         let key = token.value;
-        let colon = self.expect(
+        self.expect(
           super::TokenType::Punctuation(super::PunctuationType::DoubleDot),
           "Se esperaba dos puntos",
         )?;
@@ -1885,12 +1885,12 @@ impl Parser {
       super::TokenType::Punctuation(p) => {
         if p == super::PunctuationType::QuadrateBracketOpen {
           let expr = self.parse_expr();
-          let close_bracket = self.expect(
+          self.expect(
             super::TokenType::Punctuation(super::PunctuationType::QuadrateBracketClose),
             "Se esperaba un corchete cuadrado de cierre (pop)",
           )?;
           let key = expr?;
-          let colon = self.expect(
+          self.expect(
             super::TokenType::Punctuation(super::PunctuationType::DoubleDot),
             "Se esperaba dos puntos",
           )?;
@@ -1898,7 +1898,7 @@ impl Parser {
           return Ok(ast::NodeProperty::Dynamic(key, value));
         }
         if p == super::PunctuationType::Dot {
-          let dot = self.expect(
+          self.expect(
             super::TokenType::Punctuation(super::PunctuationType::Dot),
             "Se esperaba un punto",
           )?;
@@ -1962,7 +1962,7 @@ impl Parser {
       super::TokenType::Punctuation(p) => {
         if p == super::PunctuationType::Dot {
           self.eat();
-          let dot = self.expect(
+          self.expect(
             super::TokenType::Punctuation(super::PunctuationType::Dot),
             "Se esperaba un punto",
           )?;

@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 mod _tokenize;
 mod colors;
 pub mod list;

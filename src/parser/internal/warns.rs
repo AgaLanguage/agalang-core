@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use super::{
   errors::{error_to_string, ErrorNames},
   ErrorTypes,

@@ -19,7 +19,7 @@ impl Compiler {
     while i > 0 {
       i -= 1;
       let param = function.params.get(i).unwrap();
-      let global = compiler
+      let _global = compiler
         .chunk()
         .make_arg(param.name.clone(), param.location.start.line);
     }
@@ -32,9 +32,6 @@ impl Compiler {
       .chunk()
       .write(OpCode::OpReturn as u8, function.location.end.line);
     Ok(compiler.function)
-  }
-  pub fn new(function: Function) -> Self {
-    Self { function }
   }
   fn set_constant(&mut self, value: Value, line: usize) {
     self.chunk().write_constant(value, line);
@@ -65,7 +62,6 @@ impl Compiler {
           crate::parser::NodeOperator::LessThan => OpCode::OpLessThan,
           crate::parser::NodeOperator::And => OpCode::OpAnd,
           crate::parser::NodeOperator::Or => OpCode::OpOr,
-          _ => OpCode::OpNull,
           a => {
             return Err(format!(
               "NodeOperator::{a:?}: No es un nodo valido en bytecode"
@@ -98,7 +94,7 @@ impl Compiler {
           .chunk()
           .write(OpCode::OpReturn as u8, p.location.end.line);
       }
-      Node::Block(b, is_async) => {
+      Node::Block(b, _is_async) => {
         self
           .chunk()
           .write(OpCode::OpNewLocals as u8, b.location.start.line);
@@ -143,7 +139,6 @@ impl Compiler {
         _ => {}
       },
       Node::String(s) => {
-        let mut string = String::new();
         for (i, data) in s.value.clone().enumerate() {
           match data {
             crate::parser::StringData::Str(val) => {
@@ -230,14 +225,14 @@ impl Compiler {
         self.node_to_bytes(&i.body.clone().to_node())?;
 
         let jump_else = self.chunk().jump(OpCode::OpJump);
-        self.chunk().patch_jump(jump_if);
+        self.chunk().patch_jump(jump_if)?;
 
         if let Some(e) = &i.else_body {
           self.node_to_bytes(&e.clone().to_node())?;
         } else {
           self.chunk().make_constant(Value::Never);
         }
-        self.chunk().patch_jump(jump_else);
+        self.chunk().patch_jump(jump_else)?;
       }
       Node::While(i) => {
         let loop_start = self.chunk().len();
@@ -245,19 +240,19 @@ impl Compiler {
         let jump_while = self.chunk().jump(OpCode::OpJumpIfFalse);
         self.node_to_bytes(&i.body.clone().to_node())?;
         self.chunk().write(OpCode::OpPop as u8, 0);
-        self.chunk().add_loop(loop_start);
-        self.chunk().patch_jump(jump_while);
+        self.chunk().add_loop(loop_start)?;
+        self.chunk().patch_jump(jump_while)?;
       }
       Node::DoWhile(i) => {
         let jump_do = self.chunk().jump(OpCode::OpJump);
         let loop_start = self.chunk().len();
         self.node_to_bytes(&i.condition)?;
         let jump_while = self.chunk().jump(OpCode::OpJumpIfFalse);
-        self.chunk().patch_jump(jump_do);
+        self.chunk().patch_jump(jump_do)?;
         self.node_to_bytes(&i.body.clone().to_node())?;
         self.chunk().write(OpCode::OpPop as u8, 0);
-        self.chunk().add_loop(loop_start);
-        self.chunk().patch_jump(jump_while);
+        self.chunk().add_loop(loop_start)?;
+        self.chunk().patch_jump(jump_while)?;
       }
       Node::For(f) => {
         self
@@ -270,8 +265,8 @@ impl Compiler {
         self.node_to_bytes(&f.body.clone().to_node())?;
         self.node_to_bytes(&f.update)?;
         self.chunk().write(OpCode::OpPop as u8, 0);
-        self.chunk().add_loop(loop_start);
-        self.chunk().patch_jump(jump_while);
+        self.chunk().add_loop(loop_start)?;
+        self.chunk().patch_jump(jump_while)?;
         self
           .chunk()
           .write(OpCode::OpRemoveLocals as u8, f.location.start.line);

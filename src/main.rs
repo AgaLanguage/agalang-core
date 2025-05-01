@@ -1,4 +1,4 @@
-#![allow(warnings)]
+
 use std::process::ExitCode;
 
 mod bytecode;
@@ -43,7 +43,7 @@ fn code(path: &str) -> Option<String> {
 }
 
 fn file() -> Option<String> {
-  let mut args: Vec<String> = std::env::args().collect();
+  let args: Vec<String> = std::env::args().collect();
   if args.len() < 2 {
     let blue_usage = "\x1b[94m\x1b[1mUsage\x1b[39m:\x1b[0m";
     println!("{} {} <filename>", blue_usage, args[0]);

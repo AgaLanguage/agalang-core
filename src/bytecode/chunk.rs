@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use super::value::{Value, ValueArray};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -84,7 +85,7 @@ impl From<u8> for OpCode {
       x if x == OpCode::OpJump as u8 => OpCode::OpJump,
       x if x == OpCode::OpReturn as u8 => OpCode::OpReturn,
 
-      x => OpCode::OpNull,
+      _ => OpCode::OpNull,
     }
   }
 }
@@ -159,7 +160,7 @@ impl Chunk {
       let op = OpCode::from(self.code[offset]);
       offset += 1;
       print!("{:04x} | {:>16} ", i, format!("{:?}", op));
-      let JumpTo = if op == OpCode::OpJump || op == OpCode::OpJumpIfFalse {
+      let jump_to = if op == OpCode::OpJump || op == OpCode::OpJumpIfFalse {
         let a = self.read(offset) as u16;
         let b = self.read(offset + 1) as u16;
         offset += 2;
@@ -167,7 +168,7 @@ impl Chunk {
       } else {
         "----".into()
       };
-      print!("|   {JumpTo} ");
+      print!("|   {jump_to} ");
       let (index, value) = if op == OpCode::OpConstant || op == OpCode::OpGetVar {
         let index = self.read(offset);
         offset += 1;

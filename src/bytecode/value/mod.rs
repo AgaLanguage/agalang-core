@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use crate::parser::NodeFunction;
 use std::{
   cell::{Ref, RefCell},
@@ -14,7 +15,7 @@ pub use number::Number;
 pub struct RcIdentity<T>(Rc<RefCell<T>>);
 impl<T> PartialEq for RcIdentity<T> {
   fn eq(&self, other: &Self) -> bool {
-    Rc::ptr_eq(&self.0, &other.0) // compara identidad, no contenido
+    Rc::ptr_eq(&self.0, &other.0) // compara puntero, no contenido
   }
 }
 impl<T> RcIdentity<T> {
@@ -181,6 +182,13 @@ impl Object {
       _ => None,
     }
   }
+  pub fn get_instance_property(&self, key: &str) -> Option<Value> {
+    match (self, key) {
+      (Self::Array(array), "longitud") => Some(Value::Number(array.borrow().len().into())),
+      (Self::Function(Function::Function { .. }), "llamar") => None,
+      _ => None,
+    }
+  }
 }
 impl From<Function> for Object {
   fn from(value: Function) -> Self {
@@ -228,6 +236,7 @@ pub enum Value {
   String(String),
   Object(Object),
   Char(char),
+  Byte(u8),
   False,
   True,
   Null,
@@ -243,6 +252,7 @@ impl Value {
       Self::Number(_) => "numero",
       Self::String(_) => "cadena",
       Self::Char(_) => "caracter",
+      Self::Byte(_) => "byte",
       Self::Object(o) => o.get_type(),
     }
   }
@@ -284,6 +294,7 @@ impl Value {
       Self::Null | Self::Never | Self::False => 0.into(),
       Self::String(s) => s.parse::<Number>().unwrap_or(0.into()),
       Self::Object(_) => 1.into(),
+      Self::Byte(b) => (*b as i32).into(),
       Self::Char(c) => c.into(),
     }
   }
@@ -293,16 +304,15 @@ impl Value {
       Self::Number(x) => !x.is_zero(),
       Self::String(s) => !s.is_empty(),
       Self::Object(_) | Self::True => true,
+      Self::Byte(b) => *b != 0,
       Self::Null | Self::Never | Self::False => false,
     }
   }
   pub fn as_object(&self) -> Object {
     match self {
-      Self::Char(_) | Self::Number(_) | Self::True | Self::Null | Self::Never | Self::False => {
-        Object::new()
-      }
       Self::String(s) => s.as_str().into(),
       Self::Object(x) => x.clone(),
+      _ => Object::new(),
     }
   }
   pub fn as_string(&self) -> String {
@@ -312,9 +322,26 @@ impl Value {
       Self::True => TRUE_NAME.to_string(),
       Self::Null => NULL_NAME.to_string(),
       Self::Never => NEVER_NAME.to_string(),
+      Self::Byte(b) => format!("0by{b:02X}"),
       Self::Number(x) => x.to_string(),
       Self::Char(c) => c.to_string(),
       Self::Object(x) => x.to_string(),
+    }
+  }
+  pub fn get_instance_property(&self, key: &str) -> Option<Value> {
+    match (self, key) {
+      (Self::Object(o), key) => o.get_instance_property(key),
+      (Self::String(s), "longitud") => Some(Self::Number(s.len().into())),
+      (Self::String(c), "bytes") => Some(Self::Object(
+        c.as_bytes()
+          .iter()
+          .map(|&b| Self::Byte(b))
+          .collect::<Vec<Self>>()
+          .into(),
+      )),
+      (Self::String(_), "remplaza") => None,
+      (Self::String(_), "parte") => None,
+      _ => None,
     }
   }
 }
@@ -336,9 +363,6 @@ pub struct ValueArray {
 impl ValueArray {
   pub fn new() -> Self {
     Self { values: Vec::new() }
-  }
-  fn init(&mut self) {
-    self.values = vec![];
   }
   pub fn write(&mut self, value: Value) {
     let index = self.values.len();

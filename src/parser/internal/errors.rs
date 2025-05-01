@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 pub enum ErrorTypes {
   //FmtError(std::fmt::Error),
   IoError(std::io::Error),

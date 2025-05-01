@@ -13,7 +13,7 @@ use token_identifier::token_identifier;
 const NUMBERS: &str = "0123456789";
 const OPERATORS: &str = "+-*/%=&|<>!^~?";
 const PUNCTUATION: &str = "(){}[],.;:";
-const COLOR: util::Color = util::Color::CYAN;
+const COLOR: util::Color = util::Color::Cyan;
 
 fn token_error(token: &util::Token<TokenType>) -> ErrorTypes {
   let (data_line, token_value) = util::split_meta(&token.meta);

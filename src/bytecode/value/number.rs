@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use std::{
   fmt::Display,
   ops::{Add, Div, Mul, Neg, Sub, SubAssign},
@@ -11,7 +12,7 @@ const DECIMALS_ZERO: Decimals = Decimals(vec![]);
 const DECIMALS_MIDDLE: LazyLock<Decimals> = LazyLock::new(|| Decimals(vec![5 << 4]));
 
 #[derive(Debug, Clone, Eq, PartialOrd, Hash)]
-struct Decimals(Vec<u8>);
+pub struct Decimals(Vec<u8>);
 impl Decimals {
   pub fn is_zero(&self) -> bool {
     self.0.iter().all(|&x| x == 0)
@@ -78,7 +79,7 @@ impl From<String> for Decimals {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Hash)]
-struct UInt(Vec<u8>);
+pub struct UInt(Vec<u8>);
 impl UInt {
   pub fn is_zero(&self) -> bool {
     self.0.iter().all(|&x| x == 0)
@@ -382,7 +383,7 @@ impl From<u8> for UInt {
   }
 }
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Hash)]
-enum BasicNumber {
+pub enum BasicNumber {
   Int(bool, UInt),
   Float(bool, UInt, Decimals),
 }
@@ -691,7 +692,7 @@ impl Div for BasicNumber {
           }
         }
 
-        Self::Float(false, int_part.into(), frac_part.into())
+        Self::Float(x_neg ^ y_neg, int_part.into(), frac_part.into())
       }
       (Self::Int(x_neg, x), Self::Float(y_neg, y, y_dec)) => {
         Self::Float(x_neg ^ y_neg, x.clone(), DECIMALS_ZERO.clone()) / Self::Float(false, y, y_dec)

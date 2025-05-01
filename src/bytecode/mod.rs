@@ -2,7 +2,6 @@ use vm::VM;
 
 use crate::parser::Node;
 
-mod call_stack;
 mod compiler;
 mod chunk;
 mod value;

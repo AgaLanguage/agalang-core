@@ -324,6 +324,18 @@ impl VM {
       OpCode::OpGetMember => {
         let key = self.pop();
         let object = self.pop();
+        let is_instance = self.read() == 1u8;
+        if is_instance {
+          let key: &str = &key.as_string();
+          if let Some(value) = object.get_instance_property(key) {
+            self.push(value);
+            return InterpretResult::Continue;
+          }
+          let type_name = object.get_type();
+          return InterpretResult::RuntimeError(format!(
+            "No se pudo obtener la propiedad de instancia '{key}' de '{type_name}'"
+          ));
+        }
         if !object.is_object() {
           return InterpretResult::RuntimeError(format!(
             "Se esperaba un objeto para obtener la propiedad"
@@ -332,7 +344,6 @@ impl VM {
         let obj = object.as_object();
         if obj.is_map() {
           let map = obj.as_map();
-          let _is_instance = self.read() == 1u8;
           let value = map
             .borrow()
             .get(&key.as_string())
@@ -340,18 +351,7 @@ impl VM {
             .unwrap_or_default();
           self.stack.push(value);
         } else if obj.is_array() {
-          let is_instance = self.read() == 1u8;
           let vec = obj.as_array();
-          if is_instance {
-            let key = key.as_string();
-            if key == "longitud" {
-              self.push(Value::Number(vec.borrow().len().into()));
-              return InterpretResult::Continue;
-            }
-            return InterpretResult::RuntimeError(format!(
-              "No se puede obtener la propiedad de instancia '{key}'"
-            ));
-          }
           if !key.is_number() {
             return InterpretResult::RuntimeError(format!("Se esperaba un indice de propiedad"));
           }
@@ -363,11 +363,7 @@ impl VM {
             ));
           }
           let index = index.to_string().parse::<usize>().unwrap_or(0);
-          let value = vec
-            .borrow()
-            .get(index)
-            .cloned()
-            .unwrap_or_default();
+          let value = vec.borrow().get(index).cloned().unwrap_or_default();
           self.stack.push(value);
         } else {
           return InterpretResult::RuntimeError(format!(
@@ -581,7 +577,13 @@ impl VM {
         if a.is_number() && b.is_number() {
           let a = a.as_number();
           let b = b.as_number();
-          let value = if a.is_nan() || b.is_nan() { Value::False } else if a == b { Value::True } else { Value::False };
+          let value = if a.is_nan() || b.is_nan() {
+            Value::False
+          } else if a == b {
+            Value::True
+          } else {
+            Value::False
+          };
           self.push(value);
           return InterpretResult::Continue;
         }
@@ -603,7 +605,11 @@ impl VM {
         let b = self.pop();
         let a = self.pop();
         if !a.is_number() || !b.is_number() {
-          return InterpretResult::RuntimeError(format!("No se pudo operar '{} < {}'", a.get_type(), b.get_type()));
+          return InterpretResult::RuntimeError(format!(
+            "No se pudo operar '{} < {}'",
+            a.get_type(),
+            b.get_type()
+          ));
         }
         let a = a.as_number();
         let b = b.as_number();
@@ -620,7 +626,7 @@ impl VM {
     }
     return InterpretResult::Continue;
   }
-  
+
   fn run(&mut self) -> InterpretResult {
     loop {
       let result = self.run_instruction();
