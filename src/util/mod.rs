@@ -1,9 +1,10 @@
 #![allow(dead_code)]
-mod _tokenize;
-mod colors;
 pub mod list;
+mod tokenize;
+mod colors;
+mod cache;
 
-pub use _tokenize::*;
+pub use tokenize::*;
 pub use colors::Color;
 pub use list::*;
 pub fn split_meta(meta: &str) -> (&str, &str) {

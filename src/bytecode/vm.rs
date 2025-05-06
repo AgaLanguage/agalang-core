@@ -4,7 +4,18 @@ use std::rc::Rc;
 
 use super::chunk::{ChunkGroup, OpCode};
 use super::compiler::Compiler;
-use super::value::{Function, Value, FALSE_NAME, NEVER_NAME, NULL_NAME, TRUE_NAME};
+use crate::value::{Function, Value, FALSE_NAME, NEVER_NAME, NULL_NAME, TRUE_NAME};
+const THIS_NAME: &str = "esto";
+const SUPER_NAME: &str = "super";
+
+const KEYWORDS: [&str; 6] = [
+  FALSE_NAME,
+  NULL_NAME,
+  TRUE_NAME,
+  NEVER_NAME,
+  THIS_NAME,
+  SUPER_NAME,
+];
 
 type RC<T> = Rc<RefCell<T>>;
 fn rc<T>(t: T) -> Rc<RefCell<T>> {
@@ -34,10 +45,10 @@ impl VarsManager {
   }
   pub fn get_global() -> Self {
     let mut this = Self::new();
-    this.declare(NEVER_NAME, Value::Never, true);
-    this.declare(NULL_NAME, Value::Null, true);
-    this.declare(FALSE_NAME, Value::False, true);
-    this.declare(TRUE_NAME, Value::True, true);
+    this.declare_keyword(NEVER_NAME, Value::Never);
+    this.declare_keyword(NULL_NAME, Value::Null);
+    this.declare_keyword(FALSE_NAME, Value::False);
+    this.declare_keyword(TRUE_NAME, Value::True);
     this
   }
   pub fn crate_child(parent: RC<Self>) -> Self {
@@ -45,7 +56,13 @@ impl VarsManager {
     this.link = Some(parent);
     this
   }
+  fn declare_keyword(&mut self, name: &str, value: Value) {
+    self.variables.insert(name.to_string(), value.clone());
+  }
   pub fn declare(&mut self, name: &str, value: Value, is_constant: bool) -> Option<Value> {
+    if KEYWORDS.contains(&name) {
+      return None;
+    }
     if self.variables.contains_key(name) {
       return None;
     }
@@ -62,11 +79,15 @@ impl VarsManager {
     self.variables.get(name)
   }
   pub fn assign(&mut self, name: &str, value: Value) -> Option<Value> {
-    if !self.variables.contains_key(name) || self.constants.contains(name) {
+    if !self.variables.contains_key(name) || self.constants.contains(name) || KEYWORDS.contains(&name) {
       return None;
     };
     self.variables.insert(name.to_string(), value.clone());
     Some(value)
+  }
+  pub fn set_this(mut self, this: Value) -> Self{
+    self.declare_keyword(THIS_NAME, this);
+    self
   }
 }
 
@@ -149,8 +170,8 @@ pub struct VM {
 }
 
 impl VM {
-  pub fn new(compiler: Compiler) -> Self {
-    //compiler.chunk().print();
+  pub fn new(mut compiler: Compiler) -> Self {
+    compiler.chunk().print();
     let globals = rc(VarsManager::get_global());
     Self {
       stack: vec![],
@@ -241,7 +262,11 @@ impl VM {
     let b = self.read() as u16;
     (a << 8) | b
   }
-  fn call_value(&mut self, callee: Value, arity: usize) -> bool {
+  fn call_value(&mut self, this: Value, callee: Value, arity: usize) -> bool {
+    let mut args = vec![];
+    for _ in 0..arity {
+      args.push(self.pop());
+    }
     if !callee.is_object() {
       if !callee.is_number() {
         return false;
@@ -249,17 +274,33 @@ impl VM {
       if arity != 1 {
         return false;
       }
-      let _num = callee.as_number();
+      let num = callee.as_number();
+      if args.len() != 1 {
+        return false;
+      }
+      let arg = args.pop().unwrap();
+      if !arg.is_number() {
+        return false;
+      }
+      let arg = arg.as_number();
+      let value = Value::Number(num * arg);
+      self.push(value);
+      return true;
     }
     let obj = callee.as_object();
     if !obj.is_function() {
       return false;
     }
     let function = obj.as_function();
+    if let Function::Native { func, .. } = function {
+      let value = func(callee, args);
+      self.push(value);
+      return true;
+    }
     self.call_stack.push(CallFrame {
       ip: 0,
       function,
-      locals: vec![rc(VarsManager::crate_child(self.globals.clone()))],
+      locals: vec![rc(VarsManager::crate_child(self.globals.clone()).set_this(this))],
     });
     true
   }
@@ -270,6 +311,11 @@ impl VM {
     println!("{:<16} | {:?}", format!("{:?}", instruction), self.stack);
 
     match instruction {
+      OpCode::OpCopy => {
+        let value = self.pop();
+        self.push(value.clone());
+        self.push(value);
+      }
       OpCode::OpApproximate => {
         let value = self.pop();
         if !value.is_number() {
@@ -281,22 +327,32 @@ impl VM {
         let value = self.pop();
         let key = self.pop();
         let object = self.pop();
+        let is_instance = self.read() == 1u8;
         if !object.is_object() {
           return InterpretResult::RuntimeError(format!(
-            "Se esperaba un objeto para obtener la propiedad"
+            "Se esperaba un objeto para asignar la propiedad '{}' [1]",
+            key.as_string()
+          ));
+        }
+        if is_instance {
+          return InterpretResult::RuntimeError(format!(
+            "Las propiedades de instancia no se pueden asignar fuera de su clase"
           ));
         }
         let obj = object.as_object();
+        if let Value::Never = value {
+          let type_name = object.get_type();
+          return InterpretResult::RuntimeError(format!(
+            "No se puede asignar un valor '{type_name}' a una propiedad en su lugar usa '{}'",
+            Value::Null.get_type()
+          ));
+        }
         if obj.is_map() {
-          let _is_instance = self.read() == 1u8;
           let map = obj.as_map();
-          let value = map
-            .borrow_mut()
-            .insert(key.as_string(), value)
-            .unwrap_or_default();
+          let mut map = map.0.lock();
+          let value = map.insert(key.as_string(), value).unwrap_or_default();
           self.stack.push(value);
         } else if obj.is_array() {
-          let _is_instance = self.read() == 1u8;
           let vec = obj.as_array();
           if !key.is_number() {
             return InterpretResult::RuntimeError(format!("Se esperaba un indice de propiedad"));
@@ -309,15 +365,16 @@ impl VM {
             ));
           }
           let index = index.to_string().parse::<usize>().unwrap_or(0);
-          if vec.borrow().len() <= index {
-            vec.borrow_mut().push(value.clone());
-          } else {
-            vec.borrow_mut()[index] = value.clone();
-          };
+          let mut vec = vec.lock();
+          if index >= vec.len() {
+            vec.resize(index + 1, Value::Never);
+          }
+          vec[index] = value.clone();
           self.stack.push(value);
         } else {
           return InterpretResult::RuntimeError(format!(
-            "Se esperaba un objeto para obtener la propiedad"
+            "Se esperaba un objeto para asignar la propiedad '{}' [2]",
+            key.as_string()
           ));
         }
       }
@@ -338,17 +395,29 @@ impl VM {
         }
         if !object.is_object() {
           return InterpretResult::RuntimeError(format!(
-            "Se esperaba un objeto para obtener la propiedad"
+            "Se esperaba un objeto para obtener la propiedad '{}' [3]",
+            key.as_string()
           ));
         }
         let obj = object.as_object();
         if obj.is_map() {
           let map = obj.as_map();
-          let value = map
-            .borrow()
-            .get(&key.as_string())
-            .cloned()
-            .unwrap_or_default();
+          let value = if is_instance {
+            map.0.lock().get(&key.as_string()).cloned()
+          } else {
+            map.1.lock().get(&key.as_string()).cloned()
+          };
+          let value = if let Some(value) = value {
+            value
+          } else if is_instance {
+            return InterpretResult::RuntimeError(format!(
+              "No se pudo obtener la propiedad de instancia '{}' de '{}'",
+              key.as_string(),
+              object.get_type()
+            ));
+          } else {
+            Value::Never
+          };
           self.stack.push(value);
         } else if obj.is_array() {
           let vec = obj.as_array();
@@ -363,11 +432,12 @@ impl VM {
             ));
           }
           let index = index.to_string().parse::<usize>().unwrap_or(0);
-          let value = vec.borrow().get(index).cloned().unwrap_or_default();
+          let value = vec.lock().get(index).cloned().unwrap_or_default();
           self.stack.push(value);
         } else {
           return InterpretResult::RuntimeError(format!(
-            "Se esperaba un objeto para obtener la propiedad"
+            "Se esperaba un objeto para obtener la propiedad '{}' [4]",
+            key.as_string()
           ));
         }
       }
@@ -382,7 +452,7 @@ impl VM {
         }
       }
       OpCode::OpArgDecl => {
-        let name = self.read_constant().as_string();
+        let name = self.read_string();
         let value = self.pop();
         match self.declare(&name, value, true) {
           None => {
@@ -411,7 +481,8 @@ impl VM {
       OpCode::OpCall => {
         let arity = self.read() as usize;
         let callee = self.pop();
-        let call = self.call_value(callee, arity);
+        let this = self.pop();
+        let call = self.call_value(this, callee, arity);
         if !call {
           return InterpretResult::RuntimeError("Se esperaba llamar a una funcion".into());
         }

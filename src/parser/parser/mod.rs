@@ -1177,12 +1177,12 @@ impl Parser {
     .into()
   }
   fn parse_stmt_expr(&mut self) -> Result<ast::Node, NodeError> {
-    let node = self.parse_expr();
+    let node = self.parse_expr()?;
     self.expect(
       super::TokenType::Punctuation(super::PunctuationType::SemiColon),
       "Se esperaba un punto y coma (expr)",
     )?;
-    node
+    Ok(node)
   }
   fn parse_expr(&mut self) -> Result<ast::Node, NodeError> {
     let left = self.parse_math_lineal_expr()?;
@@ -1618,8 +1618,8 @@ impl Parser {
   fn parse_member_expr(&mut self, object: ast::Node) -> Result<ast::Node, NodeError> {
     let mut value = object;
     loop {
-      let object = self.check_token(super::TokenType::Punctuation(super::PunctuationType::Dot));
-      let instance = if self.match_token(super::TokenType::Punctuation(
+      let object = self.match_token(super::TokenType::Punctuation(super::PunctuationType::Dot));
+      let instance = if object {false} else if self.match_token(super::TokenType::Punctuation(
         super::PunctuationType::DoubleDot,
       )) {
         if self.match_join_token(super::TokenType::Punctuation(
@@ -1639,6 +1639,8 @@ impl Parser {
       let computed = self.match_token(super::TokenType::Punctuation(
         super::PunctuationType::QuadrateBracketOpen,
       ));
+      println!("value: {:?}", value);
+      println!("object: {}, instance: {}, computed: {}", object, instance, computed);
       if !(object || computed || instance) {
         break;
       }

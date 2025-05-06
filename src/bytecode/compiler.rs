@@ -2,10 +2,8 @@ use std::collections::HashMap;
 
 use crate::parser::{Node, NodeFunction};
 
-use super::{
-  chunk::{ChunkGroup, OpCode},
-  value::{Function, Number, Value, NEVER_NAME},
-};
+use super::chunk::{ChunkGroup, OpCode};
+use crate::value::{Function, Number, Value, NEVER_NAME};
 
 pub struct Compiler {
   pub function: Function,
@@ -33,8 +31,8 @@ impl Compiler {
       .write(OpCode::OpReturn as u8, function.location.end.line);
     Ok(compiler.function)
   }
-  fn set_constant(&mut self, value: Value, line: usize) {
-    self.chunk().write_constant(value, line);
+  fn set_constant(&mut self, value: Value, line: usize) -> u8{
+    self.chunk().write_constant(value, line)
   }
   pub fn chunk(&mut self) -> &mut ChunkGroup {
     self.function.chunk()
@@ -71,16 +69,20 @@ impl Compiler {
         if operator == OpCode::OpNull {
           match b.operator {
             crate::parser::NodeOperator::NotEqual => {
-              self.chunk().write_buffer(vec![OpCode::OpEquals as u8, OpCode::OpNot as u8], b.location.start.line);
+              self.chunk().write_buffer(
+                vec![OpCode::OpEquals as u8, OpCode::OpNot as u8],
+                b.location.start.line,
+              );
             }
-            a =>{
+            a => {
               return Err(format!(
                 "NodeOperator::{a:?}: No es un nodo valido en bytecode"
               ))
             }
           };
-        }else {
-        self.chunk().write(operator as u8, b.location.start.line);};
+        } else {
+          self.chunk().write(operator as u8, b.location.start.line);
+        };
       }
       Node::Program(p) => {
         if p.body.len() != 0 {
@@ -142,7 +144,7 @@ impl Compiler {
         for (i, data) in s.value.clone().enumerate() {
           match data {
             crate::parser::StringData::Str(val) => {
-              self.set_constant(Value::Object(val.as_str().into()), s.location.start.line)
+              self.set_constant(Value::String(val.as_str().into()), s.location.start.line);
             }
             crate::parser::StringData::Id(id) => {
               self.chunk().read_var(id, s.location.start.line);
@@ -157,8 +159,7 @@ impl Compiler {
       }
       Node::VarDecl(v) => {
         let global = self
-          .chunk()
-          .make_constant(Value::Object(v.name.as_str().into()));
+          .set_constant(Value::String(v.name.as_str().into()), v.location.start.line);
         let op;
         if v.is_const {
           match &v.value {
@@ -192,8 +193,7 @@ impl Compiler {
         match a.identifier.as_ref() {
           Node::Identifier(id) => {
             let name = self
-              .chunk()
-              .make_constant(Value::Object(id.name.as_str().into()));
+              .set_constant(Value::String(id.name.as_str().into()), id.location.start.line);
             self.node_to_bytes(&a.value)?;
             self
               .chunk()
@@ -208,13 +208,15 @@ impl Compiler {
                 Node::Identifier(id) => id.name.as_str(),
                 _ => return Err("Se esperaba un identificador como propiedad".to_string()),
               };
-              self.set_constant(Value::Object(name.into()), m.location.start.line)
+              self.set_constant(Value::String(name.into()), m.location.start.line);
             };
             self.node_to_bytes(&a.value)?;
-            let byte = if m.instance { 1u8 } else { 0u8 };
+            if m.instance {
+              return Err("No se puede asignar a una propiedad de instancia".to_string());
+            }
             self
               .chunk()
-              .write_buffer(vec![OpCode::OpSetMember as u8, byte], m.location.start.line);
+              .write_buffer(vec![OpCode::OpSetMember as u8, 0], m.location.start.line);
           }
           _ => return Err("Se esperaba una assignacion valida".to_string()),
         };
@@ -230,7 +232,7 @@ impl Compiler {
         if let Some(e) = &i.else_body {
           self.node_to_bytes(&e.clone().to_node())?;
         } else {
-          self.chunk().make_constant(Value::Never);
+          self.set_constant(Value::Never, i.location.start.line);
         }
         self.chunk().patch_jump(jump_else)?;
       }
@@ -273,8 +275,7 @@ impl Compiler {
       }
       Node::Function(f) => {
         let global = self
-          .chunk()
-          .make_constant(Value::Object(f.name.as_str().into()));
+          .set_constant(Value::String(f.name.as_str().into()), f.location.start.line);
 
         self.set_constant(
           Value::Object(Self::parse_function(f)?.into()),
@@ -290,7 +291,30 @@ impl Compiler {
         for arg in &c.arguments {
           self.node_to_bytes(&arg)?;
         }
-        self.node_to_bytes(&c.callee)?;
+        match c.callee.as_ref() {
+          Node::Member(m) => {
+            self.node_to_bytes(&m.object)?;
+            self
+              .chunk()
+              .write(OpCode::OpCopy as u8, m.object.get_location().end.line);
+            if m.computed {
+              self.node_to_bytes(&m.member)?;
+            } else {
+              let name = match m.member.as_ref() {
+                Node::Identifier(id) => id.name.as_str(),
+                _ => return Err("Se esperaba un identificador como propiedad".to_string()),
+              };
+              self.set_constant(Value::String(name.into()), m.location.start.line);
+            };
+          }
+          node => {
+            self.node_to_bytes(&c.callee)?;
+            self
+              .chunk()
+              .write(OpCode::OpCopy as u8, node.get_location().start.line)
+          }
+        };
+
         self.chunk().write_buffer(
           vec![OpCode::OpCall as u8, c.arguments.len() as u8],
           c.location.start.line,
@@ -323,7 +347,7 @@ impl Compiler {
               );
             }
             crate::parser::NodeProperty::Property(key, value) => {
-              self.set_constant(Value::Object(key.as_str().into()), o.location.start.line);
+              self.set_constant(Value::String(key), o.location.start.line);
               self.node_to_bytes(&value)?;
               self.chunk().write_buffer(
                 vec![OpCode::OpSetMember as u8, 0, OpCode::OpPop as u8],
@@ -344,7 +368,7 @@ impl Compiler {
             Node::Identifier(id) => id.name.as_str(),
             _ => return Err("Se esperaba un identificador como propiedad".to_string()),
           };
-          self.set_constant(Value::Object(name.into()), m.location.start.line)
+          self.set_constant(Value::String(name.into()), m.location.start.line);
         };
         let is_instance = if m.instance { 1u8 } else { 0u8 };
         self.chunk().write_buffer(
@@ -377,10 +401,7 @@ impl Compiler {
           crate::parser::NodeLoopEditType::Break => OpCode::OpBreak,
           crate::parser::NodeLoopEditType::Continue => OpCode::OpContinue,
         } as u8;
-        self.chunk().write(
-          byte,
-          e.location.start.line,
-        );
+        self.chunk().write(byte, e.location.start.line);
       }
       a => {
         return Err(format!(

@@ -3,6 +3,8 @@ use std::process::ExitCode;
 
 mod bytecode;
 mod parser;
+mod value;
+mod proto;
 mod util;
 
 fn main() -> ExitCode {

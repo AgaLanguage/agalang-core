@@ -1,41 +1,42 @@
 #![allow(dead_code)]
-use crate::parser::NodeFunction;
 use std::{
-  cell::{Ref, RefCell},
   collections::{HashMap, HashSet},
   hash::{Hash, Hasher},
-  rc::Rc,
+  sync::{Arc, Mutex},
 };
 
-use super::chunk::ChunkGroup;
+use crate::{bytecode::ChunkGroup, parser::NodeFunction};
 mod number;
 pub use number::Number;
 
-#[derive(Debug, Clone, Eq)]
-pub struct RcIdentity<T>(Rc<RefCell<T>>);
-impl<T> PartialEq for RcIdentity<T> {
+#[derive(Debug, Clone)]
+pub struct MutexIdentity<T>(Arc<Mutex<T>>);
+impl<T> PartialEq for MutexIdentity<T> {
   fn eq(&self, other: &Self) -> bool {
-    Rc::ptr_eq(&self.0, &other.0) // compara puntero, no contenido
+    Arc::ptr_eq(&self.0, &other.0) // compara puntero, no contenido
   }
 }
-impl<T> RcIdentity<T> {
-  pub fn borrow(&self) -> Ref<'_, T> {
-    self.0.as_ref().borrow()
-  }
-  pub fn borrow_mut(&self) -> std::cell::RefMut<'_, T> {
-    self.0.as_ref().borrow_mut()
+impl<T> MutexIdentity<T> {
+  pub fn lock(&self) -> std::sync::MutexGuard<'_, T> {
+    self.0.lock().unwrap()
   }
 }
-impl<T> Hash for RcIdentity<T> {
+impl<T> Hash for MutexIdentity<T> {
   fn hash<H: Hasher>(&self, state: &mut H) {
-    Rc::as_ptr(&self.0).hash(state); // usa la dirección del Rc para el hash
+    Arc::as_ptr(&self.0).hash(state); // usa la dirección del Rc para el hash
   }
 }
-impl<T> From<Rc<RefCell<T>>> for RcIdentity<T> {
-  fn from(value: Rc<RefCell<T>>) -> Self {
+impl<T> From<Arc<Mutex<T>>> for MutexIdentity<T> {
+  fn from(value: Arc<Mutex<T>>) -> Self {
     Self(value)
   }
 }
+impl<T> From<T> for MutexIdentity<T> {
+  fn from(value: T) -> Self {
+    Self(Arc::new(Mutex::new(value)))
+  }
+}
+impl<T> Eq for MutexIdentity<T> {}
 
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub enum Function {
@@ -50,18 +51,26 @@ pub enum Function {
     chunk: ChunkGroup,
     path: String,
   },
+  Native {
+    name: String,
+    path: String,
+    chunk: ChunkGroup,
+    func: fn(Value, Vec<Value>) -> Value,
+  },
 }
 impl Function {
   pub const fn get_type(&self) -> &str {
     match self {
       Self::Function { .. } => "funcion",
       Self::Script { .. } => "script",
+      Self::Native { .. } => "nativo",
     }
   }
   pub fn chunk(&mut self) -> &mut ChunkGroup {
     match self {
       Self::Function { chunk, .. } => chunk,
       Self::Script { chunk, .. } => chunk,
+      Self::Native { chunk, .. } => chunk,
     }
   }
   pub fn location(&self) -> String {
@@ -80,14 +89,18 @@ impl Function {
         }
       ),
       Self::Script { path, .. } => format!("en <{path}>"),
+      Self::Native { path, .. } => format!("en <{path}>"),
     }
   }
 }
 impl ToString for Function {
   fn to_string(&self) -> String {
     match self {
-      Self::Function { name, .. } => format!("<fn {name}>"),
+      Self::Function { name, is_async, .. } => {
+        format!("<{} {name}>", if *is_async { "asinc fn" } else { "fn" })
+      }
       Self::Script { path, .. } => format!("<script '{path}'>"),
+      Self::Native { name, .. } => format!("<nativo fn {name}>"),
     }
   }
 }
@@ -110,26 +123,29 @@ impl std::fmt::Debug for Function {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Object {
-  Map(RcIdentity<HashMap<String, Value>>),
-  Set(RcIdentity<HashSet<Value>>),
-  Array(RcIdentity<Vec<Value>>),
+  Map(
+    MutexIdentity<HashMap<String, Value>>,
+    MutexIdentity<HashMap<String, Value>>,
+  ),
+  Set(MutexIdentity<HashSet<Value>>),
+  Array(MutexIdentity<Vec<Value>>),
   Function(Function),
 }
 impl Object {
   pub fn new() -> Self {
-    Self::Map(Rc::new(RefCell::new(HashMap::new())).into())
+    Self::Map(HashMap::new().into(), HashMap::new().into())
   }
   pub const fn get_type(&self) -> &str {
     match self {
       Self::Function(f) => f.get_type(),
-      Self::Map(_) => "objeto",
+      Self::Map(_, _) => "objeto",
       Self::Array(_) => "lista",
       Self::Set(_) => "conjunto",
     }
   }
   pub fn is_map(&self) -> bool {
     match self {
-      Self::Map(_) => true,
+      Self::Map(_, _) => true,
       _ => false,
     }
   }
@@ -145,16 +161,21 @@ impl Object {
       _ => false,
     }
   }
-  pub fn as_map(&self) -> RcIdentity<HashMap<String, Value>> {
+  pub fn as_map(
+    &self,
+  ) -> (
+    MutexIdentity<HashMap<String, Value>>,
+    MutexIdentity<HashMap<String, Value>>,
+  ) {
     match self {
-      Self::Map(x) => x.clone(),
-      _ => Rc::new(RefCell::new(HashMap::new())).into(),
+      Self::Map(x, y) => (x.clone(), y.clone()),
+      _ => (HashMap::new().into(), HashMap::new().into()),
     }
   }
-  pub fn as_array(&self) -> RcIdentity<Vec<Value>> {
+  pub fn as_array(&self) -> MutexIdentity<Vec<Value>> {
     match self {
       Self::Array(x) => x.clone(),
-      _ => Rc::new(RefCell::new(vec![])).into(),
+      _ => vec![].into(),
     }
   }
   pub fn as_function(&self) -> Function {
@@ -171,10 +192,10 @@ impl Object {
   }
   pub fn get_property(&self, key: &str) -> Option<Value> {
     match self {
-      Self::Map(map) => map.borrow().get(key).cloned(),
+      Self::Map(map, _) => map.lock().get(key).cloned(),
       Self::Array(array) => {
         if let Ok(index) = key.parse::<usize>() {
-          array.borrow().get(index).cloned()
+          array.lock().get(index).cloned()
         } else {
           None
         }
@@ -184,7 +205,8 @@ impl Object {
   }
   pub fn get_instance_property(&self, key: &str) -> Option<Value> {
     match (self, key) {
-      (Self::Array(array), "longitud") => Some(Value::Number(array.borrow().len().into())),
+      (Self::Map(_, instance), key) => instance.lock().get(key).cloned(),
+      (Self::Array(array), "longitud") => Some(Value::Number(array.lock().len().into())),
       (Self::Function(Function::Function { .. }), "llamar") => None,
       _ => None,
     }
@@ -197,21 +219,22 @@ impl From<Function> for Object {
 }
 impl From<HashMap<String, Value>> for Object {
   fn from(value: HashMap<String, Value>) -> Self {
-    Self::Map(Rc::new(RefCell::new(value)).into())
+    Self::Map(value.into(), HashMap::new().into())
   }
 }
 impl From<Vec<Value>> for Object {
   fn from(value: Vec<Value>) -> Self {
-    Self::Array(Rc::new(RefCell::new(value)).into())
+    Self::Array(value.into())
   }
 }
 impl From<&str> for Object {
   fn from(value: &str) -> Self {
     Object::Array(
-      Rc::new(RefCell::new(
-        value.chars().map(|c| Value::Char(c)).collect(),
-      ))
-      .into(),
+      value
+        .chars()
+        .map(|c| Value::Char(c))
+        .collect::<Vec<_>>()
+        .into(),
     )
   }
 }
@@ -219,7 +242,7 @@ impl ToString for Object {
   fn to_string(&self) -> String {
     match self {
       Self::Function(f) => f.to_string(),
-      Self::Map(_) => format!("<Objeto {}>", self.get_type()),
+      Self::Map(_, _) => format!("<Objeto {}>", self.get_type()),
       _ => format!("<{}>", self.get_type()),
     }
   }
@@ -339,8 +362,7 @@ impl Value {
           .collect::<Vec<Self>>()
           .into(),
       )),
-      (Self::String(_), "remplaza") => None,
-      (Self::String(_), "parte") => None,
+      (Self::String(_), key) => super::proto::proto("cadena").get_instance_property(key),
       _ => None,
     }
   }
@@ -375,13 +397,26 @@ impl ValueArray {
   pub fn len(&self) -> u8 {
     self.values.len() as u8
   }
+  pub fn try_get(&self, index: u8) -> Option<&Value> {
+    if index as usize >= self.values.len() {
+      return None;
+    }
+    Some(&self.values[index as usize])
+  }
   pub fn get(&self, index: u8) -> &Value {
-    self.values.get(index as usize).unwrap()
+    self.values.get(index as usize).expect(&format!(
+      "Error: el índice {} está fuera de rango (0-{})",
+      index,
+      self.values.len() - 1
+    ))
   }
   pub fn has_value(&self, value: &Value) -> bool {
     self.values.iter().any(|v| v == value)
   }
   pub fn get_index(&self, value: &Value) -> Option<u8> {
     self.values.iter().position(|v| v == value).map(|i| i as u8)
+  }
+  pub fn enumerate(&self) -> impl Iterator<Item = (u8, &Value)> {
+    self.values.iter().enumerate().map(|(i, v)| (i as u8, v))
   }
 }

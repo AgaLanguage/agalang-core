@@ -1,5 +1,6 @@
 #![allow(dead_code)]
-use super::value::{Value, ValueArray};
+
+use crate::value::{Value, ValueArray};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum OpCode {
@@ -42,6 +43,7 @@ pub enum OpCode {
   OpReturn,
   OpBreak,
   OpContinue,
+  OpCopy, // Para duplicar el ultimo valor en el stack (obtener el padre de un objeto)
   // Invalid
   OpNull,
 }
@@ -84,6 +86,7 @@ impl From<u8> for OpCode {
       x if x == OpCode::OpJumpIfFalse as u8 => OpCode::OpJumpIfFalse,
       x if x == OpCode::OpJump as u8 => OpCode::OpJump,
       x if x == OpCode::OpReturn as u8 => OpCode::OpReturn,
+      x if x == OpCode::OpCopy as u8 => OpCode::OpCopy,
 
       _ => OpCode::OpNull,
     }
@@ -153,41 +156,56 @@ impl Chunk {
   }
   fn print(&self, name: String) {
     println!("===== {name} =====");
+    
+    println!("-- {name} consts -");
+    println!("Index | Value",);
+    for (i, value) in self.constants.enumerate() {
+      println!("   {i:02x} | {value:?}");
+    }
+    println!("-- {name} consts -");
     println!("Byte | Operation        | JumpTo | Index | Value",);
     let mut offset = 0;
     while offset < self.code.len() {
       let i = offset;
       let op = OpCode::from(self.code[offset]);
       offset += 1;
-      print!("{:04x} | {:>16} ", i, format!("{:?}", op));
-      let jump_to = if op == OpCode::OpJump || op == OpCode::OpJumpIfFalse {
-        let a = self.read(offset) as u16;
-        let b = self.read(offset + 1) as u16;
-        offset += 2;
-        format!("{:04x}", (a << 8) | b)
-      } else {
-        "----".into()
+      let (jump_to, index, value): (String, String, String) = match op {
+        OpCode::OpJump | OpCode::OpJumpIfFalse => {
+          let a = self.read(offset) as u16;
+          let b = self.read(offset + 1) as u16;
+          offset += 2;
+          (format!("{:04x}", (a << 8) | b), "--".into(), "-------------------------".into())
+        }
+        OpCode::OpConstant | OpCode::OpGetVar | OpCode::OpConstDecl | OpCode::OpVarDecl | OpCode::OpArgDecl => {
+          let index = self.read(offset);
+          offset += 1;
+          (
+            "----".into(),
+            format!("{index:02x}"),
+            format!("{:?}", self.constants.get(index).as_string()),
+          )
+        }
+        OpCode::OpLoop => {
+          let a = self.read(offset) as u16;
+          let b = self.read(offset + 1) as u16;
+          offset += 2;
+          (format!("{:04x}", offset as u16 - ((a << 8) | b)), "--".into(), "-------------------------".into())
+        }
+        OpCode::OpCall | OpCode::OpSetMember | OpCode::OpGetMember => {
+          offset += 1;
+          (
+            "----".into(),
+            "--".into(),
+            "-------------------------".into(),
+          )
+        }
+        _ => {
+          ("----".into(), "--".into(), "-------------------------".into())
+        }
       };
-      print!("|   {jump_to} ");
-      let (index, value) = if op == OpCode::OpConstant || op == OpCode::OpGetVar {
-        let index = self.read(offset);
-        offset += 1;
-        (
-          format!("{index:02x}"),
-          format!("{:?}", self.constants.get(index)),
-        )
-      } else if op == OpCode::OpConstDecl || op == OpCode::OpVarDecl {
-        let index = self.read(offset);
-        offset += 1;
-        (
-          format!("{index:02x}"),
-          format!("{:?}", self.constants.get(index)),
-        )
-      } else {
-        ("--".into(), "-------------------------".into())
-      };
-      println!("|    {index} | {value:>25}")
+      println!("{i:04x} | {:>16} |   {jump_to} |    {index} | {value:>25}", format!("{:?}", op));
     }
+    println!("===== {name} =====");
   }
 }
 
@@ -261,7 +279,7 @@ impl ChunkGroup {
     }
     let index = self
       .current_chunk_mut()
-      .add_constant(Value::Object(name.as_str().into()));
+      .add_constant(Value::String(name.as_str().into()));
     self.write_buffer(vec![OpCode::OpGetVar as u8, index], line);
     index
   }
@@ -273,24 +291,21 @@ impl ChunkGroup {
     }
     let index = self
       .current_chunk_mut()
-      .add_constant(Value::Object(name.as_str().into()));
+      .add_constant(Value::String(name.as_str().into()));
     self.write_buffer(vec![OpCode::OpArgDecl as u8, index], line);
     index
   }
-  pub fn make_constant(&mut self, value: Value) -> u8 {
-    let line = self.current_chunk_mut().lines.last().unwrap_or(&0) + 1;
-    self.write_constant(value, line)
-  }
   pub fn write_constant(&mut self, value: Value, line: usize) -> u8 {
-    if self.current_chunk_mut().constants.has_value(&value) {
-      return self.current_chunk_mut().constants.get_index(&value).unwrap_or(0);
-    }
-    if self.current_chunk_mut().constants.len() >= u8::MAX {
-      self.current += 1;
-      self.chunks.push(Chunk::new());
-      self.aggregate_len.push(self.prev_aggregate_len());
-    }
-    let index = self.current_chunk_mut().add_constant(value);
+    let index = if self.current_chunk_mut().constants.has_value(&value) {
+      self.current_chunk_mut().constants.get_index(&value).unwrap_or_default()
+    }else{
+      if self.current_chunk_mut().constants.len() >= u8::MAX {
+        self.current += 1;
+        self.chunks.push(Chunk::new());
+        self.aggregate_len.push(self.prev_aggregate_len());
+      };
+      self.current_chunk_mut().add_constant(value)
+    };
     self.write_buffer(vec![OpCode::OpConstant as u8, index], line);
     index
   }
@@ -332,5 +347,13 @@ impl ChunkGroup {
     for (i, chunk) in self.chunks.iter().enumerate() {
       chunk.print(format!("chunk {i}"));
     }
+  }
+}
+impl Default for ChunkGroup {
+  fn default() -> Self {
+    let mut group = Self::new();
+    group.write_constant(Value::Never, 0);
+    group.write(OpCode::OpReturn as u8, 0);
+    group
   }
 }
