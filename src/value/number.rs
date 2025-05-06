@@ -37,15 +37,7 @@ impl Display for Decimals {
 }
 impl PartialEq for Decimals {
   fn eq(&self, other: &Self) -> bool {
-    if self.0.len() != other.0.len() {
-      return false;
-    }
-    for i in 0..self.0.len() {
-      if self.0.get(i).unwrap_or(&0) != other.0.get(i).unwrap_or(&0) {
-        return false;
-      }
-    }
-    true
+    self.to_string() == other.to_string()
   }
 }
 impl Ord for Decimals {
@@ -79,10 +71,13 @@ impl From<String> for Decimals {
   }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Hash)]
+#[derive(Debug, Clone, Eq, PartialOrd, Hash)]
 pub struct UInt(Vec<u8>);
 impl UInt {
   pub fn is_zero(&self) -> bool {
+    if self.0.len() == 0 {
+      return true;
+    }
     self.0.iter().all(|&x| x == 0)
   }
   fn shift_left(&self, n: u8) -> Self {
@@ -147,6 +142,10 @@ impl UInt {
     }
     self
   }
+  pub fn digits(&self) -> Vec<u8> {
+    self.to_string().chars().rev()
+      .map(|c| c.to_digit(10).unwrap() as u8).collect()
+  }
 }
 
 impl Display for UInt {
@@ -158,6 +157,11 @@ impl Display for UInt {
       result.push_str(&format!("{:X}{:X}", byte_1, byte_0));
     }
     write!(f, "{}", result.trim_start_matches('0'))
+  }
+}
+impl PartialEq for UInt {
+  fn eq(&self, other: &Self) -> bool {
+    self.to_string() == other.to_string()
   }
 }
 
@@ -261,26 +265,29 @@ impl Sub for &UInt {
 }
 impl Mul for &UInt {
   type Output = UInt;
-  fn mul(self, rhs: Self) -> Self::Output {
-    let mut result = UInt::from(0);
-    let x_vec = self.clone().to_string().chars().rev().collect::<String>();
-    let y_vec = rhs.clone().to_string().chars().rev().collect::<String>();
 
-    for i in 0..x_vec.len() {
-      let x = x_vec.chars().nth(i).unwrap_or('0') as u8 - b'0';
-      if x > 9 {
-        break;
-      }
-      for j in 0..y_vec.len() {
-        let y = y_vec.chars().nth(j).unwrap_or('0') as u8 - b'0';
-        if y > 9 {
-          break;
+  fn mul(self, rhs: Self) -> Self::Output {
+    let x_digits = self.digits();
+    let y_digits = rhs.digits();
+
+    let mut result = vec![0u8; x_digits.len() + y_digits.len()];
+
+    for (i, &x) in x_digits.iter().enumerate() {
+      for (j, &y) in y_digits.iter().enumerate() {
+        result[i + j] += x * y;
+        if result[i + j] >= 10 {
+          result[i + j + 1] += result[i + j] / 10;
+          result[i + j] %= 10;
         }
-        result =
-          result + format!("{}{}", x * y, String::from_utf8(vec![b'0'; i + j]).unwrap()).into();
       }
     }
-    result
+
+    while result.len() > 1 && *result.last().unwrap() == 0 {
+      result.pop();
+    }
+
+    let result_str: String = result.into_iter().rev().map(|d| std::char::from_digit(d as u32, 10).unwrap()).collect();
+    UInt::from(result_str)
   }
 }
 impl Div for &UInt {
@@ -298,8 +305,6 @@ impl Div for &UInt {
     let mut quotient_digits = Vec::new();
 
     let mut current = UInt::from(0);
-
-    println!("Dividend: {:?}", self.num_digits());
 
     for i in 0..self.num_digits() {
       current = current.shift_left(1).trim_leading_zeros();
@@ -369,6 +374,7 @@ impl From<String> for UInt {
       let byte = (char_1 << 4) | char_0;
       result.push(byte);
     }
+    result.reverse();
     Self(result)
   }
 }
@@ -383,7 +389,7 @@ impl From<u8> for UInt {
     UInt(vec![byte])
   }
 }
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Hash)]
+#[derive(Debug, Clone, Eq, PartialOrd, Hash)]
 pub enum BasicNumber {
   Int(bool, UInt),
   Float(bool, UInt, Decimals),
@@ -469,6 +475,17 @@ impl ToString for BasicNumber {
       Self::Float(x_neg, x, x_dec) => {
         format!("{}{}.{}", if *x_neg { "-" } else { "" }, x, x_dec)
       }
+    }
+  }
+}
+impl PartialEq for BasicNumber {
+  fn eq(&self, other: &Self) -> bool {
+    match (self, other) {
+      (Self::Int(x_neg, x), Self::Int(y_neg, y)) => x_neg == y_neg && x == y,
+      (Self::Float(x_neg, x, x_dec), Self::Float(y_neg, y, y_dec)) => {
+        x_neg == y_neg && x == y && x_dec == y_dec
+      }
+      _ => false,
     }
   }
 }
@@ -632,23 +649,29 @@ impl Mul for BasicNumber {
         let x_dec = x_dec.to_string();
         let y_dec = y_dec.to_string();
         let x_str = format!("{}{}", x, x_dec);
+        let x: UInt = x_str.into();
         let y_str = format!("{}{}", y, y_dec);
-        let decimals = x_dec.len() + y_dec.len() - 1;
+        let y: UInt = y_str.into();
+        let mut decimals = x_dec.len() + y_dec.len();
 
-        let result = UInt::from(x_str) * y_str.into();
+
+        let result = x * y;
         let result = result.to_string();
 
-        let mut int_part = String::new();
+        let int_part: String;
         let mut frac_part = String::new();
-        for (i, c) in result.chars().enumerate() {
-          if decimals > result.len() {
-            frac_part.push(c);
-          } else if i <= (result.len() - decimals) {
-            int_part.push(c);
-          } else {
-            frac_part.push(c);
-          }
+        let mut number = result.chars().collect::<Vec<_>>();
+        while decimals > 0 {
+          decimals -= 1;
+          frac_part.push(number.pop().unwrap_or('0'));
         }
+        int_part = if number.is_empty() {
+          "0".to_string()
+        } else {
+          number.iter().collect()
+        };
+
+        let frac_part = frac_part.chars().rev().collect::<String>();
 
         Self::Float(x_neg ^ y_neg, int_part.into(), frac_part.into())
       }
@@ -675,23 +698,25 @@ impl Div for BasicNumber {
         y_dec.extend(std::iter::repeat('0').take(max_dec - y_dec.len()));
         let x_str = format!("{}{}", x, x_dec);
         let y_str = format!("{}{}", y, y_dec);
-        let decimals = DIVISION_DECIMALS - 1;
+        let mut decimals = max_dec + DIVISION_DECIMALS;
 
         let result = UInt::from(x_str) / UInt::from(y_str);
-        println!("Result: {}", result);
         let result = result.to_string();
 
-        let mut int_part = String::new();
+        let int_part: String;
         let mut frac_part = String::new();
-        for (i, c) in result.chars().enumerate() {
-          if decimals > result.len() {
-            frac_part.push(c);
-          } else if i <= (result.len() - decimals) {
-            int_part.push(c);
-          } else {
-            frac_part.push(c);
-          }
+        let mut number = result.chars().collect::<Vec<_>>();
+        while decimals > 0 {
+          decimals -= 1;
+          frac_part.push(number.pop().unwrap_or('0'));
         }
+        int_part = if number.is_empty() {
+          "0".to_string()
+        } else {
+          number.iter().collect()
+        };
+
+        let frac_part = frac_part.chars().rev().collect::<String>();
 
         Self::Float(x_neg ^ y_neg, int_part.into(), frac_part.into())
       }
@@ -765,7 +790,7 @@ impl From<String> for BasicNumber {
     Self::Float(false, int_part.into(), frac_part.into())
   }
 }
-#[derive(Debug, Clone, PartialEq, Eq, Default, Hash)]
+#[derive(Debug, Clone, Eq, Default, Hash)]
 pub enum Number {
   #[default]
   NaN,
@@ -931,6 +956,11 @@ impl ToString for Number {
         return format!("{} + {}i", x.to_string(), y.to_string());
       }
     }
+  }
+}
+impl PartialEq for Number {
+  fn eq(&self, other: &Self) -> bool {
+    self.to_string() == other.to_string()
   }
 }
 
