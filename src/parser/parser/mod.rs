@@ -1639,8 +1639,6 @@ impl Parser {
       let computed = self.match_token(super::TokenType::Punctuation(
         super::PunctuationType::QuadrateBracketOpen,
       ));
-      println!("value: {:?}", value);
-      println!("object: {}, instance: {}, computed: {}", object, instance, computed);
       if !(object || computed || instance) {
         break;
       }

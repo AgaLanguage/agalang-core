@@ -1,42 +1,43 @@
 #![allow(dead_code)]
 use std::{
-  collections::{HashMap, HashSet},
-  hash::{Hash, Hasher},
-  sync::{Arc, Mutex},
+  cell::RefCell, collections::{HashMap, HashSet}, hash::{Hash, Hasher}, rc::Rc
 };
 
-use crate::{bytecode::ChunkGroup, parser::NodeFunction};
+use crate::{bytecode::ChunkGroup, parser::NodeFunction, util::cache::DataManager};
 mod number;
 pub use number::Number;
 
 #[derive(Debug, Clone)]
-pub struct MutexIdentity<T>(Arc<Mutex<T>>);
-impl<T> PartialEq for MutexIdentity<T> {
+pub struct MultiRefHash<T>(Rc<RefCell<T>>);
+impl<T> PartialEq for MultiRefHash<T> {
   fn eq(&self, other: &Self) -> bool {
-    Arc::ptr_eq(&self.0, &other.0) // compara puntero, no contenido
+    Rc::ptr_eq(&self.0, &other.0) // compara puntero, no contenido
   }
 }
-impl<T> MutexIdentity<T> {
-  pub fn lock(&self) -> std::sync::MutexGuard<'_, T> {
-    self.0.lock().unwrap()
+impl<T> MultiRefHash<T> {
+  pub fn borrow(&self) -> std::cell::Ref<T> {
+    self.0.borrow()
+  }
+  pub fn borrow_mut(&self) -> std::cell::RefMut<T> {
+    self.0.borrow_mut()
   }
 }
-impl<T> Hash for MutexIdentity<T> {
+impl<T> Hash for MultiRefHash<T> {
   fn hash<H: Hasher>(&self, state: &mut H) {
-    Arc::as_ptr(&self.0).hash(state); // usa la dirección del Rc para el hash
+    Rc::as_ptr(&self.0).hash(state); // usa la dirección del Rc para el hash
   }
 }
-impl<T> From<Arc<Mutex<T>>> for MutexIdentity<T> {
-  fn from(value: Arc<Mutex<T>>) -> Self {
+impl<T> From<Rc<RefCell<T>>> for MultiRefHash<T> {
+  fn from(value: Rc<RefCell<T>>) -> Self {
     Self(value)
   }
 }
-impl<T> From<T> for MutexIdentity<T> {
+impl<T> From<T> for MultiRefHash<T> {
   fn from(value: T) -> Self {
-    Self(Arc::new(Mutex::new(value)))
+    Self(Rc::new(RefCell::new(value)))
   }
 }
-impl<T> Eq for MutexIdentity<T> {}
+impl<T> Eq for MultiRefHash<T> {}
 
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub enum Function {
@@ -55,7 +56,7 @@ pub enum Function {
     name: String,
     path: String,
     chunk: ChunkGroup,
-    func: fn(Value, Vec<Value>) -> Value,
+    func: fn(Value, Vec<Value>) -> Result<Value, String>,
   },
 }
 impl Function {
@@ -124,11 +125,11 @@ impl std::fmt::Debug for Function {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Object {
   Map(
-    MutexIdentity<HashMap<String, Value>>,
-    MutexIdentity<HashMap<String, Value>>,
+    MultiRefHash<HashMap<String, Value>>,
+    MultiRefHash<HashMap<String, Value>>,
   ),
-  Set(MutexIdentity<HashSet<Value>>),
-  Array(MutexIdentity<Vec<Value>>),
+  Set(MultiRefHash<HashSet<Value>>),
+  Array(MultiRefHash<Vec<Value>>),
   Function(Function),
 }
 impl Object {
@@ -164,15 +165,15 @@ impl Object {
   pub fn as_map(
     &self,
   ) -> (
-    MutexIdentity<HashMap<String, Value>>,
-    MutexIdentity<HashMap<String, Value>>,
+    MultiRefHash<HashMap<String, Value>>,
+    MultiRefHash<HashMap<String, Value>>,
   ) {
     match self {
       Self::Map(x, y) => (x.clone(), y.clone()),
       _ => (HashMap::new().into(), HashMap::new().into()),
     }
   }
-  pub fn as_array(&self) -> MutexIdentity<Vec<Value>> {
+  pub fn as_array(&self) -> MultiRefHash<Vec<Value>> {
     match self {
       Self::Array(x) => x.clone(),
       _ => vec![].into(),
@@ -192,10 +193,10 @@ impl Object {
   }
   pub fn get_property(&self, key: &str) -> Option<Value> {
     match self {
-      Self::Map(map, _) => map.lock().get(key).cloned(),
+      Self::Map(map, _) => map.borrow().get(key).cloned(),
       Self::Array(array) => {
         if let Ok(index) = key.parse::<usize>() {
-          array.lock().get(index).cloned()
+          array.borrow().get(index).cloned()
         } else {
           None
         }
@@ -203,12 +204,11 @@ impl Object {
       _ => None,
     }
   }
-  pub fn get_instance_property(&self, key: &str) -> Option<Value> {
+  pub fn get_instance_property(&self, key: &str, proto_cache: DataManager<String, Value>) -> Option<Value> {
     match (self, key) {
-      (Self::Map(_, instance), key) => instance.lock().get(key).cloned(),
-      (Self::Array(array), "longitud") => Some(Value::Number(array.lock().len().into())),
-      (Self::Function(Function::Function { .. }), "llamar") => None,
-      _ => None,
+      (Self::Map(_, instance), key) => instance.borrow().get(key).cloned(),
+      (Self::Array(array), "longitud") => Some(Value::Number(array.borrow().len().into())),
+      (value, key) => super::proto::proto(value.get_type().to_string(), proto_cache.clone()).get_instance_property(key, proto_cache),
     }
   }
 }
@@ -317,7 +317,7 @@ impl Value {
       Self::Null | Self::Never | Self::False => 0.into(),
       Self::String(s) => s.parse::<Number>().unwrap_or(0.into()),
       Self::Object(_) => 1.into(),
-      Self::Byte(b) => (*b as i32).into(),
+      Self::Byte(b) => b.to_string().parse::<Number>().unwrap_or(0.into()),
       Self::Char(c) => c.into(),
     }
   }
@@ -351,9 +351,9 @@ impl Value {
       Self::Object(x) => x.to_string(),
     }
   }
-  pub fn get_instance_property(&self, key: &str) -> Option<Value> {
+  pub fn get_instance_property(&self, key: &str, proto_cache: DataManager<String, Value>) -> Option<Value> {
     match (self, key) {
-      (Self::Object(o), key) => o.get_instance_property(key),
+      (Self::Object(o), key) => o.get_instance_property(key, proto_cache),
       (Self::String(s), "longitud") => Some(Self::Number(s.len().into())),
       (Self::String(c), "bytes") => Some(Self::Object(
         c.as_bytes()
@@ -362,8 +362,7 @@ impl Value {
           .collect::<Vec<Self>>()
           .into(),
       )),
-      (Self::String(_), key) => super::proto::proto("cadena").get_instance_property(key),
-      _ => None,
+      (value, key) => super::proto::proto(value.get_type().to_string(), proto_cache.clone()).get_instance_property(key, proto_cache),
     }
   }
 }

@@ -2,7 +2,7 @@
 pub mod list;
 mod tokenize;
 mod colors;
-mod cache;
+pub mod cache;
 
 pub use tokenize::*;
 pub use colors::Color;

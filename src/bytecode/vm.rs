@@ -4,6 +4,7 @@ use std::rc::Rc;
 
 use super::chunk::{ChunkGroup, OpCode};
 use super::compiler::Compiler;
+use crate::util::cache::DataManager;
 use crate::value::{Function, Value, FALSE_NAME, NEVER_NAME, NULL_NAME, TRUE_NAME};
 const THIS_NAME: &str = "esto";
 const SUPER_NAME: &str = "super";
@@ -91,6 +92,18 @@ impl VarsManager {
   }
 }
 
+struct Cache {
+  proto: DataManager<String, Value>,
+  // libs: DataManager<String, Value>,
+}
+impl Cache {
+  pub fn new() -> Self {
+    Self {
+      proto: DataManager::new(),
+      // libs: DataManager::new(),
+    }
+  }
+}
 struct CallFrame {
   ip: usize,
   function: Function,
@@ -167,16 +180,18 @@ pub struct VM {
   stack: Vec<Value>,
   globals: RC<VarsManager>,
   call_stack: Vec<CallFrame>,
+  cache: Cache,
 }
 
 impl VM {
-  pub fn new(mut compiler: Compiler) -> Self {
-    compiler.chunk().print();
+  pub fn new(compiler: Compiler) -> Self {
+    // let compiler = {let mut compiler = compiler; compiler.chunk().print();compiler};
     let globals = rc(VarsManager::get_global());
     Self {
       stack: vec![],
       call_stack: vec![CallFrame::new(compiler, globals.clone())],
       globals,
+      cache: Cache::new(),
     }
   }
   fn current_frame(&mut self) -> &mut CallFrame {
@@ -262,53 +277,55 @@ impl VM {
     let b = self.read() as u16;
     (a << 8) | b
   }
-  fn call_value(&mut self, this: Value, callee: Value, arity: usize) -> bool {
+  fn call_value(&mut self, this: Value, callee: Value, arity: usize) -> InterpretResult {
     let mut args = vec![];
     for _ in 0..arity {
       args.push(self.pop());
     }
+    args.reverse();
     if !callee.is_object() {
       if !callee.is_number() {
-        return false;
+        return InterpretResult::RuntimeError("Se esperaba llamar una funcion [1]".into());
       }
-      if arity != 1 {
-        return false;
+      if arity != 1 || args.len() != 1  {
+        return InterpretResult::RuntimeError("Solo se puede multiplicar un numero (llamada)".into());
+      }
+      let arg = args.get(0).unwrap();
+      if !arg.is_number() {
+        return InterpretResult::RuntimeError("Solo se pueden multiplicar numeros (llamada)".into());
       }
       let num = callee.as_number();
-      if args.len() != 1 {
-        return false;
-      }
-      let arg = args.pop().unwrap();
-      if !arg.is_number() {
-        return false;
-      }
       let arg = arg.as_number();
       let value = Value::Number(num * arg);
       self.push(value);
-      return true;
+      return InterpretResult::Continue;
     }
     let obj = callee.as_object();
     if !obj.is_function() {
-      return false;
+      return InterpretResult::RuntimeError("Se esperaba llamar una funcion [2]".into());
     }
     let function = obj.as_function();
     if let Function::Native { func, .. } = function {
-      let value = func(callee, args);
-      self.push(value);
-      return true;
+      let value = func(this, args);
+      return if let Err(error) = value{
+        InterpretResult::RuntimeError(error)
+      } else {
+        self.push(value.unwrap());
+        InterpretResult::Continue
+      };
     }
     self.call_stack.push(CallFrame {
       ip: 0,
       function,
       locals: vec![rc(VarsManager::crate_child(self.globals.clone()).set_this(this))],
     });
-    true
+    InterpretResult::Continue
   }
   pub fn run_instruction(&mut self) -> InterpretResult {
     let byte_instruction = self.read();
     let instruction: OpCode = byte_instruction.into();
 
-    println!("{:<16} | {:?}", format!("{:?}", instruction), self.stack);
+    // println!("{:<16} | {:?}", format!("{:?}", instruction), self.stack);
 
     match instruction {
       OpCode::OpCopy => {
@@ -349,7 +366,7 @@ impl VM {
         }
         if obj.is_map() {
           let map = obj.as_map();
-          let mut map = map.0.lock();
+          let mut map = map.0.borrow_mut();
           let value = map.insert(key.as_string(), value).unwrap_or_default();
           self.stack.push(value);
         } else if obj.is_array() {
@@ -365,7 +382,7 @@ impl VM {
             ));
           }
           let index = index.to_string().parse::<usize>().unwrap_or(0);
-          let mut vec = vec.lock();
+          let mut vec = vec.borrow_mut();
           if index >= vec.len() {
             vec.resize(index + 1, Value::Never);
           }
@@ -384,7 +401,7 @@ impl VM {
         let is_instance = self.read() == 1u8;
         if is_instance {
           let key: &str = &key.as_string();
-          if let Some(value) = object.get_instance_property(key) {
+          if let Some(value) = object.get_instance_property(key, self.cache.proto.clone()) {
             self.push(value);
             return InterpretResult::Continue;
           }
@@ -403,9 +420,9 @@ impl VM {
         if obj.is_map() {
           let map = obj.as_map();
           let value = if is_instance {
-            map.0.lock().get(&key.as_string()).cloned()
+            map.0.borrow().get(&key.as_string()).cloned()
           } else {
-            map.1.lock().get(&key.as_string()).cloned()
+            map.1.borrow().get(&key.as_string()).cloned()
           };
           let value = if let Some(value) = value {
             value
@@ -432,7 +449,7 @@ impl VM {
             ));
           }
           let index = index.to_string().parse::<usize>().unwrap_or(0);
-          let value = vec.lock().get(index).cloned().unwrap_or_default();
+          let value = vec.borrow().get(index).cloned().unwrap_or_default();
           self.stack.push(value);
         } else {
           return InterpretResult::RuntimeError(format!(
@@ -482,10 +499,7 @@ impl VM {
         let arity = self.read() as usize;
         let callee = self.pop();
         let this = self.pop();
-        let call = self.call_value(this, callee, arity);
-        if !call {
-          return InterpretResult::RuntimeError("Se esperaba llamar a una funcion".into());
-        }
+        return self.call_value(this, callee, arity);
       }
       OpCode::OpVarDecl => {
         let name = self.read_string();

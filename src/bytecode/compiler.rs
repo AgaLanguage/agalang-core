@@ -306,6 +306,17 @@ impl Compiler {
               };
               self.set_constant(Value::String(name.into()), m.location.start.line);
             };
+            let is_instance = if m.instance { 1u8 } else { 0u8 };
+            self.chunk().write_buffer(
+              vec![OpCode::OpGetMember as u8, is_instance],
+              m.location.start.line,
+            );
+          }
+          Node::Identifier(i) => {
+            self.chunk().read_var(i.name.clone(), i.location.start.line);
+            self
+              .chunk()
+              .write(OpCode::OpCopy as u8, node.get_location().start.line)
           }
           node => {
             self.node_to_bytes(&c.callee)?;
@@ -378,7 +389,7 @@ impl Compiler {
       }
       Node::Array(a) => {
         let value = Value::Object(vec![].into());
-        let mut index = 0.0;
+        let mut index = 0;
         for p in a.elements.clone() {
           self.set_constant(value.clone(), a.location.start.line);
           match p {
@@ -392,7 +403,7 @@ impl Compiler {
             }
             _ => {}
           };
-          index += 1.0;
+          index += 1;
         }
         self.set_constant(value, a.location.start.line);
       }

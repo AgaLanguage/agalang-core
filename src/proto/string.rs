@@ -1,17 +1,57 @@
 use crate::{bytecode::ChunkGroup, value::Value};
 
+const REPLACE: &str = "remplaza";
+const SPLIT: &str = "separa";
+
 pub fn string_proto() -> Value {
-  println!("string_proto() called");
   let mut hashmap = std::collections::HashMap::new();
 
   hashmap.insert(
-    "remplaza".into(),
+    REPLACE.into(),
     crate::value::Value::Object(crate::value::Object::Function(
       crate::value::Function::Native {
-        name: "remplaza".into(),
-        path: "proto/cadena".into(),
-        func: |_, _| Value::Number(64.into()),
-        chunk: ChunkGroup::default()
+        name: REPLACE.into(),
+        path: format!("<cadena>::{REPLACE}"),
+        func: |this, args| {
+          let old = args.get(0);
+          if old.is_none() {
+            return Err("remplaza: se esperaban 2 argumentos y se recibieron 0".into());
+          }
+          let old = old.unwrap().as_string();
+          let new = args.get(1);
+          if new.is_none() {
+            return Err("remplaza: se esperaban 2 argumentos y se recibieron 1".into());
+          }
+          let new = new.unwrap().as_string();
+          let string = this.as_string();
+          let string = string.replace(&old, &new);
+          Ok(Value::String(string.into()))
+        },
+        chunk: ChunkGroup::default(),
+      },
+    )),
+  );
+
+  hashmap.insert(
+    SPLIT.into(),
+    crate::value::Value::Object(crate::value::Object::Function(
+      crate::value::Function::Native {
+        name: SPLIT.into(),
+        path: format!("<cadena>::{SPLIT}"),
+        func: |this, args| {
+          let separator = args.get(0);
+          if separator.is_none() {
+            return Err("remplaza: se esperaba 1 argumento y se recibieron 0".into());
+          }
+          let separator = separator.unwrap().as_string();
+          let string = this.as_string();
+          let list = string
+            .split(&separator)
+            .map(|s| Value::String(s.to_string()))
+            .collect::<Vec<_>>();
+          Ok(Value::Object(list.into()))
+        },
+        chunk: ChunkGroup::default(),
       },
     )),
   );

@@ -1,46 +1,25 @@
-#[macro_export]
-macro_rules! cache_fn {
-  (fn $function:ident ($name:ident : $key:ty ) -> $val:ty $init:block) => {
-    const CACHE: std::sync::LazyLock<
-      std::rc::Rc<std::cell::RefCell<std::collections::HashMap<$key, $val>>>,
-    > = std::sync::LazyLock::new(|| {
-      std::rc::Rc::new(std::cell::RefCell::new(std::collections::HashMap::new()))
-    });
+use std::collections::HashMap;
 
-    fn $function($name: $key) -> $val
-    where
-      $key: std::cmp::Eq + std::hash::Hash + Clone,
-      $val: Clone,
-    {
-      if let Some(value) = CACHE.borrow().get(&$name) {
-        return value.clone();
-      } else {
-        let value: $val = { |$name: $key| $init }($name.clone());
-        CACHE.borrow_mut().insert($name, value.clone());
-        return value;
-      }
+use crate::value::MultiRefHash;
+
+#[derive(Debug, Clone)]
+pub struct DataManager<K: Eq + std::hash::Hash, V: Clone>
+{
+  data: MultiRefHash<HashMap<K, V>>,
+}
+impl<K: Eq + std::hash::Hash, V: Clone> DataManager<K, V> {
+  pub fn new() -> Self {
+    DataManager {
+      data: HashMap::new().into(),
     }
-  };
-
-  (pub fn $function:ident ($name:ident : $key:ty ) -> $val:ty $init:block) => {
-    const CACHE: std::sync::LazyLock<
-      std::rc::Rc<std::cell::RefCell<std::collections::HashMap<$key, $val>>>,
-    > = std::sync::LazyLock::new(|| {
-      std::rc::Rc::new(std::cell::RefCell::new(std::collections::HashMap::new()))
-    });
-
-    pub fn $function($name: $key) -> $val
-    where
-      $key: std::cmp::Eq + std::hash::Hash + Clone,
-      $val: Clone,
-    {
-      if let Some(value) = CACHE.borrow().get(&$name) {
-        return value.clone();
-      } else {
-        let value: $val = { |$name: $key| $init }($name.clone());
-        CACHE.borrow_mut().insert($name, value.clone());
-        return value;
-      }
-    }
-  };
+  }
+  pub fn get(&self, key: &K) -> Option<V> {
+    self.data.borrow().get(key).cloned()
+  }
+  pub fn set(&mut self, key: K, value: V) {
+    self.data.borrow_mut().insert(key, value);
+  }
+  pub fn has(&self, key: &K) -> bool {
+    self.data.borrow().contains_key(key)
+  }
 }

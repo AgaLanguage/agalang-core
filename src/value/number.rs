@@ -4,6 +4,7 @@ use std::{
   ops::{Add, Div, Mul, Neg, Sub, SubAssign},
   str::FromStr,
   sync::LazyLock,
+  vec,
 };
 
 const DIVISION_DECIMALS: usize = 100;
@@ -303,7 +304,7 @@ impl Div for &UInt {
     for i in 0..self.num_digits() {
       current = current.shift_left(1).trim_leading_zeros();
       current.add_digit_mut(self.digit_at(i));
-      
+
       let mut q_digit = 0;
       for d in (1..=9).rev() {
         let test = &divisor * &UInt::from(d);
@@ -312,7 +313,7 @@ impl Div for &UInt {
           break;
         }
       }
-      
+
       quotient_digits.push(q_digit);
       let sub = &divisor * &UInt::from(q_digit);
       current.sub_assign(&sub);
@@ -756,7 +757,14 @@ impl Ord for BasicNumber {
     }
   }
 }
-
+impl From<String> for BasicNumber {
+  fn from(value: String) -> Self {
+    let split = value.split('.');
+    let int_part = split.clone().nth(0).unwrap_or("0").to_string();
+    let frac_part = split.clone().nth(1).unwrap_or("0").to_string();
+    Self::Float(false, int_part.into(), frac_part.into())
+  }
+}
 #[derive(Debug, Clone, PartialEq, Eq, Default, Hash)]
 pub enum Number {
   #[default]
@@ -842,39 +850,8 @@ impl Number {
       return Self::NaN;
     }
     i32::from_str_radix(value, radix as u32)
-      .map(|v| Self::from(v))
-      .unwrap_or(Self::NaN)
-  }
-}
-impl From<i32> for Number {
-  fn from(value: i32) -> Self {
-    Self::Basic(BasicNumber::Int(
-      value.is_negative(),
-      value.abs().to_string().into(),
-    ))
-  }
-}
-impl From<f64> for Number {
-  fn from(value: f64) -> Self {
-    if value.is_nan() {
-      return Self::NaN;
-    }
-    if value.is_infinite() {
-      if value.is_sign_positive() {
-        return Self::Infinity;
-      } else {
-        return Self::NegativeInfinity;
-      }
-    }
-    let binding = value.abs().to_string();
-    let split = binding.split('.');
-    let int_part = split.clone().nth(0).unwrap_or("0").to_string();
-    let frac_part = split.clone().nth(1).unwrap_or("0").to_string();
-    Self::Basic(BasicNumber::Float(
-      value.is_sign_negative(),
-      int_part.into(),
-      frac_part.into(),
-    ))
+      .map(|v| v.to_string().parse::<Self>().unwrap_or_default())
+      .unwrap_or_default()
   }
 }
 impl From<&char> for Number {
@@ -894,14 +871,37 @@ impl FromStr for Number {
     if s == "NeN" {
       return Ok(Self::NaN);
     }
-    if let Ok(value) = s.parse::<i32>() {
-      return Ok(Self::Basic(BasicNumber::Int(
-        value.is_negative(),
-        value.abs().to_string().into(),
+    if s.contains("i") {
+      let parts: Vec<&str> = s.split("i").collect();
+      let i_exp = parts.len() - 1;
+      let number = parts.join("").into();
+      let i_exp = i_exp % 4;
+      // is real i^x, x%2 = 0
+      let (x, y) = if i_exp % 2 == 0 {
+        (number, BasicNumber::Int(false, UInt::from(0)))
+      } else {
+        (BasicNumber::Int(false, UInt::from(0)), number)
+      };
+      // is negative i^x
+      let value = if i_exp == 3 || i_exp == 2 {
+        -Self::Complex(x, y)
+      } else {
+        Self::Complex(x, y)
+      };
+      return Ok(value);
+    }
+    if s.contains(".") {
+      let parts: Vec<&str> = s.split(".").collect();
+      let int_part = parts[0].to_string();
+      let frac_part = parts[1].to_string();
+      return Ok(Self::Basic(BasicNumber::Float(
+        false,
+        int_part.into(),
+        frac_part.into(),
       )));
     }
-    if let Ok(value) = s.parse::<f64>() {
-      return Ok(Self::from(value));
+    if s.chars().all(|c| c.is_digit(10)) {
+      return Ok(Self::Basic(BasicNumber::Int(false, s.to_string().into())));
     }
     Err(())
   }
