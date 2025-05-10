@@ -35,37 +35,31 @@
 # Tipos de Datos
 ## Primitivos
 ### Booleano
-- `__cad__()` convierte en cadena de caracteres y regresa una [cadena](#cadena).
 
 ### Byte
-- `__cad__()` convierte en cadena de caracteres y regresa una [cadena](#cadena).
 
 ### Número
-- `__cad__()` convierte en cadena de caracteres y regresa una [cadena](#cadena).
 - `(numero)` recibe un número como argumento para ser multiplicado.
     - `numero`: [Número](#numero) a multiplicar.
     - Retorna un [Número](#numero).
 
 ### Cadena
-- `__cad__()` convierte en cadena de caracteres y regresa una [cadena](#cadena).
 - `reemplaza(viejo, nuevo)` reemplaza el texto `viejo` por el `nuevo`.
     - `viejo`: [Cadena](#cadena).
     - `nuevo`: [Cadena](#cadena).
     - Retorna una [Cadena](#cadena).
 - `bytes()` convierte la cadena a una lista de bytes.
     - Retorna un [Buffer](#buffer).
-- `partir(cortador)` divide la cadena cada vez que el texto coincide con el `cortador`.
+- `separa(cortador)` divide la cadena cada vez que el texto coincide con el `cortador`.
     - `cortador`: [Cadena](#cadena).
     - Retorna una [Lista](#lista) de [Cadenas](#cadena).
 - `longitud` retorna un [Número](#numero).
 - `[indice]` retorna un [Carácter](#caracter).
 
 #### Carácter
-- `__cad__()` convierte en cadena de caracteres y regresa una [Cadena](#cadena).
 
 ## Complejos
 ### Lista
-- `__cad__()` convierte en cadena de caracteres y regresa una [Cadena](#cadena).
 - `[indice]` retorna un valor cualquiera.
 
 ### Clase
@@ -102,7 +96,6 @@ Espera a ser llamado para obtener su valor.
 Este valor debe ser atrapado para no detener el programa.
 
 ### Función Nativa
-- `__cad__()` convierte en cadena de caracteres y regresa una [Cadena](#cadena).
 - `llamar(este, argumentos)` llama a la función como si el primer parámetro fuera el dueño de la función.
     - `este`: valor cualquiera.
     - `argumentos`: [Lista](#lista) de valores cualquiera.

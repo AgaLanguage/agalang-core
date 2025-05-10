@@ -1,23 +1,30 @@
 use std::collections::HashMap;
 
-use crate::parser::{Node, NodeFunction};
+mod chunk;
 
-use super::chunk::{ChunkGroup, OpCode};
+pub use chunk::{ChunkGroup, OpCode};
+use crate::parser::{Node, NodeFunction};
 use crate::value::{Function, Number, Value, NEVER_NAME};
+
+const OBJECT_MEMBER: u8 = 0;
+const INSTANCE_MEMBER: u8 = 1;
 
 pub struct Compiler {
   pub function: Function,
+  pub path: String
 }
 impl Compiler {
   fn parse_function(function: &NodeFunction) -> Result<Function, String> {
     let mut compiler = Self {
       function: function.into(),
+      path: function.file.clone()
     };
     let mut i = function.params.len();
     while i > 0 {
       i -= 1;
       let param = function.params.get(i).unwrap();
       let _global = compiler
+        .function
         .chunk()
         .make_arg(param.name.clone(), param.location.start.line);
     }
@@ -26,16 +33,32 @@ impl Compiler {
     } else {
       compiler.set_constant(Value::Never, function.location.end.line);
     }
-    compiler
-      .chunk()
-      .write(OpCode::OpReturn as u8, function.location.end.line);
+    compiler.write(OpCode::OpReturn as u8, function.location.end.line);
     Ok(compiler.function)
   }
-  fn set_constant(&mut self, value: Value, line: usize) -> u8{
-    self.chunk().write_constant(value, line)
+  fn set_constant(&mut self, value: Value, line: usize) -> u8 {
+    self.function.chunk().write_constant(value, line)
   }
-  pub fn chunk(&mut self) -> &mut ChunkGroup {
-    self.function.chunk()
+  fn write(&mut self, byte: u8, line: usize) {
+    self.function.chunk().write(byte, line);
+  }
+  fn write_buffer(&mut self, buffer: Vec<u8>, line: usize) {
+    self.function.chunk().write_buffer(buffer, line);
+  }
+  fn len(&mut self) -> usize {
+    self.function.chunk().len()
+  }
+  fn read_var(&mut self, name: String, line: usize) {
+    self.function.chunk().read_var(name, line);
+  }
+  fn jump(&mut self, code: OpCode) -> usize {
+    self.function.chunk().jump(code)
+  }
+  fn patch_jump(&mut self, offset: usize) -> Result<(), String> {
+    self.function.chunk().patch_jump(offset)
+  }
+  fn add_loop(&mut self, offset: usize) -> Result<(), String> {
+    self.function.chunk().add_loop(offset)
   }
   fn node_to_bytes(&mut self, node: &Node) -> Result<(), String> {
     match node {
@@ -69,7 +92,7 @@ impl Compiler {
         if operator == OpCode::OpNull {
           match b.operator {
             crate::parser::NodeOperator::NotEqual => {
-              self.chunk().write_buffer(
+              self.write_buffer(
                 vec![OpCode::OpEquals as u8, OpCode::OpNot as u8],
                 b.location.start.line,
               );
@@ -81,37 +104,27 @@ impl Compiler {
             }
           };
         } else {
-          self.chunk().write(operator as u8, b.location.start.line);
+          self.write(operator as u8, b.location.start.line);
         };
       }
       Node::Program(p) => {
         if p.body.len() != 0 {
           self.node_to_bytes(&p.body.clone().to_node())?;
-          self
-            .chunk()
-            .write(OpCode::OpPop as u8, p.location.start.line);
+          self.write(OpCode::OpPop as u8, p.location.start.line);
         }
         self.set_constant(Value::Never, p.location.start.line);
-        self
-          .chunk()
-          .write(OpCode::OpReturn as u8, p.location.end.line);
+        self.write(OpCode::OpReturn as u8, p.location.end.line);
       }
       Node::Block(b, _is_async) => {
-        self
-          .chunk()
-          .write(OpCode::OpNewLocals as u8, b.location.start.line);
+        self.write(OpCode::OpNewLocals as u8, b.location.start.line);
         let last_index = b.body.len();
         for (index, node) in b.body.clone().enumerate() {
           self.node_to_bytes(&node)?;
           if index < (last_index - 1) {
-            self
-              .chunk()
-              .write(OpCode::OpPop as u8, node.get_location().end.line);
+            self.write(OpCode::OpPop as u8, node.get_location().end.line);
           }
         }
-        self
-          .chunk()
-          .write(OpCode::OpRemoveLocals as u8, b.location.start.line);
+        self.write(OpCode::OpRemoveLocals as u8, b.location.start.line);
       }
       Node::UnaryFront(u) => {
         self.node_to_bytes(&u.operand)?;
@@ -126,17 +139,15 @@ impl Compiler {
             ))
           }
         } as u8;
-        self.chunk().write(operator, u.location.start.line);
+        self.write(operator, u.location.start.line);
       }
       Node::Identifier(i) => {
-        self.chunk().read_var(i.name.clone(), i.location.start.line);
+        self.read_var(i.name.clone(), i.location.start.line);
       }
       Node::Console(c) => match c {
         crate::parser::NodeConsole::Output { value, location } => {
           self.node_to_bytes(&value)?;
-          self
-            .chunk()
-            .write(OpCode::OpConsoleOut as u8, location.start.line);
+          self.write(OpCode::OpConsoleOut as u8, location.start.line);
         }
         _ => {}
       },
@@ -147,19 +158,17 @@ impl Compiler {
               self.set_constant(Value::String(val.as_str().into()), s.location.start.line);
             }
             crate::parser::StringData::Id(id) => {
-              self.chunk().read_var(id, s.location.start.line);
+              self.read_var(id, s.location.start.line);
             }
           }
           if i != 0 {
-            self
-              .chunk()
-              .write(OpCode::OpAdd as u8, s.location.start.line);
+            self.write(OpCode::OpAdd as u8, s.location.start.line);
           }
         }
       }
       Node::VarDecl(v) => {
-        let global = self
-          .set_constant(Value::String(v.name.as_str().into()), v.location.start.line);
+        let global =
+          self.set_constant(Value::String(v.name.as_str().into()), v.location.start.line);
         let op;
         if v.is_const {
           match &v.value {
@@ -185,19 +194,17 @@ impl Compiler {
           };
           op = OpCode::OpVarDecl as u8;
         }
-        self
-          .chunk()
-          .write_buffer(vec![op, global], v.location.start.line);
+        self.write_buffer(vec![op, global], v.location.start.line);
       }
       Node::Assignment(a) => {
         match a.identifier.as_ref() {
           Node::Identifier(id) => {
-            let name = self
-              .set_constant(Value::String(id.name.as_str().into()), id.location.start.line);
+            let name = self.set_constant(
+              Value::String(id.name.as_str().into()),
+              id.location.start.line,
+            );
             self.node_to_bytes(&a.value)?;
-            self
-              .chunk()
-              .write_buffer(vec![OpCode::OpSetVar as u8, name], a.location.start.line);
+            self.write_buffer(vec![OpCode::OpSetVar as u8, name], a.location.start.line);
           }
           Node::Member(m) => {
             self.node_to_bytes(&m.object)?;
@@ -214,75 +221,69 @@ impl Compiler {
             if m.instance {
               return Err("No se puede asignar a una propiedad de instancia".to_string());
             }
-            self
-              .chunk()
-              .write_buffer(vec![OpCode::OpSetMember as u8, 0], m.location.start.line);
+            self.write_buffer(vec![OpCode::OpSetMember as u8, OBJECT_MEMBER], m.location.start.line);
           }
           _ => return Err("Se esperaba una assignacion valida".to_string()),
         };
       }
       Node::If(i) => {
         self.node_to_bytes(&i.condition)?;
-        let jump_if = self.chunk().jump(OpCode::OpJumpIfFalse);
+        let jump_if = self.jump(OpCode::OpJumpIfFalse);
         self.node_to_bytes(&i.body.clone().to_node())?;
 
-        let jump_else = self.chunk().jump(OpCode::OpJump);
-        self.chunk().patch_jump(jump_if)?;
+        let jump_else = self.jump(OpCode::OpJump);
+        self.patch_jump(jump_if)?;
 
         if let Some(e) = &i.else_body {
           self.node_to_bytes(&e.clone().to_node())?;
         } else {
           self.set_constant(Value::Never, i.location.start.line);
         }
-        self.chunk().patch_jump(jump_else)?;
+        self.patch_jump(jump_else)?;
       }
       Node::While(i) => {
-        let loop_start = self.chunk().len();
+        let loop_start = self.len();
         self.node_to_bytes(&i.condition)?;
-        let jump_while = self.chunk().jump(OpCode::OpJumpIfFalse);
+        let jump_while = self.jump(OpCode::OpJumpIfFalse);
         self.node_to_bytes(&i.body.clone().to_node())?;
-        self.chunk().write(OpCode::OpPop as u8, 0);
-        self.chunk().add_loop(loop_start)?;
-        self.chunk().patch_jump(jump_while)?;
+        self.write(OpCode::OpPop as u8, 0);
+        self.add_loop(loop_start)?;
+        self.patch_jump(jump_while)?;
       }
       Node::DoWhile(i) => {
-        let jump_do = self.chunk().jump(OpCode::OpJump);
-        let loop_start = self.chunk().len();
+        let jump_do = self.jump(OpCode::OpJump);
+        let loop_start = self.len();
         self.node_to_bytes(&i.condition)?;
-        let jump_while = self.chunk().jump(OpCode::OpJumpIfFalse);
-        self.chunk().patch_jump(jump_do)?;
+        let jump_while = self.jump(OpCode::OpJumpIfFalse);
+        self.patch_jump(jump_do)?;
         self.node_to_bytes(&i.body.clone().to_node())?;
-        self.chunk().write(OpCode::OpPop as u8, 0);
-        self.chunk().add_loop(loop_start)?;
-        self.chunk().patch_jump(jump_while)?;
+        self.write(OpCode::OpPop as u8, 0);
+        self.add_loop(loop_start)?;
+        self.patch_jump(jump_while)?;
       }
       Node::For(f) => {
-        self
-          .chunk()
-          .write(OpCode::OpNewLocals as u8, f.location.start.line);
+        self.write(OpCode::OpNewLocals as u8, f.location.start.line);
         self.node_to_bytes(&f.init)?;
-        let loop_start = self.chunk().len();
+        let loop_start = self.len();
         self.node_to_bytes(&f.condition)?;
-        let jump_while = self.chunk().jump(OpCode::OpJumpIfFalse);
+        let jump_while = self.jump(OpCode::OpJumpIfFalse);
         self.node_to_bytes(&f.body.clone().to_node())?;
         self.node_to_bytes(&f.update)?;
-        self.chunk().write(OpCode::OpPop as u8, 0);
-        self.chunk().add_loop(loop_start)?;
-        self.chunk().patch_jump(jump_while)?;
-        self
-          .chunk()
-          .write(OpCode::OpRemoveLocals as u8, f.location.start.line);
+        self.write(OpCode::OpPop as u8, 0);
+        self.add_loop(loop_start)?;
+        self.patch_jump(jump_while)?;
+        self.write(OpCode::OpRemoveLocals as u8, f.location.start.line);
       }
       Node::Function(f) => {
-        let global = self
-          .set_constant(Value::String(f.name.as_str().into()), f.location.start.line);
+        let global =
+          self.set_constant(Value::String(f.name.as_str().into()), f.location.start.line);
 
         self.set_constant(
           Value::Object(Self::parse_function(f)?.into()),
           f.location.start.line,
         );
 
-        self.chunk().write_buffer(
+        self.write_buffer(
           vec![OpCode::OpConstDecl as u8, global],
           f.location.start.line,
         );
@@ -294,9 +295,7 @@ impl Compiler {
         match c.callee.as_ref() {
           Node::Member(m) => {
             self.node_to_bytes(&m.object)?;
-            self
-              .chunk()
-              .write(OpCode::OpCopy as u8, m.object.get_location().end.line);
+            self.write(OpCode::OpCopy as u8, m.object.get_location().end.line);
             if m.computed {
               self.node_to_bytes(&m.member)?;
             } else {
@@ -306,27 +305,23 @@ impl Compiler {
               };
               self.set_constant(Value::String(name.into()), m.location.start.line);
             };
-            let is_instance = if m.instance { 1u8 } else { 0u8 };
-            self.chunk().write_buffer(
+            let is_instance = if m.instance { INSTANCE_MEMBER } else { OBJECT_MEMBER };
+            self.write_buffer(
               vec![OpCode::OpGetMember as u8, is_instance],
               m.location.start.line,
             );
           }
           Node::Identifier(i) => {
-            self.chunk().read_var(i.name.clone(), i.location.start.line);
-            self
-              .chunk()
-              .write(OpCode::OpCopy as u8, node.get_location().start.line)
+            self.read_var(i.name.clone(), i.location.start.line);
+            self.write(OpCode::OpCopy as u8, node.get_location().start.line)
           }
           node => {
             self.node_to_bytes(&c.callee)?;
-            self
-              .chunk()
-              .write(OpCode::OpCopy as u8, node.get_location().start.line)
+            self.write(OpCode::OpCopy as u8, node.get_location().start.line)
           }
         };
 
-        self.chunk().write_buffer(
+        self.write_buffer(
           vec![OpCode::OpCall as u8, c.arguments.len() as u8],
           c.location.start.line,
         );
@@ -340,9 +335,7 @@ impl Compiler {
             self.set_constant(Value::Never, r.location.start.line);
           }
         };
-        self
-          .chunk()
-          .write(OpCode::OpReturn as u8, r.location.start.line);
+        self.write(OpCode::OpReturn as u8, r.location.start.line);
       }
       Node::Object(o) => {
         let value = Value::Object(HashMap::new().into());
@@ -352,16 +345,16 @@ impl Compiler {
             crate::parser::NodeProperty::Dynamic(key, value) => {
               self.node_to_bytes(&key)?;
               self.node_to_bytes(&value)?;
-              self.chunk().write_buffer(
-                vec![OpCode::OpSetMember as u8, 0, OpCode::OpPop as u8],
+              self.write_buffer(
+                vec![OpCode::OpSetMember as u8, OBJECT_MEMBER, OpCode::OpPop as u8],
                 o.location.start.line,
               );
             }
             crate::parser::NodeProperty::Property(key, value) => {
               self.set_constant(Value::String(key), o.location.start.line);
               self.node_to_bytes(&value)?;
-              self.chunk().write_buffer(
-                vec![OpCode::OpSetMember as u8, 0, OpCode::OpPop as u8],
+              self.write_buffer(
+                vec![OpCode::OpSetMember as u8, OBJECT_MEMBER, OpCode::OpPop as u8],
                 o.location.start.line,
               );
             }
@@ -381,8 +374,8 @@ impl Compiler {
           };
           self.set_constant(Value::String(name.into()), m.location.start.line);
         };
-        let is_instance = if m.instance { 1u8 } else { 0u8 };
-        self.chunk().write_buffer(
+        let is_instance = if m.instance { INSTANCE_MEMBER } else { OBJECT_MEMBER };
+        self.write_buffer(
           vec![OpCode::OpGetMember as u8, is_instance],
           m.location.start.line,
         );
@@ -396,8 +389,8 @@ impl Compiler {
             crate::parser::NodeProperty::Indexable(value) => {
               self.set_constant(Value::Number(index.into()), a.location.start.line);
               self.node_to_bytes(&value)?;
-              self.chunk().write_buffer(
-                vec![OpCode::OpSetMember as u8, 0, OpCode::OpPop as u8],
+              self.write_buffer(
+                vec![OpCode::OpSetMember as u8, OBJECT_MEMBER, OpCode::OpPop as u8],
                 a.location.start.line,
               );
             }
@@ -412,7 +405,25 @@ impl Compiler {
           crate::parser::NodeLoopEditType::Break => OpCode::OpBreak,
           crate::parser::NodeLoopEditType::Continue => OpCode::OpContinue,
         } as u8;
-        self.chunk().write(byte, e.location.start.line);
+        self.write(byte, e.location.start.line);
+      }
+      Node::Import(i) => {
+        self.set_constant(Value::String(i.path.clone()), i.location.start.line);
+        let lazy_bit = if i.is_lazy { 0b10 } else { 0b00 };
+        let alias_bit = if i.name.is_some() { 0b01 } else { 0b00 };
+        let meta_byte = lazy_bit | alias_bit;
+        let name_byte = if let Some(name) = &i.name {
+          let index_byte =
+            self.set_constant(Value::String(name.to_string()), i.location.start.line);
+          self.write(OpCode::OpPop as u8, i.location.start.line);
+          index_byte
+        } else {
+          0
+        };
+        self.write_buffer(
+          vec![OpCode::OpImport as u8, meta_byte, name_byte],
+          i.location.start.line,
+        );
       }
       a => {
         return Err(format!(
@@ -428,8 +439,8 @@ impl From<&Node> for Compiler {
   fn from(value: &Node) -> Self {
     let path = value.get_file();
     let chunk = ChunkGroup::new();
-    let function = Function::Script { chunk, path };
-    let mut compiler = Self { function };
+    let function = Function::Script { chunk, path: path.clone() };
+    let mut compiler = Self { function, path };
     match compiler.node_to_bytes(value) {
       Err(e) => panic!("{e}"),
       _ => {}

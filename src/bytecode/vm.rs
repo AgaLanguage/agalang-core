@@ -1,9 +1,10 @@
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
+use std::path::Path;
 use std::rc::Rc;
 
-use super::chunk::{ChunkGroup, OpCode};
-use super::compiler::Compiler;
+use super::compiler::{ChunkGroup, OpCode, Compiler};
+use crate::libs::libs;
 use crate::util::cache::DataManager;
 use crate::value::{Function, Value, FALSE_NAME, NEVER_NAME, NULL_NAME, TRUE_NAME};
 const THIS_NAME: &str = "esto";
@@ -94,13 +95,13 @@ impl VarsManager {
 
 struct Cache {
   proto: DataManager<String, Value>,
-  // libs: DataManager<String, Value>,
+  libs: DataManager<String, Value>,
 }
 impl Cache {
   pub fn new() -> Self {
     Self {
       proto: DataManager::new(),
-      // libs: DataManager::new(),
+      libs: DataManager::new(),
     }
   }
 }
@@ -177,6 +178,8 @@ fn call_stack_to_string(stack: &Vec<CallFrame>) -> String {
   string
 }
 pub struct VM {
+  path: Box<Path>,
+  module: Value,
   stack: Vec<Value>,
   globals: RC<VarsManager>,
   call_stack: Vec<CallFrame>,
@@ -188,11 +191,16 @@ impl VM {
     // let compiler = {let mut compiler = compiler; compiler.chunk().print();compiler};
     let globals = rc(VarsManager::get_global());
     Self {
+      path: Path::new(&compiler.path).into(),
+      module: Value::Object(crate::value::Object::Map(HashMap::new().into(), HashMap::new().into())),
       stack: vec![],
       call_stack: vec![CallFrame::new(compiler, globals.clone())],
       globals,
       cache: Cache::new(),
     }
+  }
+  pub fn as_value(self) -> Value {
+    self.module
   }
   fn current_frame(&mut self) -> &mut CallFrame {
     self.call_stack.last_mut().unwrap()
@@ -238,10 +246,10 @@ impl VM {
   fn reset_stack(&mut self) {
     self.stack = vec![];
   }
-  pub fn push(&mut self, value: Value) {
+  fn push(&mut self, value: Value) {
     self.stack.push(value);
   }
-  pub fn pop(&mut self) -> Value {
+  fn pop(&mut self) -> Value {
     self.stack.pop().unwrap()
   }
   pub fn interpret(&mut self) -> InterpretResult {
@@ -321,7 +329,7 @@ impl VM {
     });
     InterpretResult::Continue
   }
-  pub fn run_instruction(&mut self) -> InterpretResult {
+  fn run_instruction(&mut self) -> InterpretResult {
     let byte_instruction = self.read();
     let instruction: OpCode = byte_instruction.into();
 
@@ -338,7 +346,7 @@ impl VM {
         if !value.is_number() {
           return InterpretResult::RuntimeError(format!("No se pudo operar '~x'"));
         }
-        self.push(Value::Number(value.as_number().trunc()));
+        self.push(Value::Number(value.as_number().round()));
       }
       OpCode::OpSetMember => {
         let value = self.pop();
@@ -461,6 +469,24 @@ impl VM {
       OpCode::OpConstant => {
         let constant = self.read_constant();
         self.push(constant);
+      }
+      OpCode::OpImport => {
+        let module = self.pop();
+        let path = module.as_string();
+        let meta_byte = self.read();
+        let name_byte = self.read();
+        let _is_lazy = (meta_byte & 0b10) == 0b10;
+        let alias = (meta_byte & 0b01) == 0b01;
+
+        let lib_name = if path.starts_with(":") {path}else {
+          self.path.parent().unwrap().join(path).canonicalize().unwrap().to_str().unwrap().to_string()
+        };
+        let value = libs(lib_name, self.cache.libs.clone());
+        if alias {
+          let name = self.current_chunk().read_constant(name_byte).as_string();
+          self.declare(&name, value, true);
+        }
+        self.push(module);
       }
       OpCode::OpJumpIfFalse => {
         let jump = self.read_short() as usize;
@@ -701,7 +727,6 @@ impl VM {
         let value = if a < b { Value::True } else { Value::False };
         self.push(value);
       }
-
       OpCode::OpBreak | OpCode::OpContinue => {
         self.push(Value::Null);
       }

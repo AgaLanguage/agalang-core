@@ -1,21 +1,3 @@
-def pi = 3.1415926535897932384626433832795028841971693993751058209749445923078164062862089986280348253421170679;
-((pi*1iiii) == pi ) >> csl;
+importa ':mate' como Mate;
 
-# importa ':red' como Red;
-# importa ':proto/Cadena' como Cadena;
-# 
-# asinc fn servidorHTTP(servidor, puerto){
-#   espera Red::servidorTCP("127.0.0.1:{puerto}", asinc fn (req){
-#     def res = espera servidor(espera req::leer());
-#     espera req::escribir(res);
-#   });
-# }
-# 
-# espera servidorHTTP(asinc fn(req){
-#   Consola::pintar(req);
-#   const peticion_cruda = Cadena(req);
-#   const r = peticion_cruda::remplaza('\r','')::partir('\n');
-#   def data = r[0];
-#   si(data=='GET /favicon.ico HTTP/1.1') ret 'HTTP/1.1 301\nLocation: https://aga-mca.pages.dev/favicon.ico'::bytes();
-#   ret "HTTP/1.1 200\nContent-Type: text/plain; charset=utf-8\n\n¡Hola {data}!"::bytes();
-# }, 80);
+(Mate::TAU - 2(Mate::PI)) >> csl;

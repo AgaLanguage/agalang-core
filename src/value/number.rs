@@ -1,16 +1,10 @@
-#![allow(dead_code)]
 use std::{
   fmt::Display,
   ops::{Add, Div, Mul, Neg, Sub, SubAssign},
   str::FromStr,
-  sync::LazyLock,
-  vec,
 };
 
 const DIVISION_DECIMALS: usize = 100;
-
-const DECIMALS_ZERO: Decimals = Decimals(vec![]);
-const DECIMALS_MIDDLE: LazyLock<Decimals> = LazyLock::new(|| Decimals(vec![5 << 4]));
 
 #[derive(Debug, Clone, Eq, PartialOrd, Hash)]
 pub struct Decimals(Vec<u8>);
@@ -143,8 +137,12 @@ impl UInt {
     self
   }
   pub fn digits(&self) -> Vec<u8> {
-    self.to_string().chars().rev()
-      .map(|c| c.to_digit(10).unwrap() as u8).collect()
+    self
+      .to_string()
+      .chars()
+      .rev()
+      .map(|c| c.to_digit(10).unwrap() as u8)
+      .collect()
   }
 }
 
@@ -156,7 +154,16 @@ impl Display for UInt {
       let (byte_1, byte_0) = ((byte & 0xF0) >> 4, byte & 0x0F);
       result.push_str(&format!("{:X}{:X}", byte_1, byte_0));
     }
-    write!(f, "{}", result.trim_start_matches('0'))
+    let trim_result = result.trim_start_matches('0');
+    write!(
+      f,
+      "{}",
+      if trim_result.is_empty() {
+        "0"
+      } else {
+        trim_result
+      }
+    )
   }
 }
 impl PartialEq for UInt {
@@ -227,38 +234,49 @@ impl Add for &UInt {
 }
 impl Sub for &UInt {
   type Output = UInt;
+
   fn sub(self, rhs: Self) -> Self::Output {
-    let self_vec = self.clone().0.iter().rev().cloned().collect::<Vec<_>>();
-    let rhs_vec = rhs.clone().0.iter().rev().cloned().collect::<Vec<_>>();
-    let mut carry = 0;
+    let lhs = &self.0;
+    let rhs = &rhs.0;
+
     let mut result = Vec::new();
-    let max_len = self_vec.len().max(rhs_vec.len());
+    let mut carry = 0;
+
+    // Asumimos que lhs >= rhs
+    let max_len = lhs.len().max(rhs.len());
+
     for i in 0..max_len {
-      let i = max_len - 1 - i;
-      let a = *self_vec.get(i).unwrap_or(&0);
-      let b = *rhs_vec.get(i).unwrap_or(&0);
+      let a = *lhs.get(lhs.len().wrapping_sub(1 + i)).unwrap_or(&0);
+      let b = *rhs.get(rhs.len().wrapping_sub(1 + i)).unwrap_or(&0);
 
-      let (a_byte_1, a_byte_0) = ((a & 0xF0) >> 4, a & 0x0F);
-      let (b_byte_1, b_byte_0) = ((b & 0xF0) >> 4, b & 0x0F);
+      // Extraer nibbles altos y bajos
+      let (a1, a0) = ((a >> 4) & 0x0F, a & 0x0F);
+      let (b1, b0) = ((b >> 4) & 0x0F, b & 0x0F);
 
-      let b_byte_0_c = b_byte_0 + carry;
-      let sub_0 = if a_byte_0 < b_byte_0_c {
+      // Resta del nibble bajo
+      let mut sub0 = a0 as i8 - b0 as i8 - carry;
+      carry = 0;
+      if sub0 < 0 {
+        sub0 += 10;
         carry = 1;
-        b_byte_0_c - a_byte_0
-      } else {
-        carry = 0;
-        a_byte_0 - b_byte_0_c
-      };
-      let b_byte_1_c = b_byte_1 + carry;
-      let sub_1 = if a_byte_1 < b_byte_1_c {
+      }
+
+      // Resta del nibble alto
+      let mut sub1 = a1 as i8 - b1 as i8 - carry;
+      carry = 0;
+      if sub1 < 0 {
+        sub1 += 10;
         carry = 1;
-        b_byte_1_c - a_byte_1
-      } else {
-        carry = 0;
-        a_byte_1 - b_byte_1_c
-      };
-      result.push(sub_1 << 4 | sub_0);
+      }
+
+      result.push(((sub1 as u8) << 4) | (sub0 as u8));
     }
+
+    // Eliminar ceros a la izquierda, excepto si es cero solo
+    while result.len() > 1 && *result.last().unwrap() == 0 {
+      result.pop();
+    }
+
     result.reverse();
     UInt(result)
   }
@@ -286,7 +304,11 @@ impl Mul for &UInt {
       result.pop();
     }
 
-    let result_str: String = result.into_iter().rev().map(|d| std::char::from_digit(d as u32, 10).unwrap()).collect();
+    let result_str: String = result
+      .into_iter()
+      .rev()
+      .map(|d| std::char::from_digit(d as u32, 10).unwrap())
+      .collect();
     UInt::from(result_str)
   }
 }
@@ -398,7 +420,7 @@ impl BasicNumber {
   pub fn is_zero(&self) -> bool {
     match self {
       Self::Int(_, x) => x.is_zero(),
-      Self::Float(_, y_int, y_dec) => y_int.is_zero() && y_dec == &DECIMALS_ZERO,
+      Self::Float(_, y_int, y_dec) => y_int.is_zero() && y_dec.to_string() == "0",
     }
   }
   pub fn abs(&self) -> Self {
@@ -411,7 +433,7 @@ impl BasicNumber {
     match self {
       Self::Int(x_neg, x) => Self::Int(x_neg.clone(), x.clone()),
       Self::Float(x_neg, x_int, x_dec) => {
-        if x_dec == &DECIMALS_ZERO {
+        if x_dec.to_string() == "0" {
           return Self::Int(*x_neg, x_int.clone());
         }
         if *x_neg {
@@ -442,21 +464,26 @@ impl BasicNumber {
         if x_dec.is_zero() {
           return Self::Int(*x_neg, x.clone());
         }
-        if *x_dec > DECIMALS_MIDDLE.clone() {
-          return Self::Int(*x_neg, x.clone() + UInt::from(1));
-        }
-        if *x_dec < DECIMALS_MIDDLE.clone() {
-          return Self::Int(*x_neg, x.clone() - UInt::from(1));
+        for (i, char) in x_dec.to_string().chars().enumerate() {
+          let digit = char.to_digit(10).unwrap();
+          if digit > 5 || i > 0 {
+            // 0.5x | x >= 0
+            return Self::Int(*x_neg, x.clone() + 1.into());
+          }
+          if digit < 5 {
+            return Self::Int(*x_neg, x.clone() - 1.into());
+          }
         }
         // si el decimal es 0.5 se redondea al par más cercano
         Self::Int(
           *x_neg,
           x.clone()
             + if x.0.last().unwrap_or(&0) % 2 == 0 {
-              UInt::from(0)
+              0
             } else {
-              UInt::from(1)
-            },
+              1
+            }
+            .into(),
         )
       }
     }
@@ -514,7 +541,7 @@ impl Add for BasicNumber {
         }
         let mut carry = 0;
         let z_dec = if x_dec.is_zero() && y_dec.is_zero() {
-          DECIMALS_ZERO.clone()
+          Decimals(vec![])
         } else if x_dec.is_zero() {
           y_dec.clone()
         } else if y_dec.is_zero() {
@@ -542,100 +569,71 @@ impl Add for BasicNumber {
         Self::Float(x_neg, x + y + UInt(vec![carry]), z_dec)
       }
       (Self::Int(x_neg, x), Self::Float(y_neg, y, y_dec)) => {
-        Self::Float(x_neg, x.clone(), DECIMALS_ZERO.clone()) + Self::Float(y_neg, y, y_dec)
+        Self::Float(x_neg, x.clone(), Decimals(vec![])) + Self::Float(y_neg, y, y_dec)
       }
       (Self::Float(x_neg, x, x_dec), Self::Int(y_neg, y)) => {
-        Self::Float(x_neg, x.clone(), x_dec.clone()) + Self::Float(y_neg, y, DECIMALS_ZERO.clone())
+        Self::Float(x_neg, x.clone(), x_dec.clone()) + Self::Float(y_neg, y, Decimals(vec![]))
       }
     }
   }
 }
 impl Sub for BasicNumber {
   type Output = Self;
+
   fn sub(self, rhs: Self) -> Self::Output {
     match (self, rhs) {
       (Self::Int(x_neg, x), Self::Int(y_neg, y)) => {
-        if x_neg == y_neg {
-          return Self::Int(x_neg, x - y);
+        if x_neg != y_neg {
+          // x - (-y) = x + y  || -x - y = -(x + y)
+          return Self::Int(x_neg, x + y);
         }
-        if (x.is_zero() && y.is_zero()) || (x == y) {
+        if x == y {
           return Self::Int(false, UInt::from(0));
         }
-        if y > x {
-          return Self::Int(y_neg, y - x);
+        if x > y {
+          Self::Int(x_neg, x - y)
+        } else {
+          Self::Int(!y_neg, y - x)
         }
-        return Self::Int(x_neg, x + y);
       }
+
       (Self::Float(x_neg, x, x_dec), Self::Float(y_neg, y, y_dec)) => {
         if x_neg != y_neg {
-          // x - (-y) = x + y
-          // -x -y = -(x + y)
-          // El signo de x siempre es igual al signo comun
+          // x - (-y) = x + y  || -x - y = -(x + y)
           return Self::Float(x_neg, x, x_dec) + Self::Float(x_neg, y, y_dec);
         }
-        let (signe, (x, x_dec), (y, y_dec)) = if x > y {
-          (x_neg, (x, x_dec), (y, y_dec))
-        } else if y > x {
-          (!y_neg, (y, y_dec), (x, x_dec))
-        } else if x_dec > y_dec {
-          (x_neg, (x, x_dec), (y, y_dec))
-        } else if y_dec > x_dec {
-          (!y_neg, (y, y_dec), (x, x_dec))
-        } else {
-          return Self::Int(false, UInt::from(0));
-        };
-        if y.is_zero() && y_dec.is_zero() {
-          return Self::Float(signe, x, x_dec);
-        }
-        if y_dec.is_zero() {
-          return Self::Float(signe, x - y, x_dec);
-        }
+        let mut x_dec = x_dec.to_string();
+        let mut y_dec = y_dec.to_string();
+        let decimals = x_dec.len().max(y_dec.len());
+        x_dec.extend(std::iter::repeat('0').take(decimals - x_dec.len()));
+        y_dec.extend(std::iter::repeat('0').take(decimals - y_dec.len()));
 
-        let mut carry = if x_dec < y_dec { 1 } else { 0 };
-        let z_dec = if x_dec.is_zero() && y_dec.is_zero() {
-          DECIMALS_ZERO.clone()
-        } else if y_dec.is_zero() {
-          x_dec.clone()
-        } else {
-          let mut result = Vec::new();
-          let x_vec = x_dec.0.iter().rev().cloned().collect::<Vec<_>>();
-          let y_vec = y_dec.0.iter().rev().cloned().collect::<Vec<_>>();
-          let max_len = x_vec.len().max(y_vec.len());
-          for i in 0..max_len {
-            let a = *x_vec.get(i).unwrap_or(&0);
-            let b = *y_vec.get(i).unwrap_or(&0);
-            let (a_byte_1, a_byte_0) = ((a & 0xF0) >> 4, a & 0x0F);
-            let (b_byte_1, b_byte_0) = ((b & 0xF0) >> 4, b & 0x0F);
-
-            let b_byte_0_c = b_byte_0 + carry;
-            let sub_0 = if a_byte_0 < b_byte_0_c {
-              carry = 1;
-              b_byte_0_c - a_byte_0
-            } else {
-              carry = 0;
-              a_byte_0 - b_byte_0_c
-            };
-            let b_byte_1_c = b_byte_1 + carry;
-            let sub_1 = if a_byte_1 < b_byte_1_c {
-              carry = 1;
-              b_byte_1_c - a_byte_1
-            } else {
-              carry = 0;
-              a_byte_1 - b_byte_1_c
-            };
-            result.push(sub_1 << 4 | sub_0);
-          }
-          result.reverse();
-          Decimals(result)
+        let x_full = UInt::from(format!("{}{}", x, x_dec));
+        let y_full = UInt::from(format!("{}{}", y, y_dec));
+        let (z_neg, z) = match x_full.cmp(&y_full) {
+          std::cmp::Ordering::Greater => (x_neg, x_full - y_full),
+          std::cmp::Ordering::Less => (!y_neg, y_full - x_full),
+          std::cmp::Ordering::Equal => return Self::Int(false, UInt::from(0)),
         };
 
-        Self::Float(signe, x - y - UInt(vec![carry]), z_dec)
+        let z_str = z.to_string();
+        let z_len = z_str.len();
+
+        let (z, z_dec) = if z_len > decimals {
+          let (int,dec) = z_str.split_at(z_len - decimals);
+          (int.to_string(), dec.to_string())
+        } else {
+          ("0".to_string(), format!("{:0>width$}", z_str, width = decimals))
+        };
+
+        Self::Float(z_neg, UInt::from(z), Decimals::from(z_dec))
       }
+
       (Self::Int(x_neg, x), Self::Float(y_neg, y, y_dec)) => {
-        Self::Float(x_neg, x.clone(), DECIMALS_ZERO.clone()) - Self::Float(y_neg, y, y_dec)
+        Self::Float(x_neg, x, Decimals(vec![])) - Self::Float(y_neg, y, y_dec)
       }
       (Self::Float(x_neg, x, x_dec), Self::Int(y_neg, y)) => {
-        Self::Float(x_neg, x.clone(), x_dec.clone()) - Self::Float(y_neg, y, DECIMALS_ZERO.clone())
+        Self::Float(x_neg, x, x_dec) - Self::Float(y_neg, y, Decimals(vec![]))
       }
     }
   }
@@ -653,7 +651,6 @@ impl Mul for BasicNumber {
         let y_str = format!("{}{}", y, y_dec);
         let y: UInt = y_str.into();
         let mut decimals = x_dec.len() + y_dec.len();
-
 
         let result = x * y;
         let result = result.to_string();
@@ -676,11 +673,11 @@ impl Mul for BasicNumber {
         Self::Float(x_neg ^ y_neg, int_part.into(), frac_part.into())
       }
       (Self::Int(x_neg, x), Self::Float(y_neg, y, y_dec)) => {
-        Self::Float(x_neg ^ y_neg, x.clone(), DECIMALS_ZERO.clone()) * Self::Float(false, y, y_dec)
+        Self::Float(x_neg ^ y_neg, x.clone(), Decimals(vec![])) * Self::Float(false, y, y_dec)
       }
       (Self::Float(x_neg, x, x_dec), Self::Int(y_neg, y)) => {
         Self::Float(x_neg ^ y_neg, x.clone(), x_dec.clone())
-          * Self::Float(false, y, DECIMALS_ZERO.clone())
+          * Self::Float(false, y, Decimals(vec![]))
       }
     }
   }
@@ -721,11 +718,11 @@ impl Div for BasicNumber {
         Self::Float(x_neg ^ y_neg, int_part.into(), frac_part.into())
       }
       (Self::Int(x_neg, x), Self::Float(y_neg, y, y_dec)) => {
-        Self::Float(x_neg ^ y_neg, x.clone(), DECIMALS_ZERO.clone()) / Self::Float(false, y, y_dec)
+        Self::Float(x_neg ^ y_neg, x.clone(), Decimals(vec![])) / Self::Float(false, y, y_dec)
       }
       (Self::Float(x_neg, x, x_dec), Self::Int(y_neg, y)) => {
         Self::Float(x_neg ^ y_neg, x.clone(), x_dec.clone())
-          / Self::Float(false, y, DECIMALS_ZERO.clone())
+          / Self::Float(false, y, Decimals(vec![]))
       }
     }
   }
@@ -848,6 +845,22 @@ impl Number {
       }
     }
   }
+  pub fn round(&self) -> Self {
+    match self {
+      Self::NaN => Self::NaN,
+      Self::Infinity => Self::Infinity,
+      Self::NegativeInfinity => Self::NegativeInfinity,
+      Self::Basic(x) => Self::Basic(x.round()),
+      Self::Complex(x, y) => {
+        let x = x.round();
+        let y = y.round();
+        if y.is_zero() {
+          return Self::Basic(x);
+        }
+        Self::Complex(x, y)
+      }
+    }
+  }
   pub const fn is_nan(&self) -> bool {
     matches!(self, Self::NaN)
   }
@@ -885,7 +898,7 @@ impl From<&char> for Number {
   }
 }
 impl FromStr for Number {
-  type Err = ();
+  type Err = String;
   fn from_str(s: &str) -> Result<Self, Self::Err> {
     if s == "infinito" {
       return Ok(Self::Infinity);
@@ -900,20 +913,37 @@ impl FromStr for Number {
       let parts: Vec<&str> = s.split("i").collect();
       let i_exp = parts.len() - 1;
       let number = parts.join("").into();
+      for (i, part) in parts.iter().enumerate() {
+        if i == 0 {
+          continue;
+        }
+        if part
+          .chars()
+          .any(|c| c.is_digit(10) || c == '-' || c == '+' || c == '.')
+        {
+          return Err(format!(
+            "No se puede poner numeros despues de las constantes: {}",
+            part
+          ));
+        }
+      }
       let i_exp = i_exp % 4;
-      // is real i^x, x%2 = 0
-      let (x, y) = if i_exp % 2 == 0 {
-        (number, BasicNumber::Int(false, UInt::from(0)))
+
+      return if i_exp == 1 {
+        Ok(Self::Complex(
+          BasicNumber::Int(false, UInt::from(0)),
+          number,
+        ))
+      } else if i_exp == 2 {
+        Ok(Self::Basic(-number))
+      } else if i_exp == 3 {
+        Ok(Self::Complex(
+          BasicNumber::Int(false, UInt::from(0)),
+          -number,
+        ))
       } else {
-        (BasicNumber::Int(false, UInt::from(0)), number)
+        Ok(Self::Basic(number))
       };
-      // is negative i^x
-      let value = if i_exp == 3 || i_exp == 2 {
-        -Self::Complex(x, y)
-      } else {
-        Self::Complex(x, y)
-      };
-      return Ok(value);
     }
     if s.contains(".") {
       let parts: Vec<&str> = s.split(".").collect();
@@ -928,7 +958,7 @@ impl FromStr for Number {
     if s.chars().all(|c| c.is_digit(10)) {
       return Ok(Self::Basic(BasicNumber::Int(false, s.to_string().into())));
     }
-    Err(())
+    Err(format!("No se puede convertir el string '{s}' a un número",))
   }
 }
 impl From<usize> for Number {

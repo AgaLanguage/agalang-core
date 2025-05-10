@@ -1,15 +1,14 @@
 use vm::VM;
 
-use crate::parser::Node;
+use crate::{parser::Node, value::Value};
 
-mod chunk;
 mod compiler;
 mod vm;
 
-pub use chunk::ChunkGroup;
+pub use compiler::ChunkGroup;
 
-pub fn main(node: &Node) -> Result<(), String> {
+pub fn main(node: &Node) -> Result<Value, String> {
   let mut vm = VM::new(node.into());
   vm.interpret();
-  Ok(())
+  Ok(vm.as_value())
 }

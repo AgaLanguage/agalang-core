@@ -2,6 +2,7 @@ use crate::{bytecode::ChunkGroup, value::Value};
 
 const REPLACE: &str = "remplaza";
 const SPLIT: &str = "separa";
+const BYTES: &str = "bytes";
 
 pub fn string_proto() -> Value {
   let mut hashmap = std::collections::HashMap::new();
@@ -26,6 +27,22 @@ pub fn string_proto() -> Value {
           let string = this.as_string();
           let string = string.replace(&old, &new);
           Ok(Value::String(string.into()))
+        },
+        chunk: ChunkGroup::default(),
+      },
+    )),
+  );
+
+  hashmap.insert(
+    BYTES.into(),
+    crate::value::Value::Object(crate::value::Object::Function(
+      crate::value::Function::Native {
+        name: BYTES.into(),
+        path: format!("<cadena>::{BYTES}"),
+        func: |this, _| {
+          let string = this.as_string();
+          let list = string.as_bytes().iter().map(|b|Value::Byte(*b)).collect::<Vec<_>>();
+          Ok(Value::Object(list.into()))
         },
         chunk: ChunkGroup::default(),
       },
