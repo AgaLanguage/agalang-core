@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::value::{Number, Object, Value};
+use crate::bytecode::value::{Function, Number, Object, Value};
 
 pub const MATH_LIB: &str = ":mate";
 const CEIL: &str = "techo";
@@ -11,13 +11,14 @@ const MIN: &str = "min";
 const PI: &str = "PI";
 const EULER: &str = "E";
 const TAU: &str = "TAU";
+const IS_INFINITE: &str = "esInfinito";
 
 pub fn math_lib() -> Value {
   let mut hashmap = HashMap::new();
 
   hashmap.insert(
     FLOOR.into(),
-    Value::Object(Object::Function(crate::value::Function::Native {
+    Value::Object(Object::Function(Function::Native {
       name: format!("<{MATH_LIB}>::{FLOOR}"),
       path: format!("<{MATH_LIB}>::{FLOOR}"),
       chunk: crate::bytecode::ChunkGroup::default(),
@@ -35,9 +36,29 @@ pub fn math_lib() -> Value {
       },
     })),
   );
+    hashmap.insert(
+    IS_INFINITE.into(),
+    Value::Object(Object::Function(Function::Native {
+      name: format!("<{MATH_LIB}>::{IS_INFINITE}"),
+      path: format!("<{MATH_LIB}>::{IS_INFINITE}"),
+      chunk: crate::bytecode::ChunkGroup::default(),
+      func: |_, args| {
+        let number = args
+          .get(0)
+          .ok_or_else(|| format!("{IS_INFINITE}: se esperaba 1 argumento y se recibieron 0"))?;
+
+        if number.is_number() {
+          let number = number.as_number();
+          Ok(Value::from(number.is_infinite()))
+        } else {
+          Err(format!("{IS_INFINITE}: se esperaba un número"))
+        }
+      },
+    })),
+  );
   hashmap.insert(
     ROUND.into(),
-    Value::Object(Object::Function(crate::value::Function::Native {
+    Value::Object(Object::Function(Function::Native {
       name: format!("<{MATH_LIB}>::{ROUND}"),
       path: format!("<{MATH_LIB}>::{ROUND}"),
       chunk: crate::bytecode::ChunkGroup::default(),
@@ -57,7 +78,7 @@ pub fn math_lib() -> Value {
   );
   hashmap.insert(
     CEIL.into(),
-    Value::Object(Object::Function(crate::value::Function::Native {
+    Value::Object(Object::Function(Function::Native {
       name: format!("<{MATH_LIB}>::{CEIL}"),
       path: format!("<{MATH_LIB}>::{CEIL}"),
       chunk: crate::bytecode::ChunkGroup::default(),
@@ -77,12 +98,12 @@ pub fn math_lib() -> Value {
   );
   hashmap.insert(
     MAX.into(),
-    Value::Object(Object::Function(crate::value::Function::Native {
+    Value::Object(Object::Function(Function::Native {
       name: format!("<{MATH_LIB}>::{MAX}"),
       path: format!("<{MATH_LIB}>::{MAX}"),
       chunk: crate::bytecode::ChunkGroup::default(),
       func: |_, args| {
-        let mut max = crate::value::Number::NegativeInfinity;
+        let mut max = Number::NegativeInfinity;
         for arg in args {
           if arg.is_number() {
             let number = arg.as_number();
@@ -99,12 +120,12 @@ pub fn math_lib() -> Value {
   );
   hashmap.insert(
     MIN.into(),
-    Value::Object(Object::Function(crate::value::Function::Native {
+    Value::Object(Object::Function(Function::Native {
       name: format!("<{MATH_LIB}>::{MIN}"),
       path: format!("<{MATH_LIB}>::{MIN}"),
       chunk: crate::bytecode::ChunkGroup::default(),
       func: |_, args| {
-        let mut min = crate::value::Number::NegativeInfinity;
+        let mut min = Number::NegativeInfinity;
         for arg in args {
           if arg.is_number() {
             let number = arg.as_number();

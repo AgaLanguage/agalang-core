@@ -1,9 +1,6 @@
-#![allow(dead_code)]
 pub mod list;
 mod tokenize;
 mod colors;
-pub mod cache;
-pub mod lazy;
 
 pub use tokenize::*;
 pub use colors::Color;

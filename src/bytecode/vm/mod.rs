@@ -1,200 +1,39 @@
 use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::Path;
 use std::rc::Rc;
 
-use super::compiler::{ChunkGroup, OpCode, Compiler};
-use crate::libs::libs;
-use crate::util::cache::DataManager;
-use crate::value::{Function, Value, FALSE_NAME, NEVER_NAME, NULL_NAME, TRUE_NAME};
-const THIS_NAME: &str = "esto";
-const SUPER_NAME: &str = "super";
+use super::cache::Cache;
+use super::compiler::{ChunkGroup, Compiler, OpCode};
+use super::libs::libs;
+use super::stack::{call_stack_to_string, CallFrame, InterpretResult, VarsManager};
+use super::value::{Function, Value, Object};
 
-const KEYWORDS: [&str; 6] = [
-  FALSE_NAME,
-  NULL_NAME,
-  TRUE_NAME,
-  NEVER_NAME,
-  THIS_NAME,
-  SUPER_NAME,
-];
-
-type RC<T> = Rc<RefCell<T>>;
-fn rc<T>(t: T) -> Rc<RefCell<T>> {
-  Rc::new(RefCell::new(t))
-}
-
-#[derive(PartialEq)]
-pub enum InterpretResult {
-  Ok,
-  Continue,
-  CompileError(String),
-  RuntimeError(String),
-}
-
-struct VarsManager {
-  variables: HashMap<String, Value>,
-  constants: HashSet<String>,
-  link: Option<RC<VarsManager>>,
-}
-impl VarsManager {
-  pub fn new() -> Self {
-    Self {
-      variables: HashMap::new(),
-      constants: HashSet::new(),
-      link: None,
-    }
-  }
-  pub fn get_global() -> Self {
-    let mut this = Self::new();
-    this.declare_keyword(NEVER_NAME, Value::Never);
-    this.declare_keyword(NULL_NAME, Value::Null);
-    this.declare_keyword(FALSE_NAME, Value::False);
-    this.declare_keyword(TRUE_NAME, Value::True);
-    this
-  }
-  pub fn crate_child(parent: RC<Self>) -> Self {
-    let mut this = Self::new();
-    this.link = Some(parent);
-    this
-  }
-  fn declare_keyword(&mut self, name: &str, value: Value) {
-    self.variables.insert(name.to_string(), value.clone());
-  }
-  pub fn declare(&mut self, name: &str, value: Value, is_constant: bool) -> Option<Value> {
-    if KEYWORDS.contains(&name) {
-      return None;
-    }
-    if self.variables.contains_key(name) {
-      return None;
-    }
-    if is_constant {
-      self.constants.insert(name.to_string());
-    }
-    self.variables.insert(name.to_string(), value.clone());
-    Some(value)
-  }
-  pub fn has(&self, name: &str) -> bool {
-    self.variables.contains_key(name)
-  }
-  pub fn get(&self, name: &str) -> Option<&Value> {
-    self.variables.get(name)
-  }
-  pub fn assign(&mut self, name: &str, value: Value) -> Option<Value> {
-    if !self.variables.contains_key(name) || self.constants.contains(name) || KEYWORDS.contains(&name) {
-      return None;
-    };
-    self.variables.insert(name.to_string(), value.clone());
-    Some(value)
-  }
-  pub fn set_this(mut self, this: Value) -> Self{
-    self.declare_keyword(THIS_NAME, this);
-    self
-  }
-}
-
-struct Cache {
-  proto: DataManager<String, Value>,
-  libs: DataManager<String, Value>,
-}
-impl Cache {
-  pub fn new() -> Self {
-    Self {
-      proto: DataManager::new(),
-      libs: DataManager::new(),
-    }
-  }
-}
-struct CallFrame {
-  ip: usize,
-  function: Function,
-  locals: Vec<RC<VarsManager>>,
-}
-impl CallFrame {
-  pub fn new(compiler: Compiler, vars: RC<VarsManager>) -> Self {
-    Self {
-      ip: 0,
-      function: compiler.function,
-      locals: vec![rc(VarsManager::crate_child(vars))],
-    }
-  }
-  fn current_chunk(&mut self) -> &mut ChunkGroup {
-    self.function.chunk()
-  }
-  pub fn current_line(&mut self) -> usize {
-    let instruction = self.ip.saturating_sub(1);
-    let instruction = if instruction > self.ip {
-      0
-    } else {
-      instruction
-    };
-    self.current_chunk().get_line(instruction)
-  }
-  pub fn read(&mut self) -> u8 {
-    let ip = self.ip;
-    let byte = self.current_chunk().read(ip);
-    self.ip += 1;
-    byte
-  }
-  pub fn back(&mut self, offset: usize) {
-    self.ip -= offset;
-  }
-  pub fn advance(&mut self, offset: usize) {
-    self.ip += offset;
-  }
-  pub fn current_vars(&self) -> RC<VarsManager> {
-    self.locals.last().unwrap().clone()
-  }
-  pub fn resolve_vars(&mut self, name: &str) -> RC<VarsManager> {
-    let mut vars = self.current_vars();
-    for local in self.locals.clone() {
-      if local.borrow().has(name) {
-        vars = local
-      }
-    }
-    vars
-  }
-  pub fn add_vars(&mut self) {
-    self
-      .locals
-      .push(rc(VarsManager::crate_child(self.current_vars())));
-  }
-  pub fn pop_vars(&mut self) -> RC<VarsManager> {
-    self.locals.pop().unwrap()
-  }
-}
-impl std::fmt::Debug for CallFrame {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    write!(f, "\n\t{}", self.function.location())
-  }
-}
-fn call_stack_to_string(stack: &Vec<CallFrame>) -> String {
-  let mut string = String::new();
-  let mut index = stack.len();
-  while index > 0 {
-    index -= 1;
-    string.push_str(&format!("\n\t{}", stack[index].function.location()));
-  }
-  string
-}
 pub struct VM {
   path: Box<Path>,
   module: Value,
   stack: Vec<Value>,
-  globals: RC<VarsManager>,
+  globals: Rc<RefCell<VarsManager>>,
   call_stack: Vec<CallFrame>,
   cache: Cache,
 }
 
 impl VM {
   pub fn new(compiler: Compiler) -> Self {
-    // let compiler = {let mut compiler = compiler; compiler.chunk().print();compiler};
-    let globals = rc(VarsManager::get_global());
+    let compiler = {
+      let mut compiler = compiler;
+      compiler.function.chunk().print();
+      compiler
+    };
+    let globals = Rc::new(RefCell::new(VarsManager::get_global()));
     Self {
       path: Path::new(&compiler.path).into(),
-      module: Value::Object(crate::value::Object::Map(HashMap::new().into(), HashMap::new().into())),
+      module: Value::Object(Object::Map(
+        HashMap::new().into(),
+        HashMap::new().into(),
+      )),
       stack: vec![],
-      call_stack: vec![CallFrame::new(compiler, globals.clone())],
+      call_stack: vec![CallFrame::new_compiler(compiler, globals.clone())],
       globals,
       cache: Cache::new(),
     }
@@ -206,12 +45,12 @@ impl VM {
     self.call_stack.last_mut().unwrap()
   }
   fn current_chunk(&mut self) -> &mut ChunkGroup {
-    self.current_frame().function.chunk()
+    self.current_frame().current_chunk()
   }
-  fn current_vars(&mut self) -> RC<VarsManager> {
+  fn current_vars(&mut self) -> Rc<RefCell<VarsManager>> {
     self.current_frame().current_vars()
   }
-  fn resolve(&mut self, name: &str) -> RC<VarsManager> {
+  fn resolve(&mut self, name: &str) -> Rc<RefCell<VarsManager>> {
     let mut vars = self.globals.clone();
     for call in &mut self.call_stack {
       let local_vars = call.resolve_vars(name);
@@ -238,7 +77,7 @@ impl VM {
     eprintln!(
       "[linea {}] en {}",
       self.current_frame().current_line(),
-      self.current_frame().function.to_string()
+      self.current_frame().to_string()
     );
 
     self.reset_stack();
@@ -295,12 +134,16 @@ impl VM {
       if !callee.is_number() {
         return InterpretResult::RuntimeError("Se esperaba llamar una funcion [1]".into());
       }
-      if arity != 1 || args.len() != 1  {
-        return InterpretResult::RuntimeError("Solo se puede multiplicar un numero (llamada)".into());
+      if arity != 1 || args.len() != 1 {
+        return InterpretResult::RuntimeError(
+          "Solo se puede multiplicar un numero (llamada)".into(),
+        );
       }
       let arg = args.get(0).unwrap();
       if !arg.is_number() {
-        return InterpretResult::RuntimeError("Solo se pueden multiplicar numeros (llamada)".into());
+        return InterpretResult::RuntimeError(
+          "Solo se pueden multiplicar numeros (llamada)".into(),
+        );
       }
       let num = callee.as_number();
       let arg = arg.as_number();
@@ -315,18 +158,17 @@ impl VM {
     let function = obj.as_function();
     if let Function::Native { func, .. } = function {
       let value = func(this, args);
-      return if let Err(error) = value{
+      return if let Err(error) = value {
         InterpretResult::RuntimeError(error)
       } else {
         self.push(value.unwrap());
         InterpretResult::Continue
       };
     }
-    self.call_stack.push(CallFrame {
-      ip: 0,
-      function,
-      locals: vec![rc(VarsManager::crate_child(self.globals.clone()).set_this(this))],
-    });
+    let locals = vec![Rc::new(RefCell::new(
+      VarsManager::crate_child(self.globals.clone()).set_this(this),
+    ))];
+    self.call_stack.push(CallFrame::new(function, locals));
     InterpretResult::Continue
   }
   fn run_instruction(&mut self) -> InterpretResult {
@@ -478,8 +320,19 @@ impl VM {
         let _is_lazy = (meta_byte & 0b10) == 0b10;
         let alias = (meta_byte & 0b01) == 0b01;
 
-        let lib_name = if path.starts_with(":") {path}else {
-          self.path.parent().unwrap().join(path).canonicalize().unwrap().to_str().unwrap().to_string()
+        let lib_name = if path.starts_with(":") {
+          path
+        } else {
+          self
+            .path
+            .parent()
+            .unwrap()
+            .join(path)
+            .canonicalize()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_string()
         };
         let value = libs(lib_name, self.cache.libs.clone());
         if alias {

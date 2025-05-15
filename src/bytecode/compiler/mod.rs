@@ -4,7 +4,8 @@ mod chunk;
 
 pub use chunk::{ChunkGroup, OpCode};
 use crate::parser::{Node, NodeFunction};
-use crate::value::{Function, Number, Value, NEVER_NAME};
+
+use super::value::{Function, Number, Value, NEVER_NAME};
 
 const OBJECT_MEMBER: u8 = 0;
 const INSTANCE_MEMBER: u8 = 1;

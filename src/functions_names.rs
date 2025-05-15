@@ -7,6 +7,4 @@ pub const TO_AGAL_BOOLEAN: &str = "__bul__";
 
 pub const CALL: &str = "__ll__";
 
-pub const BINARY_OPERATION: &str = "__bin__";
-
 pub const CONSTRUCTOR: &str = "__constructor__";

@@ -1,6 +1,4 @@
-#![allow(dead_code)]
-
-use crate::value::{Value, ValueArray};
+use crate::bytecode::value::{Value, ValueArray};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum OpCode {

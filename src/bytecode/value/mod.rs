@@ -1,9 +1,8 @@
-#![allow(dead_code)]
 use std::{
   cell::RefCell, collections::{HashMap, HashSet}, hash::{Hash, Hasher}, rc::Rc
 };
 
-use crate::{bytecode::ChunkGroup, parser::NodeFunction, util::cache::DataManager};
+use crate::{bytecode::{ChunkGroup, DataCache}, parser::NodeFunction};
 mod number;
 pub use number::Number;
 
@@ -204,7 +203,7 @@ impl Object {
       _ => None,
     }
   }
-  pub fn get_instance_property(&self, key: &str, proto_cache: DataManager<String, Value>) -> Option<Value> {
+  pub fn get_instance_property(&self, key: &str, proto_cache: DataCache) -> Option<Value> {
     match (self, key) {
       (Self::Map(_, instance), key) => instance.borrow().get(key).cloned(),
       (Self::Array(array), "longitud") => Some(Value::Number(array.borrow().len().into())),
@@ -351,7 +350,7 @@ impl Value {
       Self::Object(x) => x.to_string(),
     }
   }
-  pub fn get_instance_property(&self, key: &str, proto_cache: DataManager<String, Value>) -> Option<Value> {
+  pub fn get_instance_property(&self, key: &str, proto_cache: DataCache) -> Option<Value> {
     match (self, key) {
       (Self::Object(o), key) => o.get_instance_property(key, proto_cache),
       (Self::String(s), "longitud") => Some(Self::Number(s.len().into())),
@@ -374,6 +373,15 @@ impl From<&str> for Value {
 impl From<Number> for Value {
   fn from(value: Number) -> Self {
     Self::Number(value)
+  }
+}
+impl From<bool> for Value {
+  fn from(value: bool) -> Self {
+      if value {
+        Self::True
+      }else {
+        Self::False
+      }
   }
 }
 

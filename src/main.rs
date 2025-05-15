@@ -3,10 +3,7 @@ use std::process::ExitCode;
 
 mod bytecode;
 mod parser;
-mod value;
-mod proto;
 mod util;
-mod libs;
 
 fn main() -> ExitCode {
   let file_name = match file() {
