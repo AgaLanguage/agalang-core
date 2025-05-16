@@ -26,6 +26,7 @@ impl<K: Eq + std::hash::Hash, V: Clone> DataManager<K, V> {
 
 pub type DataCache = DataManager<String, Value>;
 
+#[derive(Clone)]
 pub struct Cache {
   pub proto: DataCache,
   pub libs: DataCache,

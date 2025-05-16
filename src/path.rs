@@ -5,8 +5,6 @@ pub fn absolute_path(path: &str) -> String {
   let canonicalize = path_buf.canonicalize();
   let path_str = if let Ok(canonicalized) = canonicalize {
     canonicalized
-  } else if let Err(e) = canonicalize {
-    path_buf
   } else {
     path_buf
   }

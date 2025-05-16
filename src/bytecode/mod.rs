@@ -15,7 +15,8 @@ pub use cache::DataCache;
 pub use compiler::ChunkGroup;
 
 pub fn main(node: &Node) -> Result<Value, String> {
-  let mut vm = VM::new(node.into());
+  let binding = VM::new(node.into());
+  let mut vm = binding.borrow().clone().unwrap();
   vm.interpret();
-  Ok(vm.as_value())
+  Ok(vm.clone().as_value())
 }

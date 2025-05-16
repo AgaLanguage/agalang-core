@@ -33,6 +33,7 @@ pub enum OpCode {
   OpSetVar,
   OpLoop,
   OpImport,
+  OpExport,
   // Control
   OpPop,
   OpNewLocals,
@@ -87,6 +88,7 @@ impl From<u8> for OpCode {
       x if x == Self::OpReturn as u8 => Self::OpReturn,
       x if x == Self::OpCopy as u8 => Self::OpCopy,
       x if x == Self::OpImport as u8 => Self::OpImport,
+      x if x == Self::OpExport as u8 => Self::OpExport,
 
       _ => Self::OpNull,
     }
@@ -176,7 +178,7 @@ impl Chunk {
           offset += 2;
           (format!("{:04x}", (a << 8) | b), "--".into(), "-------------------------".into())
         }
-        OpCode::OpConstant | OpCode::OpGetVar | OpCode::OpConstDecl | OpCode::OpVarDecl | OpCode::OpArgDecl => {
+        OpCode::OpConstant | OpCode::OpGetVar | OpCode::OpConstDecl | OpCode::OpVarDecl | OpCode::OpArgDecl | OpCode::OpExport => {
           let index = self.read(offset);
           offset += 1;
           (

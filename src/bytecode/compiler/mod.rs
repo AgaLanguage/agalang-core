@@ -2,8 +2,8 @@ use std::collections::HashMap;
 
 mod chunk;
 
-pub use chunk::{ChunkGroup, OpCode};
 use crate::parser::{Node, NodeFunction};
+pub use chunk::{ChunkGroup, OpCode};
 
 use super::value::{Function, Number, Value, NEVER_NAME};
 
@@ -12,13 +12,13 @@ const INSTANCE_MEMBER: u8 = 1;
 
 pub struct Compiler {
   pub function: Function,
-  pub path: String
+  pub path: String,
 }
 impl Compiler {
   fn parse_function(function: &NodeFunction) -> Result<Function, String> {
     let mut compiler = Self {
       function: function.into(),
-      path: function.file.clone()
+      path: function.file.clone(),
     };
     let mut i = function.params.len();
     while i > 0 {
@@ -222,7 +222,10 @@ impl Compiler {
             if m.instance {
               return Err("No se puede asignar a una propiedad de instancia".to_string());
             }
-            self.write_buffer(vec![OpCode::OpSetMember as u8, OBJECT_MEMBER], m.location.start.line);
+            self.write_buffer(
+              vec![OpCode::OpSetMember as u8, OBJECT_MEMBER],
+              m.location.start.line,
+            );
           }
           _ => return Err("Se esperaba una assignacion valida".to_string()),
         };
@@ -306,7 +309,11 @@ impl Compiler {
               };
               self.set_constant(Value::String(name.into()), m.location.start.line);
             };
-            let is_instance = if m.instance { INSTANCE_MEMBER } else { OBJECT_MEMBER };
+            let is_instance = if m.instance {
+              INSTANCE_MEMBER
+            } else {
+              OBJECT_MEMBER
+            };
             self.write_buffer(
               vec![OpCode::OpGetMember as u8, is_instance],
               m.location.start.line,
@@ -347,7 +354,11 @@ impl Compiler {
               self.node_to_bytes(&key)?;
               self.node_to_bytes(&value)?;
               self.write_buffer(
-                vec![OpCode::OpSetMember as u8, OBJECT_MEMBER, OpCode::OpPop as u8],
+                vec![
+                  OpCode::OpSetMember as u8,
+                  OBJECT_MEMBER,
+                  OpCode::OpPop as u8,
+                ],
                 o.location.start.line,
               );
             }
@@ -355,7 +366,11 @@ impl Compiler {
               self.set_constant(Value::String(key), o.location.start.line);
               self.node_to_bytes(&value)?;
               self.write_buffer(
-                vec![OpCode::OpSetMember as u8, OBJECT_MEMBER, OpCode::OpPop as u8],
+                vec![
+                  OpCode::OpSetMember as u8,
+                  OBJECT_MEMBER,
+                  OpCode::OpPop as u8,
+                ],
                 o.location.start.line,
               );
             }
@@ -375,7 +390,11 @@ impl Compiler {
           };
           self.set_constant(Value::String(name.into()), m.location.start.line);
         };
-        let is_instance = if m.instance { INSTANCE_MEMBER } else { OBJECT_MEMBER };
+        let is_instance = if m.instance {
+          INSTANCE_MEMBER
+        } else {
+          OBJECT_MEMBER
+        };
         self.write_buffer(
           vec![OpCode::OpGetMember as u8, is_instance],
           m.location.start.line,
@@ -391,7 +410,11 @@ impl Compiler {
               self.set_constant(Value::Number(index.into()), a.location.start.line);
               self.node_to_bytes(&value)?;
               self.write_buffer(
-                vec![OpCode::OpSetMember as u8, OBJECT_MEMBER, OpCode::OpPop as u8],
+                vec![
+                  OpCode::OpSetMember as u8,
+                  OBJECT_MEMBER,
+                  OpCode::OpPop as u8,
+                ],
                 a.location.start.line,
               );
             }
@@ -426,6 +449,58 @@ impl Compiler {
           i.location.start.line,
         );
       }
+      Node::Export(e) => {
+        let name = match e.value.as_ref() {
+          Node::VarDecl(v) => {
+            let global =
+              self.set_constant(Value::String(v.name.as_str().into()), v.location.start.line);
+            let op;
+            if v.is_const {
+              match &v.value {
+                Some(value) => {
+                  self.node_to_bytes(&value)?;
+                }
+                None => {
+                  return Err(format!(
+                    "No se puede asignar '{}' a una constante",
+                    NEVER_NAME
+                  ))
+                }
+              }
+              op = OpCode::OpConstDecl as u8;
+            } else {
+              match &v.value {
+                Some(value) => {
+                  self.node_to_bytes(&value)?;
+                }
+                None => {
+                  self.set_constant(Value::Never, v.location.start.line);
+                }
+              };
+              op = OpCode::OpVarDecl as u8;
+            }
+            self.write_buffer(vec![op, global], v.location.start.line);
+            v.name.clone()
+          }
+          Node::Function(f) => {
+            let global =
+              self.set_constant(Value::String(f.name.as_str().into()), f.location.start.line);
+            
+            self.set_constant(
+              Value::Object(Self::parse_function(f)?.into()),
+              f.location.start.line,
+            );
+
+            self.write_buffer(
+              vec![OpCode::OpConstDecl as u8, global],
+              f.location.start.line,
+            );
+            f.name.clone()
+          }
+          _ => todo!(),
+        };
+        self.write_buffer(vec![OpCode::OpExport as u8], e.location.start.line);
+      }
       a => {
         return Err(format!(
           "{}: No es un nodo valido en bytecode",
@@ -440,7 +515,10 @@ impl From<&Node> for Compiler {
   fn from(value: &Node) -> Self {
     let path = value.get_file();
     let chunk = ChunkGroup::new();
-    let function = Function::Script { chunk, path: path.clone() };
+    let function = Function::Script {
+      chunk,
+      path: path.clone(),
+    };
     let mut compiler = Self { function, path };
     match compiler.node_to_bytes(value) {
       Err(e) => panic!("{e}"),

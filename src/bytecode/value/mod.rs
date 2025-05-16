@@ -190,19 +190,6 @@ impl Object {
       },
     }
   }
-  pub fn get_property(&self, key: &str) -> Option<Value> {
-    match self {
-      Self::Map(map, _) => map.borrow().get(key).cloned(),
-      Self::Array(array) => {
-        if let Ok(index) = key.parse::<usize>() {
-          array.borrow().get(index).cloned()
-        } else {
-          None
-        }
-      }
-      _ => None,
-    }
-  }
   pub fn get_instance_property(&self, key: &str, proto_cache: DataCache) -> Option<Value> {
     match (self, key) {
       (Self::Map(_, instance), key) => instance.borrow().get(key).cloned(),
@@ -281,18 +268,6 @@ impl Value {
   pub fn is_number(&self) -> bool {
     match self {
       Self::Number(_) => true,
-      _ => false,
-    }
-  }
-  pub fn is_boolean(&self) -> bool {
-    match self {
-      Self::False | Self::True => true,
-      _ => false,
-    }
-  }
-  pub fn is_null(&self) -> bool {
-    match self {
-      Self::Null => true,
       _ => false,
     }
   }
@@ -403,12 +378,6 @@ impl ValueArray {
   }
   pub fn len(&self) -> u8 {
     self.values.len() as u8
-  }
-  pub fn try_get(&self, index: u8) -> Option<&Value> {
-    if index as usize >= self.values.len() {
-      return None;
-    }
-    Some(&self.values[index as usize])
   }
   pub fn get(&self, index: u8) -> &Value {
     self.values.get(index as usize).expect(&format!(

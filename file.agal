@@ -1,3 +1,7 @@
 importa ':mate' como Mate;
+importa './sort.la' como Sort;
 
-(Mate::TAU - 2(Mate::PI)) >> csl;
+fn hola(){
+  csl << Sort::ordenar;
+}
+hola();

@@ -7,14 +7,16 @@ use super::value::Function;
 mod vars_manager;
 pub use vars_manager::VarsManager;
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone)]
 pub enum InterpretResult {
   Ok,
   Continue,
   CompileError(String),
   RuntimeError(String),
+  NativeError
 }
 
+#[derive(Clone)]
 pub struct CallFrame {
   ip: usize,
   function: Function,
