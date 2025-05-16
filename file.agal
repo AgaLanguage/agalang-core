@@ -1,7 +1,4 @@
-importa ':mate' como Mate;
-importa './sort.la' como Sort;
-
-fn hola(){
-  csl << Sort::ordenar;
+fn hola(ho){
+  const lista = [3,6,4,2,5,1];
 }
-hola();
+hola(1);

@@ -40,6 +40,9 @@ impl Compiler {
   fn set_constant(&mut self, value: Value, line: usize) -> u8 {
     self.function.chunk().write_constant(value, line)
   }
+  fn set_value(&mut self, value: Value) -> u8 {
+    self.function.chunk().add_value(value)
+  }
   fn write(&mut self, byte: u8, line: usize) {
     self.function.chunk().write(byte, line);
   }
@@ -70,6 +73,9 @@ impl Compiler {
           Number::from_str_radix(&n.value, n.base)
         };
         self.set_constant(Value::Number(number), n.location.start.line);
+      }
+      Node::Byte(n) => {
+        self.set_constant(Value::Byte(n.value), n.location.start.line);
       }
       Node::Binary(b) => {
         self.node_to_bytes(&b.left)?;
@@ -168,8 +174,6 @@ impl Compiler {
         }
       }
       Node::VarDecl(v) => {
-        let global =
-          self.set_constant(Value::String(v.name.as_str().into()), v.location.start.line);
         let op;
         if v.is_const {
           match &v.value {
@@ -195,16 +199,14 @@ impl Compiler {
           };
           op = OpCode::OpVarDecl as u8;
         }
-        self.write_buffer(vec![op, global], v.location.start.line);
+        let name = self.set_value(Value::String(v.name.as_str().into()));
+        self.write_buffer(vec![op, name], v.location.start.line);
       }
       Node::Assignment(a) => {
         match a.identifier.as_ref() {
           Node::Identifier(id) => {
-            let name = self.set_constant(
-              Value::String(id.name.as_str().into()),
-              id.location.start.line,
-            );
             self.node_to_bytes(&a.value)?;
+            let name = self.set_value(Value::String(id.name.as_str().into()));
             self.write_buffer(vec![OpCode::OpSetVar as u8, name], a.location.start.line);
           }
           Node::Member(m) => {
@@ -279,18 +281,13 @@ impl Compiler {
         self.write(OpCode::OpRemoveLocals as u8, f.location.start.line);
       }
       Node::Function(f) => {
-        let global =
-          self.set_constant(Value::String(f.name.as_str().into()), f.location.start.line);
-
         self.set_constant(
           Value::Object(Self::parse_function(f)?.into()),
           f.location.start.line,
         );
 
-        self.write_buffer(
-          vec![OpCode::OpConstDecl as u8, global],
-          f.location.start.line,
-        );
+        let name = self.set_value(Value::String(f.name.as_str().into()));
+        self.write_buffer(vec![OpCode::OpConstDecl as u8, name], f.location.start.line);
       }
       Node::Call(c) => {
         for arg in &c.arguments {

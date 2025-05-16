@@ -1,4 +1,4 @@
-use crate::bytecode::value::{Value, ValueArray};
+use crate::bytecode::value::{self, Value, ValueArray};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum OpCode {
@@ -297,8 +297,8 @@ impl ChunkGroup {
     self.write_buffer(vec![OpCode::OpArgDecl as u8, index], line);
     index
   }
-  pub fn write_constant(&mut self, value: Value, line: usize) -> u8 {
-    let index = if self.current_chunk_mut().constants.has_value(&value) {
+  pub fn add_value(&mut self, value: Value) -> u8 {
+    if self.current_chunk_mut().constants.has_value(&value) {
       self.current_chunk_mut().constants.get_index(&value).unwrap_or_default()
     }else{
       if self.current_chunk_mut().constants.len() >= u8::MAX {
@@ -307,7 +307,10 @@ impl ChunkGroup {
         self.aggregate_len.push(self.prev_aggregate_len());
       };
       self.current_chunk_mut().add_constant(value)
-    };
+    }
+  }
+  pub fn write_constant(&mut self, value: Value, line: usize) -> u8 {
+    let index = self.add_value(value);
     self.write_buffer(vec![OpCode::OpConstant as u8, index], line);
     index
   }

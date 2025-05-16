@@ -319,7 +319,7 @@ impl Value {
       Self::True => TRUE_NAME.to_string(),
       Self::Null => NULL_NAME.to_string(),
       Self::Never => NEVER_NAME.to_string(),
-      Self::Byte(b) => format!("0by{b:02X}"),
+      Self::Byte(b) => format!("0x{b:02X}"),
       Self::Number(x) => x.to_string(),
       Self::Char(c) => c.to_string(),
       Self::Object(x) => x.to_string(),

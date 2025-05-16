@@ -140,6 +140,9 @@ impl Thread {
         InterpretResult::Continue
       };
     }
+    for arg in args {
+      self.push(arg);
+    }
     let vars = self.current_vars();
     let locals = vec![Rc::new(RefCell::new(
       VarsManager::crate_child(vars.clone()).set_this(this),
@@ -153,18 +156,18 @@ impl Thread {
 
     //println!("{:<16} | {:?}", format!("{:?}", instruction), self.stack);
 
-    match instruction {
+    let value: Value = match instruction {
       OpCode::OpCopy => {
         let value = self.pop();
         self.push(value.clone());
-        self.push(value);
+        value
       }
       OpCode::OpApproximate => {
         let value = self.pop();
         if !value.is_number() {
           return InterpretResult::RuntimeError(format!("No se pudo operar '~x'"));
         }
-        self.push(Value::Number(value.as_number().round()));
+        Value::Number(value.as_number().round())
       }
       OpCode::OpSetMember => {
         let value = self.pop();
@@ -194,7 +197,7 @@ impl Thread {
           let map = obj.as_map();
           let mut map = map.0.borrow_mut();
           let value = map.insert(key.as_string(), value).unwrap_or_default();
-          self.stack.push(value);
+          value
         } else if obj.is_array() {
           let vec = obj.as_array();
           if !key.is_number() {
@@ -213,7 +216,7 @@ impl Thread {
             vec.resize(index + 1, Value::Never);
           }
           vec[index] = value.clone();
-          self.stack.push(value);
+          value
         } else {
           return InterpretResult::RuntimeError(format!(
             "Se esperaba un objeto para asignar la propiedad '{}' [2]",
@@ -252,7 +255,7 @@ impl Thread {
           } else {
             Value::Never
           };
-          self.stack.push(value);
+          value
         } else if obj.is_array() {
           let vec = obj.as_array();
           if !key.is_number() {
@@ -267,7 +270,7 @@ impl Thread {
           }
           let index = index.to_string().parse::<usize>().unwrap_or(0);
           let value = vec.borrow().get(index).cloned().unwrap_or_default();
-          self.stack.push(value);
+          value
         } else {
           return InterpretResult::RuntimeError(format!(
             "Se esperaba un objeto para obtener la propiedad '{}' [4]",
@@ -275,10 +278,7 @@ impl Thread {
           ));
         }
       }
-      OpCode::OpConstant => {
-        let constant = self.read_constant();
-        self.push(constant);
-      }
+      OpCode::OpConstant => self.read_constant(),
       OpCode::OpImport => {
         let module = self.pop();
         let path = module.as_string();
@@ -321,40 +321,43 @@ impl Thread {
           let name = self.current_chunk().read_constant(name_byte).as_string();
           self.declare(&name, value, true);
         }
-        self.push(module);
+        module
       }
       OpCode::OpJumpIfFalse => {
         let jump = self.read_short() as usize;
         if self.pop().as_boolean() == false {
           self.current_frame().advance(jump);
         }
+        return InterpretResult::Continue;
       }
       OpCode::OpArgDecl => {
         let name = self.read_string();
         let value = self.pop();
-        match self.declare(&name, value, true) {
+        return match self.declare(&name, value.clone(), true) {
           None => {
-            return InterpretResult::RuntimeError(format!(
-              "No se pudo declarar la variable '{name}'"
-            ))
+            InterpretResult::RuntimeError(format!("No se pudo declarar la variable '{name}'"))
           }
-          _ => {}
-        }
+          _ => InterpretResult::Continue,
+        };
       }
       OpCode::OpJump => {
         let jump = self.read_short() as usize;
         self.current_frame().advance(jump);
+        return InterpretResult::Continue;
       }
       OpCode::OpLoop => {
         let offset = self.read_short() as usize;
         self.current_frame().back(offset);
+        return InterpretResult::Continue;
       }
       OpCode::OpRemoveLocals => {
         self.current_frame().pop_vars();
+        return InterpretResult::Continue;
       }
       OpCode::OpNewLocals => {
         self.current_vars();
-        self.current_frame().add_vars()
+        self.current_frame().add_vars();
+        return InterpretResult::Continue;
       }
       OpCode::OpCall => {
         let arity = self.read() as usize;
@@ -379,32 +382,29 @@ impl Thread {
         if !obj.is_map() {
           return InterpretResult::RuntimeError("Se esperaba un objeto como modulo".to_string());
         }
-        self.push(value.clone());
-        obj.as_map().1.borrow_mut().insert(name, value);
+        obj.as_map().1.borrow_mut().insert(name, value.clone());
+        value
       }
       OpCode::OpVarDecl => {
         let name = self.read_string();
         let value = self.pop();
-        match self.declare(&name, value, false) {
+        return match self.declare(&name, value.clone(), false) {
           None => {
-            return InterpretResult::RuntimeError(format!(
-              "No se pudo declarar la variable '{name}'"
-            ))
+            InterpretResult::RuntimeError(format!("No se pudo declarar la variable '{name}'"))
           }
-          _ => {}
-        }
+          _ => InterpretResult::Continue,
+        };
       }
       OpCode::OpConstDecl => {
         let name = self.read_string();
         let value = self.pop();
-        match self.declare(&name, value, true) {
+        self.push(value.clone());
+        return match self.declare(&name, value.clone(), true) {
           None => {
-            return InterpretResult::RuntimeError(format!(
-              "No se pudo declarar la constante '{name}'"
-            ))
+            InterpretResult::RuntimeError(format!("No se pudo declarar la constante '{name}'"))
           }
-          _ => {}
-        }
+          _ => InterpretResult::Continue,
+        };
       }
       OpCode::OpGetVar => {
         let name = self.read_string();
@@ -419,22 +419,23 @@ impl Thread {
             Some(value) => value.clone(),
           }
         };
-        self.push(value);
+        value
       }
       OpCode::OpSetVar => {
         let name = self.read_string();
         let value = self.pop();
-        match self.assign(&name, value) {
+        match self.assign(&name, value.clone()) {
           None => {
             return InterpretResult::RuntimeError(format!(
               "No se pudo re-asignar la variable '{name}'"
             ))
           }
-          _ => {}
-        };
+          _ => value,
+        }
       }
       OpCode::OpPop => {
         self.pop();
+        return InterpretResult::Continue;
       }
       OpCode::OpAdd => {
         let b = self.pop();
@@ -461,7 +462,7 @@ impl Thread {
         }
         let a = a.as_number();
         let b = b.as_number();
-        self.push(Value::Number(a - b));
+        Value::Number(a - b)
       }
       OpCode::OpMultiply => {
         let b = self.pop();
@@ -471,7 +472,7 @@ impl Thread {
         }
         let a = a.as_number();
         let b = b.as_number();
-        self.push(Value::Number(a * b));
+        Value::Number(a * b)
       }
       OpCode::OpDivide => {
         let b = self.pop();
@@ -481,52 +482,54 @@ impl Thread {
         }
         let a = a.as_number();
         let b = b.as_number();
-        self.push(Value::Number(a / b));
+        Value::Number(a / b)
       }
       OpCode::OpOr => {
         let b = self.pop();
         let a = self.pop();
         if a.as_boolean() {
-          self.push(a);
+          a
+        } else {
+          b
         }
-        self.push(b);
       }
       OpCode::OpAnd => {
         let b = self.pop();
         let a = self.pop();
         if !a.as_boolean() {
-          self.push(a);
+          a
+        } else {
+          b
         }
-        self.push(b);
       }
       OpCode::OpNegate => {
         let value = self.pop();
         if !value.is_number() {
           return InterpretResult::RuntimeError(format!("No se pudo operar '-x'"));
         }
-        self.push(Value::Number(-value.as_number()));
+        Value::Number(-value.as_number())
       }
       OpCode::OpNot => {
         let value = self.pop().as_boolean();
         let value = if value { Value::False } else { Value::True };
-        self.push(value);
+        value
       }
       OpCode::OpAsBoolean => {
         let value = self.pop().as_boolean();
         let value = if value { Value::True } else { Value::False };
-        self.push(value);
+        value
       }
       OpCode::OpAsString => {
         let value = self.pop().as_string();
         let value = Value::Object(value.as_str().into());
-        self.push(value);
+        value
       }
       OpCode::OpConsoleOut => {
         let value = self.pop().as_string();
         print!("{value}");
         use std::io::Write as _;
         let _ = std::io::stdout().flush();
-        self.push(Value::Never);
+        Value::Never
       }
       OpCode::OpReturn => {
         self.call_stack.pop();
@@ -534,7 +537,7 @@ impl Thread {
         if self.call_stack.len() == 0 {
           return InterpretResult::Ok;
         }
-        self.push(value);
+        value
       }
 
       OpCode::OpEquals => {
@@ -553,8 +556,11 @@ impl Thread {
           self.push(value);
           return InterpretResult::Continue;
         }
-        let value = if a == b { Value::True } else { Value::False };
-        self.push(value);
+        if a == b {
+          Value::True
+        } else {
+          Value::False
+        }
       }
       OpCode::OpGreaterThan => {
         let b = self.pop();
@@ -564,8 +570,11 @@ impl Thread {
         }
         let a = a.as_number();
         let b = b.as_number();
-        let value = if a > b { Value::True } else { Value::False };
-        self.push(value);
+        if a > b {
+          Value::True
+        } else {
+          Value::False
+        }
       }
       OpCode::OpLessThan => {
         let b = self.pop();
@@ -580,15 +589,14 @@ impl Thread {
         let a = a.as_number();
         let b = b.as_number();
         let value = if a < b { Value::True } else { Value::False };
-        self.push(value);
+        value
       }
-      OpCode::OpBreak | OpCode::OpContinue => {
-        self.push(Value::Null);
-      }
+      OpCode::OpBreak | OpCode::OpContinue => Value::Null,
       OpCode::OpNull => {
         return InterpretResult::CompileError(format!("Byte invalido {}", byte_instruction))
       }
-    }
+    };
+    self.push(value);
     return InterpretResult::Continue;
   }
 }

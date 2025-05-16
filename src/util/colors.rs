@@ -21,7 +21,6 @@ pub enum Color {
 impl Color {
   pub const fn get(number: u8) -> Self {
     match number {
-      0 => Color::Reset,
       30 => Color::Black,
       31 => Color::Red,
       32 => Color::Green,
