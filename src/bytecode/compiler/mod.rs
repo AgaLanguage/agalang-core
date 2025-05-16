@@ -450,55 +450,7 @@ impl Compiler {
         );
       }
       Node::Export(e) => {
-        let name = match e.value.as_ref() {
-          Node::VarDecl(v) => {
-            let global =
-              self.set_constant(Value::String(v.name.as_str().into()), v.location.start.line);
-            let op;
-            if v.is_const {
-              match &v.value {
-                Some(value) => {
-                  self.node_to_bytes(&value)?;
-                }
-                None => {
-                  return Err(format!(
-                    "No se puede asignar '{}' a una constante",
-                    NEVER_NAME
-                  ))
-                }
-              }
-              op = OpCode::OpConstDecl as u8;
-            } else {
-              match &v.value {
-                Some(value) => {
-                  self.node_to_bytes(&value)?;
-                }
-                None => {
-                  self.set_constant(Value::Never, v.location.start.line);
-                }
-              };
-              op = OpCode::OpVarDecl as u8;
-            }
-            self.write_buffer(vec![op, global], v.location.start.line);
-            v.name.clone()
-          }
-          Node::Function(f) => {
-            let global =
-              self.set_constant(Value::String(f.name.as_str().into()), f.location.start.line);
-            
-            self.set_constant(
-              Value::Object(Self::parse_function(f)?.into()),
-              f.location.start.line,
-            );
-
-            self.write_buffer(
-              vec![OpCode::OpConstDecl as u8, global],
-              f.location.start.line,
-            );
-            f.name.clone()
-          }
-          _ => todo!(),
-        };
+        self.node_to_bytes(e.value.as_ref())?;
         self.write_buffer(vec![OpCode::OpExport as u8], e.location.start.line);
       }
       a => {

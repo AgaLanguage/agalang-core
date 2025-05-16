@@ -140,8 +140,9 @@ impl Thread {
         InterpretResult::Continue
       };
     }
+    let vars = self.current_vars();
     let locals = vec![Rc::new(RefCell::new(
-      VarsManager::crate_child(self.vm.borrow().as_ref().unwrap().globals.clone()).set_this(this),
+      VarsManager::crate_child(vars.clone()).set_this(this),
     ))];
     self.call_stack.push(CallFrame::new(function, locals));
     InterpretResult::Continue
@@ -227,8 +228,7 @@ impl Thread {
         if is_instance {
           let key = key.as_string();
           let proto = self.vm.borrow().as_ref().unwrap().cache.proto.clone();
-          if let Some(value) = object.get_instance_property(&key, proto)
-          {
+          if let Some(value) = object.get_instance_property(&key, proto) {
             self.push(value);
             return InterpretResult::Continue;
           }
@@ -302,13 +302,18 @@ impl Thread {
         };
         let proto = self.vm.borrow().as_ref().unwrap().cache.libs.clone();
         let value = libs(lib_name, proto, |path| {
-          let thread = Rc::new(RefCell::new(VM::resolve(self.vm.clone(), path, self.current_vars())));
+          let thread = Rc::new(RefCell::new(VM::resolve(
+            self.vm.clone(),
+            path,
+            self.current_vars(),
+          )));
           *self
             .module
             .borrow()
             .as_ref()
             .unwrap()
-            .sub_module.borrow_mut() = Some(thread.clone());
+            .sub_module
+            .borrow_mut() = Some(thread.clone());
           let x = thread.borrow().clone().as_value();
           x
         });
@@ -359,10 +364,12 @@ impl Thread {
       }
       OpCode::OpExport => {
         let name = self.pop().as_string();
-        let value = if let Some(value) = self.current_vars().borrow().get(&name) {
+        let value = if let Some(value) = self.get(&name) {
           value.clone()
-        }else {
-          return InterpretResult::RuntimeError(format!("Se exporto la funcion '{name}' antes de ser declarada"));
+        } else {
+          return InterpretResult::RuntimeError(format!(
+            "Se exporto la funcion '{name}' antes de ser declarada"
+          ));
         };
         let module = self.module.borrow().as_ref().unwrap().module.clone();
         if !module.is_object() {
