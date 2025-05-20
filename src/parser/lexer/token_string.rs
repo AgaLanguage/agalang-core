@@ -12,8 +12,8 @@ fn is_hexadecimal(v: Option<&char>) -> bool {
 pub fn token_string(
   quote: char,
   pos: util::Position,
-  line: String,
-  file_name: String,
+  line: &str,
+  file_name: &str,
 ) -> (util::Token<TokenType>, usize) {
   let col = pos.column;
   let src = line.chars().collect::<Vec<char>>();
@@ -41,10 +41,9 @@ pub fn token_string(
                 line: pos.line,
               },
               length: str_length - col,
-              file_name: file_name.clone(),
+              file_name: file_name.to_string(),
             },
             value: "Se esperaba un caracter literal".to_string(),
-            meta: format!("{line}\0{quote}{str}"),
           },
           str_length - col - 1,
         );
@@ -74,10 +73,9 @@ pub fn token_string(
                   line: pos.line,
                 },
                 length: str_length - col,
-                file_name: file_name.clone(),
+                file_name: file_name.to_string(),
               },
               value: "Se esperaba un numero hexadecimal".to_string(),
-              meta: format!("{line}\0{quote}{str}"),
             },
             str_length - col - 1,
           );
@@ -108,10 +106,9 @@ pub fn token_string(
                   line: pos.line,
                 },
                 length: str_length - col,
-                file_name: file_name.clone(),
+                file_name: file_name.to_string(),
               },
               value: "Se esperaba un numero hexadecimal".to_string(),
-              meta: format!("{line}\0{quote}{str}"),
             },
             str_length - col - 1,
           );
@@ -142,10 +139,9 @@ pub fn token_string(
             line: pos.line,
           },
           length: str_length - col,
-          file_name: file_name.clone(),
+          file_name: file_name.to_string(),
         },
         value: format!("Se esperaba un [{quote}] para cerrar la cadena"),
-        meta: format!("{line}\0{quote}{str}"),
       },
       str_length - col - 1,
     );
@@ -164,10 +160,9 @@ pub fn token_string(
           line: pos.line,
         },
         length: str_length - col,
-        file_name: file_name.clone(),
+        file_name: file_name.to_string(),
       },
       value: str,
-      meta: file_name,
     },
     str_length - col - 1,
   )

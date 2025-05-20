@@ -101,7 +101,9 @@ impl KeywordsType {
       KeywordsType::Delete => "borra",
     }
   }
-  pub fn to_string(&self) -> String {
-    self.as_str().to_string()
+}
+impl std::fmt::Display for KeywordsType {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+      write!(f, "{}", self.as_str())
   }
 }

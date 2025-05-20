@@ -1,4 +1,4 @@
-use crate::bytecode::value::{self, Value, ValueArray};
+use crate::bytecode::value::{Value, ValueArray};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum OpCode {
@@ -259,7 +259,7 @@ impl ChunkGroup {
       .chunks
       .get(resolved_index)
       .and_then(|chunk| chunk.lines.get(local_index))
-      .unwrap_or(&0) // Si quieres devolver Result o Option, se puede cambiar.
+      .unwrap_or(&0)
   }
 
   fn prev_aggregate_len(&self) -> usize {

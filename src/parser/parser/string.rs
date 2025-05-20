@@ -5,7 +5,6 @@ fn is_alpha(c: char) -> bool {
 }
 pub fn complex_string(
   token_string: util::Token<parser::TokenType>,
-  line: &str,
 ) -> Result<super::NodeString, super::NodeError> {
   let string = token_string.value;
   let mut result = util::List::new();
@@ -26,7 +25,6 @@ pub fn complex_string(
         return Err(super::NodeError {
           message: "No se encontro la apertura de el identificador".to_string(),
           location: token_string.location,
-          meta: format!("{}\0{}", line, string),
         });
       }
       let nc = nc.unwrap();
@@ -57,7 +55,6 @@ pub fn complex_string(
       return Err(super::NodeError {
         message: "Se esperaba un caracter literal".to_string(),
         location: token_string.location,
-        meta: format!("{}\0{}", line, string),
       });
     }
     let nc = nc.unwrap();
@@ -75,7 +72,6 @@ pub fn complex_string(
     return Err(super::NodeError {
       message: "Se esperaba cierre del identificador".to_string(),
       location: token_string.location,
-      meta: format!("{}\0{}", line, string),
     });
   }
   if current.len() > 0 {
@@ -84,6 +80,5 @@ pub fn complex_string(
   Ok(super::NodeString {
     value: result,
     location: token_string.location,
-    file: token_string.meta,
   })
 }

@@ -5,7 +5,7 @@ use std::rc::Rc;
 use thread::Thread;
 
 use super::cache::Cache;
-use super::compiler::Compiler;
+use super::compiler::{Compiler};
 use super::stack::{call_stack_to_string, CallFrame, InterpretResult, VarsManager};
 use super::value::{Object, Value};
 
@@ -48,6 +48,7 @@ pub struct VM {
 
 impl VM {
   pub fn new(compiler: Compiler) -> Rc<RefCell<Option<Self>>> {
+    //let compiler = {let mut compiler = compiler;compiler.function.chunk().print();compiler};
     let globals = Rc::new(RefCell::new(VarsManager::get_global()));
 
     let vm = Rc::new(RefCell::new(Some(Self {
@@ -92,28 +93,38 @@ impl VM {
   pub fn run(&mut self) -> InterpretResult {
     loop {
       let data = self.run_instruction();
-      if matches!(data, InterpretResult::Ok) && self.sub_threads.is_empty() {
-        return data;
+      match data {
+        InterpretResult::Ok => {
+          if self.sub_threads.is_empty() {
+            return data;
+          }
+        }
+        InterpretResult::Continue => {}
+        error => {
+          self.main.borrow().as_ref().unwrap().thread.borrow_mut().stack.clear();
+          return error;
+        }
       }
     }
   }
   pub fn interpret(&mut self) -> InterpretResult {
     let result = self.run();
-    let thread = self.main.borrow().as_ref().unwrap().thread.clone();
+    let binding = self.main.borrow();
+    let mut thread = binding.as_ref().unwrap().thread.borrow_mut();
     match &result {
-      InterpretResult::RuntimeError(e) => thread.borrow_mut().runtime_error(&format!(
+      InterpretResult::RuntimeError(e) => thread.clone().runtime_error(&format!(
         "Error en tiempo de ejecucion\n\t{}\n\t{}\n",
         e,
-        call_stack_to_string(&thread.borrow_mut().call_stack)
+        call_stack_to_string(&thread.call_stack)
       )),
       InterpretResult::CompileError(e) => {
-        thread.borrow_mut().runtime_error(&format!("Error en compilacion\n\t{}", e))
+        thread.runtime_error(&format!("Error en compilacion\n\t{}", e))
       }
       _ => {}
     };
-    let stack = thread.borrow_mut().stack.clone();
+    let stack = thread.stack.clone();
     if stack.len() != 0 {
-      thread.borrow_mut().runtime_error(&format!("Error de pila no vacia | {stack:?}"));
+      thread.runtime_error(&format!("Error de pila no vacia | {stack:?}"));
     }
     result
   }
@@ -135,11 +146,11 @@ impl VM {
       Some(value) => value,
     };
 
-    let ref ast = match crate::parser::Parser::new(file, &path).produce_ast() {
+    let ref ast = match crate::parser::Parser::new(&file, &path).produce_ast() {
       Err(a) => {
         crate::parser::print_error(crate::parser::error_to_string(
           &crate::parser::ErrorNames::SyntaxError,
-          crate::parser::node_error(&a),
+          crate::parser::node_error(&a, &file),
         ));
         result.status = InterpretResult::NativeError;
         return result;

@@ -1,5 +1,5 @@
 importa ':mate' como Mate;
-exporta fn ordenar(lista) {
+fn ordenar(lista) {
   def fin_c = lista::longitud;
   si fin_c <= 0 {
     ret lista;
@@ -38,3 +38,4 @@ exporta fn ordenar(lista) {
   quicksort(0, fin_c-1);
   ret lista;
 }
+exporta nombre ordenar;

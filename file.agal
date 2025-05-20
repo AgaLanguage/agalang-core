@@ -1,4 +1,2 @@
-fn hola(ho){
-  const lista = [3,6,4,2,5,1];
-}
-hola(1);
+importa ':consola' como Consola;
+233//-2 |> Consola::pintar;

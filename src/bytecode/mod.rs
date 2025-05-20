@@ -1,3 +1,4 @@
+use stack::InterpretResult;
 use value::Value;
 use vm::VM;
 
@@ -14,9 +15,14 @@ mod vm;
 pub use cache::DataCache;
 pub use compiler::ChunkGroup;
 
-pub fn main(node: &Node) -> Result<Value, String> {
+pub fn main(node: &Node) -> Result<Value, ()> {
   let binding = VM::new(node.into());
   let mut vm = binding.borrow().clone().unwrap();
-  vm.interpret();
+  match vm.interpret() {
+    InterpretResult::Ok => {}
+    _ => {
+      return Err(());
+    }
+  }
   Ok(vm.clone().as_value())
 }

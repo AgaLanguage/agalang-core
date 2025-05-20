@@ -66,12 +66,12 @@ impl Thread {
     self.resolve(name).borrow().get(name).cloned()
   }
   pub fn runtime_error(&mut self, message: &str) {
-    eprintln!("{}", message);
     eprintln!(
       "[linea {}] en {}",
       self.current_frame().current_line(),
       self.current_frame().to_string()
     );
+    eprintln!("{}", message);
 
     self.reset_stack();
   }
@@ -366,14 +366,8 @@ impl Thread {
         return self.call_value(this, callee, arity);
       }
       OpCode::OpExport => {
-        let name = self.pop().as_string();
-        let value = if let Some(value) = self.get(&name) {
-          value.clone()
-        } else {
-          return InterpretResult::RuntimeError(format!(
-            "Se exporto la funcion '{name}' antes de ser declarada"
-          ));
-        };
+        let name = self.read_string();
+        let value = self.pop();
         let module = self.module.borrow().as_ref().unwrap().module.clone();
         if !module.is_object() {
           return InterpretResult::RuntimeError("Se esperaba un objeto como modulo".to_string());
@@ -388,23 +382,26 @@ impl Thread {
       OpCode::OpVarDecl => {
         let name = self.read_string();
         let value = self.pop();
-        return match self.declare(&name, value.clone(), false) {
+        match self.declare(&name, value.clone(), false) {
           None => {
-            InterpretResult::RuntimeError(format!("No se pudo declarar la variable '{name}'"))
+            return InterpretResult::RuntimeError(format!(
+              "No se pudo declarar la variable '{name}'"
+            ))
           }
-          _ => InterpretResult::Continue,
-        };
+          _ => value,
+        }
       }
       OpCode::OpConstDecl => {
         let name = self.read_string();
         let value = self.pop();
-        self.push(value.clone());
-        return match self.declare(&name, value.clone(), true) {
+        match self.declare(&name, value.clone(), true) {
           None => {
-            InterpretResult::RuntimeError(format!("No se pudo declarar la constante '{name}'"))
+            return InterpretResult::RuntimeError(format!(
+              "No se pudo declarar la constante '{name}'"
+            ))
           }
-          _ => InterpretResult::Continue,
-        };
+          _ => value,
+        }
       }
       OpCode::OpGetVar => {
         let name = self.read_string();
@@ -416,7 +413,7 @@ impl Thread {
                 "No se pudo obtener la variable '{name}'"
               ))
             }
-            Some(value) => value.clone(),
+            Some(value) => value,
           }
         };
         value
@@ -539,24 +536,20 @@ impl Thread {
         }
         value
       }
-
       OpCode::OpEquals => {
         let b = self.pop();
         let a = self.pop();
         if a.is_number() && b.is_number() {
           let a = a.as_number();
           let b = b.as_number();
-          let value = if a.is_nan() || b.is_nan() {
+          if a.is_nan() || b.is_nan() {
             Value::False
           } else if a == b {
             Value::True
           } else {
             Value::False
-          };
-          self.push(value);
-          return InterpretResult::Continue;
-        }
-        if a == b {
+          }
+        } else if a == b {
           Value::True
         } else {
           Value::False

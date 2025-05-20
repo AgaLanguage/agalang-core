@@ -125,7 +125,7 @@ pub fn math_lib() -> Value {
       path: format!("<{MATH_LIB}>::{MIN}"),
       chunk: crate::bytecode::ChunkGroup::default(),
       func: |_, args| {
-        let mut min = Number::NegativeInfinity;
+        let mut min = Number::Infinity;
         for arg in args {
           if arg.is_number() {
             let number = arg.as_number();

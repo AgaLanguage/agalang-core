@@ -15,8 +15,24 @@ const OPERATORS: &str = "+-*/%=&|<>!^~?";
 const PUNCTUATION: &str = "(){}[],.;:";
 const COLOR: util::Color = util::Color::Cyan;
 
-fn token_error(token: &util::Token<TokenType>) -> ErrorTypes {
-  let (data_line, token_value) = util::split_meta(&token.meta);
+fn token_error(token: &util::Token<TokenType>, source: &str) -> ErrorTypes {
+    let binding = util::get_content(
+    source,
+    util::Position {
+      line: token.location.start.line,
+      column: 0,
+    },
+    token.location.end,
+  )
+  .unwrap();
+    let lines = binding.lines().collect::<Vec<&str>>();
+  let data_line = *lines.get(0).unwrap_or(&"");
+  let token_value = data_line
+    .chars()
+    .skip(token.location.start.column)
+    .collect::<String>();
+
+
   let line = token.location.start.line + 1;
   let column_token = token.location.start.column + 1;
   let column = token.location.end.column;
@@ -54,8 +70,8 @@ fn token_error(token: &util::Token<TokenType>) -> ErrorTypes {
 fn comment(
   _: char,
   position: util::Position,
-  line: String,
-  meta: String,
+  line: &str,
+  file_name: &str,
 ) -> (util::Token<TokenType>, usize) {
   let line_len = line.len();
   let length = line_len - position.column;
@@ -69,16 +85,15 @@ fn comment(
         column: length,
       },
       length,
-      file_name: meta.clone(),
+      file_name: file_name.to_string(),
     },
-    meta,
   };
   (token, length + 1)
 }
 
-pub fn tokenizer(input: String, file_name: String) -> Vec<util::Token<TokenType>> {
+pub fn tokenizer(source: &str, file_name: &str) -> Vec<util::Token<TokenType>> {
   let tokens = util::tokenize::<TokenType>(
-    input,
+    source,
     vec![
       (
         util::TokenOptionCondition::Chars("\t\r "),
@@ -109,7 +124,7 @@ pub fn tokenizer(input: String, file_name: String) -> Vec<util::Token<TokenType>
         util::TokenOptionResult::Full(comment),
       ),
     ],
-    file_name.clone(),
+    file_name,
   );
   let tokens = match tokens {
     Ok(mut t) => {
@@ -124,10 +139,9 @@ pub fn tokenizer(input: String, file_name: String) -> Vec<util::Token<TokenType>
           start: pos,
           end: pos,
           length: 0,
-          file_name,
+          file_name: file_name.to_string(),
         },
         value: "".to_string(),
-        meta: "".to_string(),
       });
       t.retain(|x| x.token_type != TokenType::None);
       t
@@ -140,7 +154,7 @@ pub fn tokenizer(input: String, file_name: String) -> Vec<util::Token<TokenType>
   let errors = tokens
     .iter()
     .filter(|x| x.token_type == TokenType::Error)
-    .map(|x| token_error(x))
+    .map(|x| token_error(x, source))
     .collect::<Vec<ErrorTypes>>();
   if errors.len() > 0 {
     show_multiple_errors(&ErrorNames::LexerError, errors);

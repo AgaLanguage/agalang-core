@@ -111,7 +111,7 @@ impl From<&NodeFunction> for Function {
       chunk: ChunkGroup::new(),
       name: value.name.clone(),
       is_async: value.is_async,
-      file: value.file.clone(),
+      file: value.location.file_name.clone(),
     }
   }
 }
@@ -121,7 +121,7 @@ impl std::fmt::Debug for Function {
   }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub enum Object {
   Map(
     MultiRefHash<HashMap<String, Value>>,
@@ -233,13 +233,18 @@ impl ToString for Object {
     }
   }
 }
+impl std::fmt::Debug for Object {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "{}", self.to_string())
+  }
+}
 
 pub const NULL_NAME: &str = "nulo";
 pub const NEVER_NAME: &str = "nada";
 pub const TRUE_NAME: &str = "cierto";
 pub const FALSE_NAME: &str = "falso";
 
-#[derive(Debug, Clone, PartialEq, Eq, Default, Hash)]
+#[derive(Clone, PartialEq, Eq, Default, Hash)]
 pub enum Value {
   Number(Number),
   String(String),
@@ -357,6 +362,11 @@ impl From<bool> for Value {
       }else {
         Self::False
       }
+  }
+}
+impl std::fmt::Debug for Value {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "{}", self.as_string())
   }
 }
 

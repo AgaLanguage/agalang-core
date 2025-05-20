@@ -18,7 +18,7 @@ impl Compiler {
   fn parse_function(function: &NodeFunction) -> Result<Function, String> {
     let mut compiler = Self {
       function: function.into(),
-      path: function.file.clone(),
+      path: function.location.file_name.clone(),
     };
     let mut i = function.params.len();
     while i > 0 {
@@ -81,38 +81,25 @@ impl Compiler {
         self.node_to_bytes(&b.left)?;
         self.node_to_bytes(&b.right)?;
         let operator = match b.operator {
-          crate::parser::NodeOperator::Division => OpCode::OpDivide,
-          crate::parser::NodeOperator::Minus => OpCode::OpSubtract,
-          crate::parser::NodeOperator::Multiply => OpCode::OpMultiply,
-          crate::parser::NodeOperator::Plus => OpCode::OpAdd,
-          crate::parser::NodeOperator::GreaterThan => OpCode::OpGreaterThan,
-          crate::parser::NodeOperator::Equal => OpCode::OpEquals,
-          crate::parser::NodeOperator::LessThan => OpCode::OpLessThan,
-          crate::parser::NodeOperator::And => OpCode::OpAnd,
-          crate::parser::NodeOperator::Or => OpCode::OpOr,
+          crate::parser::NodeOperator::TruncDivision => {
+            vec![OpCode::OpDivide as u8, OpCode::OpApproximate as u8]
+          }
+          crate::parser::NodeOperator::Division => vec![OpCode::OpDivide as u8],
+          crate::parser::NodeOperator::Minus => vec![OpCode::OpSubtract as u8],
+          crate::parser::NodeOperator::Multiply => vec![OpCode::OpMultiply as u8],
+          crate::parser::NodeOperator::Plus => vec![OpCode::OpAdd as u8],
+          crate::parser::NodeOperator::GreaterThan => vec![OpCode::OpGreaterThan as u8],
+          crate::parser::NodeOperator::Equal => vec![OpCode::OpEquals as u8],
+          crate::parser::NodeOperator::LessThan => vec![OpCode::OpLessThan as u8],
+          crate::parser::NodeOperator::And => vec![OpCode::OpAnd as u8],
+          crate::parser::NodeOperator::Or => vec![OpCode::OpOr as u8],
           a => {
             return Err(format!(
               "NodeOperator::{a:?}: No es un nodo valido en bytecode"
             ))
           }
         };
-        if operator == OpCode::OpNull {
-          match b.operator {
-            crate::parser::NodeOperator::NotEqual => {
-              self.write_buffer(
-                vec![OpCode::OpEquals as u8, OpCode::OpNot as u8],
-                b.location.start.line,
-              );
-            }
-            a => {
-              return Err(format!(
-                "NodeOperator::{a:?}: No es un nodo valido en bytecode"
-              ))
-            }
-          };
-        } else {
-          self.write(operator as u8, b.location.start.line);
-        };
+        self.write_buffer(operator, b.location.start.line);
       }
       Node::Program(p) => {
         if p.body.len() != 0 {
@@ -434,10 +421,7 @@ impl Compiler {
         let alias_bit = if i.name.is_some() { 0b01 } else { 0b00 };
         let meta_byte = lazy_bit | alias_bit;
         let name_byte = if let Some(name) = &i.name {
-          let index_byte =
-            self.set_constant(Value::String(name.to_string()), i.location.start.line);
-          self.write(OpCode::OpPop as u8, i.location.start.line);
-          index_byte
+          self.set_value(Value::String(name.to_string()))
         } else {
           0
         };
@@ -446,9 +430,71 @@ impl Compiler {
           i.location.start.line,
         );
       }
+      Node::Name(_) => {
+        return Err(format!(
+          "No se puede usar '{}' sin exportar",
+          crate::parser::KeywordsType::Name
+        ))
+      }
       Node::Export(e) => {
-        self.node_to_bytes(e.value.as_ref())?;
-        self.write_buffer(vec![OpCode::OpExport as u8], e.location.start.line);
+        let name: &str = match e.value.as_ref() {
+          Node::Name(n) => {
+            self.read_var(n.name.clone(), n.location.start.line);
+            &n.name
+          }
+          Node::Function(f) => {
+            self.set_constant(
+              Value::Object(Self::parse_function(f)?.into()),
+              f.location.start.line,
+            );
+
+            let name = self.set_value(Value::String(f.name.as_str().into()));
+            self.write_buffer(vec![OpCode::OpConstDecl as u8, name], f.location.start.line);
+            &f.name
+          }
+          Node::VarDecl(v) => {
+            let op;
+            if v.is_const {
+              match &v.value {
+                Some(value) => {
+                  self.node_to_bytes(&value)?;
+                }
+                None => {
+                  return Err(format!(
+                    "No se puede asignar '{}' a una constante",
+                    NEVER_NAME
+                  ))
+                }
+              }
+              op = OpCode::OpConstDecl as u8;
+            } else {
+              match &v.value {
+                Some(value) => {
+                  self.node_to_bytes(&value)?;
+                }
+                None => {
+                  self.set_constant(Value::Never, v.location.start.line);
+                }
+              };
+              op = OpCode::OpVarDecl as u8;
+            }
+            let name = self.set_value(Value::String(v.name.as_str().into()));
+            self.write_buffer(vec![op, name], v.location.start.line);
+            &v.name
+          }
+
+          _ => {
+            return Err(format!(
+              "No se puede obtener el nombre y el valor de {}",
+              node.get_type()
+            ))
+          }
+        };
+        let name_byte = self.set_value(Value::String(name.to_string()));
+        self.write_buffer(
+          vec![OpCode::OpExport as u8, name_byte],
+          e.location.start.line,
+        );
       }
       a => {
         return Err(format!(

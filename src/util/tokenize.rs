@@ -50,12 +50,10 @@ pub struct Token<TokenKind> {
   pub token_type: TokenKind,
   pub value: String,
   pub location: Location,
-  pub meta: String,
 }
 
 pub type TokenOptionsCallbackFull<TK> =
-  fn(ch: char, start_pos: Position, line: String, meta: String) -> (Token<TK>, usize);
-pub type TokenOptionsCallbackMeta<TK> = fn(meta: String) -> (TK, String);
+  fn(ch: char, start_pos: Position, line: &str, file_name: &str) -> (Token<TK>, usize);
 pub type TokenOptionsCallbackChar<TK> = fn(char: char) -> TK;
 pub type TokenOptionsCallbackMin<TK> = fn() -> TK;
 
@@ -66,7 +64,6 @@ pub enum TokenOptionCondition {
 
 pub enum TokenOptionResult<TK> {
   Full(TokenOptionsCallbackFull<TK>),
-  Meta(TokenOptionsCallbackMeta<TK>),
   Char(TokenOptionsCallbackChar<TK>),
   Min(TokenOptionsCallbackMin<TK>),
 }
@@ -74,9 +71,9 @@ pub enum TokenOptionResult<TK> {
 pub type TokenOption<'a, TK> = (TokenOptionCondition, TokenOptionResult<TK>);
 
 pub fn tokenize<TK>(
-  input: String,
+  input: &str,
   options: Vec<TokenOption<TK>>,
-  file_name: String,
+  file_name: &str,
 ) -> Result<Vec<Token<TK>>, Box<dyn std::error::Error>> {
   let lines = input.lines();
   let mut tokens = Vec::new();
@@ -102,27 +99,7 @@ pub fn tokenize<TK>(
           column,
         };
         let (t, consumed) = match result {
-          TokenOptionResult::Full(f) => f(c, position, line.to_string(), file_name.clone()),
-          TokenOptionResult::Meta(f) => {
-            let (token_type, meta) = f(file_name.clone());
-            (
-              Token {
-                token_type,
-                value: c.to_string(),
-                location: Location {
-                  start: position,
-                  end: Position {
-                    line: line_number,
-                    column: column + 1,
-                  },
-                  length: 1,
-                  file_name: file_name.clone(),
-                },
-                meta,
-              },
-              0,
-            )
-          }
+          TokenOptionResult::Full(f) => f(c, position, line, file_name),
           TokenOptionResult::Char(f) => {
             let token_type = f(c);
             (
@@ -136,9 +113,8 @@ pub fn tokenize<TK>(
                     column: column + 1,
                   },
                   length: 1,
-                  file_name: file_name.clone(),
+                  file_name: file_name.to_string(),
                 },
-                meta: file_name.clone(),
               },
               0,
             )
@@ -156,9 +132,8 @@ pub fn tokenize<TK>(
                     column: column + 1,
                   },
                   length: 1,
-                  file_name: file_name.clone(),
+                  file_name: file_name.to_string(),
                 },
-                meta: file_name.clone(),
               },
               0,
             )

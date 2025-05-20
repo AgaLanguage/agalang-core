@@ -6,7 +6,7 @@ use std::{
 
 const DIVISION_DECIMALS: usize = 100;
 
-#[derive(Debug, Clone, Eq, PartialOrd, Hash)]
+#[derive(Clone, Eq, PartialOrd, Hash)]
 pub struct Decimals(Vec<u8>);
 impl Decimals {
   pub fn is_zero(&self) -> bool {
@@ -22,11 +22,11 @@ impl Display for Decimals {
       let (byte_1, byte_0) = ((byte & 0xF0) >> 4, byte & 0x0F);
       result.push_str(&format!("{:X}{:X}", byte_1, byte_0));
     }
-    let clear = result.trim_start_matches('0').to_string();
+    let clear = result.trim_end_matches('0').to_string();
     if clear.is_empty() {
       return write!(f, "0");
     }
-    write!(f, "{}", result.trim_end_matches('0'))
+    write!(f, "{}", clear)
   }
 }
 impl PartialEq for Decimals {
@@ -65,70 +65,14 @@ impl From<String> for Decimals {
   }
 }
 
-#[derive(Debug, Clone, Eq, PartialOrd, Hash)]
-pub struct UInt(Vec<u8>);
-impl UInt {
+#[derive(Clone, Eq, Ord, Hash)]
+pub struct BCDUInt(Vec<u8>);
+impl BCDUInt {
   pub fn is_zero(&self) -> bool {
     if self.0.len() == 0 {
       return true;
     }
     self.0.iter().all(|&x| x == 0)
-  }
-  fn shift_left(&self, n: u8) -> Self {
-    let mut result = self.to_string();
-    for _ in 0..n {
-      result.push('0');
-    }
-    result.into()
-  }
-  fn add_digit_mut(&mut self, digit: u8) {
-    let mut carry = digit;
-    let mut i = self.0.len();
-    while carry > 0 && i > 0 {
-      i -= 1;
-      let lo = self.0[i] & 0x0F;
-      let hi = (self.0[i] >> 4) & 0x0F;
-
-      let lo_sum = lo + carry;
-      if lo_sum < 10 {
-        self.0[i] = (hi << 4) | lo_sum;
-        return;
-      } else {
-        self.0[i] = (hi << 4) | (lo_sum - 10);
-        carry = 1;
-      }
-    }
-
-    if carry > 0 {
-      self.0.insert(0, carry); // Insert new digit at front
-    }
-  }
-  fn digit_at(&self, index: usize) -> u8 {
-    let byte_index = index / 2;
-    let is_high = index % 2 == 0;
-
-    if byte_index >= self.0.len() {
-      return 0;
-    }
-
-    let byte = self.0[self.0.len() - 1 - byte_index];
-    if is_high {
-      (byte >> 4) & 0x0F
-    } else {
-      byte & 0x0F
-    }
-  }
-  fn num_digits(&self) -> usize {
-    let len = self.0.len();
-    if len == 0 {
-      return 0;
-    }
-    let mut digits = len * 2;
-    let last = self.0[0];
-    if last & 0x0F == 0x0F {
-      digits -= 1;
-    }
-    digits
   }
   pub fn trim_leading_zeros(mut self) -> Self {
     while self.0.len() > 1 && self.0[0] == 0 {
@@ -140,13 +84,75 @@ impl UInt {
     self
       .to_string()
       .chars()
-      .rev()
       .map(|c| c.to_digit(10).unwrap() as u8)
       .collect()
   }
+  pub fn from_digits(digits: Vec<u8>) -> Self {
+    let mut vec = Vec::new();
+    let mut i = digits.len();
+    while i > 0 {
+      i -= 1;
+      let low = digits[i];
+      let high = if i == 0 {
+        0
+      } else {
+        i -= 1;
+        digits[i]
+      };
+      vec.push((high << 4) | low);
+    }
+    vec.reverse();
+    Self(vec)
+  }
+  fn compare_digits(a: &[u8], b: &[u8]) -> i8 {
+    if a.len() > b.len() {
+      1
+    } else if a.len() < b.len() {
+      -1
+    } else {
+      for (&x, &y) in a.iter().zip(b) {
+        if x > y {
+          return 1;
+        };
+        if x < y {
+          return -1;
+        };
+      }
+      0
+    }
+  }
+  fn sub_digits(a: &[u8], b: &[u8]) -> Vec<u8> {
+    let mut result = Vec::new();
+    let mut carry = 0;
+    let mut ai = a.len() as isize - 1;
+    let mut bi = b.len() as isize - 1;
+
+    while ai >= 0 {
+      let mut ad = a[ai as usize] as i8 - carry;
+      let bd = if bi >= 0 { b[bi as usize] as i8 } else { 0 };
+
+      if ad < bd {
+        ad += 10;
+        carry = 1;
+      } else {
+        carry = 0;
+      }
+
+      result.push((ad - bd) as u8);
+      ai -= 1;
+      bi -= 1;
+    }
+
+    result.reverse();
+    while result.first() == Some(&0) && result.len() > 1 {
+      result.remove(0);
+    }
+
+    result
+  }
 }
 
-impl Display for UInt {
+impl Display for BCDUInt {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     let mut result = String::new();
     for i in 0..self.0.len() {
@@ -166,44 +172,72 @@ impl Display for UInt {
     )
   }
 }
-impl PartialEq for UInt {
+impl PartialEq for BCDUInt {
   fn eq(&self, other: &Self) -> bool {
     self.to_string() == other.to_string()
   }
 }
 
-impl SubAssign<&UInt> for UInt {
+impl SubAssign<&BCDUInt> for BCDUInt {
   fn sub_assign(&mut self, rhs: &Self) {
     *self = self.clone() - rhs.clone();
   }
 }
 
-impl Add for UInt {
+impl Add for BCDUInt {
   type Output = Self;
   fn add(self, rhs: Self) -> Self::Output {
     &self + &rhs
   }
 }
-impl Sub for UInt {
+impl Sub for BCDUInt {
   type Output = Self;
   fn sub(self, rhs: Self) -> Self::Output {
     &self - &rhs
   }
 }
-impl Mul for UInt {
+impl Mul for BCDUInt {
   type Output = Self;
   fn mul(self, rhs: Self) -> Self::Output {
     &self * &rhs
   }
 }
-impl Div for UInt {
+impl Div for BCDUInt {
   type Output = Self;
   fn div(self, rhs: Self) -> Self::Output {
-    &self / &rhs
+    let x_digits = self.digits();
+    let y_digits = rhs.digits();
+    if y_digits.is_empty() || y_digits.iter().all(|&d| d == 0) {
+      panic!("División por cero");
+    }
+
+    let mut result = Vec::new();
+    let mut remainder = Vec::new();
+
+    for digit in x_digits {
+      remainder.push(digit);
+      while remainder.first() == Some(&0) && remainder.len() > 1 {
+        remainder.remove(0);
+      }
+
+      let mut count = 0;
+      while Self::compare_digits(&remainder, &y_digits) >= 0 {
+        remainder = Self::sub_digits(&remainder, &y_digits);
+        count += 1;
+      }
+
+      result.push(count);
+    }
+
+    while result.first() == Some(&0) && result.len() > 1 {
+      result.remove(0);
+    }
+
+    Self::from_digits(result)
   }
 }
-impl Add for &UInt {
-  type Output = UInt;
+impl Add for &BCDUInt {
+  type Output = BCDUInt;
   fn add(self, rhs: Self) -> Self::Output {
     let self_vec = self.clone().0;
     let rhs_vec = rhs.clone().0;
@@ -229,11 +263,11 @@ impl Add for &UInt {
       result.push(carry);
     }
     result.reverse();
-    UInt(result)
+    BCDUInt(result)
   }
 }
-impl Sub for &UInt {
-  type Output = UInt;
+impl Sub for &BCDUInt {
+  type Output = BCDUInt;
 
   fn sub(self, rhs: Self) -> Self::Output {
     let lhs = &self.0;
@@ -278,15 +312,17 @@ impl Sub for &UInt {
     }
 
     result.reverse();
-    UInt(result)
+    BCDUInt(result)
   }
 }
-impl Mul for &UInt {
-  type Output = UInt;
+impl Mul for &BCDUInt {
+  type Output = BCDUInt;
 
   fn mul(self, rhs: Self) -> Self::Output {
-    let x_digits = self.digits();
-    let y_digits = rhs.digits();
+    let mut x_digits = self.digits();
+    let mut y_digits = rhs.digits();
+    x_digits.reverse();
+    y_digits.reverse();
 
     let mut result = vec![0u8; x_digits.len() + y_digits.len()];
 
@@ -299,108 +335,49 @@ impl Mul for &UInt {
         }
       }
     }
-
+    
     while result.len() > 1 && *result.last().unwrap() == 0 {
       result.pop();
     }
+    result.reverse();
 
-    let result_str: String = result
-      .into_iter()
-      .rev()
-      .map(|d| std::char::from_digit(d as u32, 10).unwrap())
-      .collect();
-    UInt::from(result_str)
+    BCDUInt::from_digits(result)
   }
 }
-impl Div for &UInt {
-  type Output = UInt;
+impl Div for &BCDUInt {
+  type Output = BCDUInt;
 
   fn div(self, rhs: Self) -> Self::Output {
-    if rhs.is_zero() {
-      panic!("Division by zero");
-    }
-    if self < rhs {
-      return UInt::from(0); // Si el dividendo es menor que el divisor, el cociente es 0
-    }
-
-    let divisor = rhs.clone();
-    let mut quotient_digits = Vec::new();
-
-    let mut current = UInt::from(0);
-
-    for i in 0..self.num_digits() {
-      current = current.shift_left(1).trim_leading_zeros();
-      current.add_digit_mut(self.digit_at(i));
-
-      let mut q_digit = 0;
-      for d in (1..=9).rev() {
-        let test = &divisor * &UInt::from(d);
-        if test <= current {
-          q_digit = d;
-          break;
-        }
-      }
-
-      quotient_digits.push(q_digit);
-      let sub = &divisor * &UInt::from(q_digit);
-      current.sub_assign(&sub);
-    }
-
-    // Convert digits to BCD-packed UInt
-    let mut result_bytes = Vec::new();
-    let mut i = 0;
-    while i < quotient_digits.len() {
-      let hi = quotient_digits[i];
-      let lo = if i + 1 < quotient_digits.len() {
-        quotient_digits[i + 1]
-      } else {
-        0xF // unused nibble
-      };
-      result_bytes.push((hi << 4) | lo);
-      i += 2;
-    }
-
-    UInt(result_bytes).trim_leading_zeros()
+    self.clone() / rhs.clone()
   }
 }
-impl Ord for UInt {
-  fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-    let self_len = self.0.len();
-    let other_len = other.0.len();
-    if self_len != other_len {
-      return self_len.cmp(&other_len);
-    }
-    for i in 0..self_len {
-      if self.0[i] != other.0[i] {
-        return self.0[i].cmp(&other.0[i]);
+
+impl PartialOrd for BCDUInt {
+  fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+    let x_digits = self.digits();
+    let y_digits = other.digits();
+    let x_len = x_digits.len();
+    let y_len = y_digits.len();
+    let max = x_len.max(y_len);
+    for i in (1..=max).rev() {
+      let x = if x_len > i { x_digits[x_len - i] } else { 0 };
+      let y = if y_len > i { y_digits[y_len - i] } else { 0 };
+      let value = x.cmp(&y);
+      if value != std::cmp::Ordering::Equal {
+        return Some(value);
       }
     }
-    std::cmp::Ordering::Equal
+    Some(std::cmp::Ordering::Equal)
   }
 }
-impl From<String> for UInt {
+
+impl From<String> for BCDUInt {
   fn from(value: String) -> Self {
-    let value = value.chars().rev().collect::<String>();
-    let mut result = Vec::new();
-    let mut i = 0;
-    while i < value.len() {
-      let char_0 = value.chars().nth(i).unwrap_or('0') as u8 - b'0';
-      if char_0 > 9 {
-        break;
-      }
-      let char_1 = value.chars().nth(i + 1).unwrap_or('0') as u8 - b'0';
-      if char_1 > 9 {
-        break;
-      }
-      i += 2;
-      let byte = (char_1 << 4) | char_0;
-      result.push(byte);
-    }
-    result.reverse();
-    Self(result)
+    let digits = value.chars().map(|c| c as u8 - b'0').collect();
+    Self::from_digits(digits)
   }
 }
-impl From<u8> for UInt {
+impl From<u8> for BCDUInt {
   fn from(value: u8) -> Self {
     if value > 99 {
       panic!("Value must be between 0 and 99");
@@ -408,13 +385,13 @@ impl From<u8> for UInt {
     let high = value / 10;
     let low = value % 10;
     let byte = (high << 4) | low;
-    UInt(vec![byte])
+    BCDUInt(vec![byte])
   }
 }
-#[derive(Debug, Clone, Eq, PartialOrd, Hash)]
+#[derive(Clone, Eq, PartialOrd, Hash)]
 pub enum BasicNumber {
-  Int(bool, UInt),
-  Float(bool, UInt, Decimals),
+  Int(bool, BCDUInt),
+  Float(bool, BCDUInt, Decimals),
 }
 impl BasicNumber {
   pub fn is_zero(&self) -> bool {
@@ -437,7 +414,7 @@ impl BasicNumber {
           return Self::Int(*x_neg, x_int.clone());
         }
         if *x_neg {
-          return Self::Int(*x_neg, x_int.clone() - UInt::from(1));
+          return Self::Int(*x_neg, x_int.clone() - BCDUInt::from(1));
         }
         Self::Int(*x_neg, x_int.clone())
       }
@@ -450,8 +427,8 @@ impl BasicNumber {
         if x_dec.is_zero() {
           return Self::Int(*x_neg, x.clone());
         }
-        if *x > UInt::from(0) {
-          return Self::Int(*x_neg, x.clone() + UInt::from(1));
+        if *x > BCDUInt::from(0) {
+          return Self::Int(*x_neg, x.clone() + BCDUInt::from(1));
         }
         Self::Int(*x_neg, x.clone())
       }
@@ -526,7 +503,7 @@ impl Add for BasicNumber {
           return Self::Int(x_neg, x + y);
         }
         if (x.is_zero() && y.is_zero()) || (x == y) {
-          return Self::Int(false, UInt::from(0));
+          return Self::Int(false, BCDUInt::from(0));
         }
         if y > x {
           return Self::Int(y_neg, y - x);
@@ -566,7 +543,7 @@ impl Add for BasicNumber {
           result.reverse();
           Decimals(result)
         };
-        Self::Float(x_neg, x + y + UInt(vec![carry]), z_dec)
+        Self::Float(x_neg, x + y + BCDUInt(vec![carry]), z_dec)
       }
       (Self::Int(x_neg, x), Self::Float(y_neg, y, y_dec)) => {
         Self::Float(x_neg, x.clone(), Decimals(vec![])) + Self::Float(y_neg, y, y_dec)
@@ -588,7 +565,7 @@ impl Sub for BasicNumber {
           return Self::Int(x_neg, x + y);
         }
         if x == y {
-          return Self::Int(false, UInt::from(0));
+          return Self::Int(false, BCDUInt::from(0));
         }
         if x > y {
           Self::Int(x_neg, x - y)
@@ -608,25 +585,28 @@ impl Sub for BasicNumber {
         x_dec.extend(std::iter::repeat('0').take(decimals - x_dec.len()));
         y_dec.extend(std::iter::repeat('0').take(decimals - y_dec.len()));
 
-        let x_full = UInt::from(format!("{}{}", x, x_dec));
-        let y_full = UInt::from(format!("{}{}", y, y_dec));
+        let x_full = BCDUInt::from(format!("{}{}", x, x_dec));
+        let y_full = BCDUInt::from(format!("{}{}", y, y_dec));
         let (z_neg, z) = match x_full.cmp(&y_full) {
           std::cmp::Ordering::Greater => (x_neg, x_full - y_full),
           std::cmp::Ordering::Less => (!y_neg, y_full - x_full),
-          std::cmp::Ordering::Equal => return Self::Int(false, UInt::from(0)),
+          std::cmp::Ordering::Equal => return Self::Int(false, BCDUInt::from(0)),
         };
 
         let z_str = z.to_string();
         let z_len = z_str.len();
 
         let (z, z_dec) = if z_len > decimals {
-          let (int,dec) = z_str.split_at(z_len - decimals);
+          let (int, dec) = z_str.split_at(z_len - decimals);
           (int.to_string(), dec.to_string())
         } else {
-          ("0".to_string(), format!("{:0>width$}", z_str, width = decimals))
+          (
+            "0".to_string(),
+            format!("{:0>width$}", z_str, width = decimals),
+          )
         };
 
-        Self::Float(z_neg, UInt::from(z), Decimals::from(z_dec))
+        Self::Float(z_neg, BCDUInt::from(z), Decimals::from(z_dec))
       }
 
       (Self::Int(x_neg, x), Self::Float(y_neg, y, y_dec)) => {
@@ -647,9 +627,9 @@ impl Mul for BasicNumber {
         let x_dec = x_dec.to_string();
         let y_dec = y_dec.to_string();
         let x_str = format!("{}{}", x, x_dec);
-        let x: UInt = x_str.into();
+        let x: BCDUInt = x_str.into();
         let y_str = format!("{}{}", y, y_dec);
-        let y: UInt = y_str.into();
+        let y: BCDUInt = y_str.into();
         let mut decimals = x_dec.len() + y_dec.len();
 
         let result = x * y;
@@ -686,18 +666,17 @@ impl Div for BasicNumber {
   type Output = Self;
   fn div(self, rhs: Self) -> Self::Output {
     match (self, rhs) {
-      (Self::Int(x_neg, x), Self::Int(y_neg, y)) => Self::Int(x_neg ^ y_neg, x / y),
       (Self::Float(x_neg, x, x_dec), Self::Float(y_neg, y, y_dec)) => {
-        let mut x_dec = x_dec.to_string().trim_end_matches('0').to_string();
-        let mut y_dec = y_dec.to_string().trim_end_matches('0').to_string();
+        let mut x_dec = x_dec.to_string();
+        let mut y_dec = y_dec.to_string();
         let max_dec = x_dec.len().max(y_dec.len());
         x_dec.extend(std::iter::repeat('0').take(max_dec + DIVISION_DECIMALS - x_dec.len()));
         y_dec.extend(std::iter::repeat('0').take(max_dec - y_dec.len()));
         let x_str = format!("{}{}", x, x_dec);
         let y_str = format!("{}{}", y, y_dec);
-        let mut decimals = max_dec + DIVISION_DECIMALS;
+        let mut decimals = max_dec + DIVISION_DECIMALS - 1;
 
-        let result = UInt::from(x_str) / UInt::from(y_str);
+        let result = BCDUInt::from(x_str) / BCDUInt::from(y_str);
         let result = result.to_string();
 
         let int_part: String;
@@ -716,6 +695,10 @@ impl Div for BasicNumber {
         let frac_part = frac_part.chars().rev().collect::<String>();
 
         Self::Float(x_neg ^ y_neg, int_part.into(), frac_part.into())
+      }
+      (Self::Int(x_neg, x), Self::Int(y_neg, y)) => {
+        Self::Float(x_neg ^ y_neg, x.clone(), Decimals(vec![]))
+          / Self::Float(false, y, Decimals(vec![]))
       }
       (Self::Int(x_neg, x), Self::Float(y_neg, y, y_dec)) => {
         Self::Float(x_neg ^ y_neg, x.clone(), Decimals(vec![])) / Self::Float(false, y, y_dec)
@@ -787,7 +770,7 @@ impl From<String> for BasicNumber {
     Self::Float(false, int_part.into(), frac_part.into())
   }
 }
-#[derive(Debug, Clone, Eq, Default, Hash)]
+#[derive(Clone, Eq, Default, Hash)]
 pub enum Number {
   #[default]
   NaN,
@@ -931,14 +914,14 @@ impl FromStr for Number {
 
       return if i_exp == 1 {
         Ok(Self::Complex(
-          BasicNumber::Int(false, UInt::from(0)),
+          BasicNumber::Int(false, BCDUInt::from(0)),
           number,
         ))
       } else if i_exp == 2 {
         Ok(Self::Basic(-number))
       } else if i_exp == 3 {
         Ok(Self::Complex(
-          BasicNumber::Int(false, UInt::from(0)),
+          BasicNumber::Int(false, BCDUInt::from(0)),
           -number,
         ))
       } else {
@@ -1103,9 +1086,9 @@ impl Div for Number {
       (Self::NaN, _) => Self::NaN,
       (_, Self::NaN) => Self::NaN,
       (Self::Infinity, _) => Self::Infinity,
-      (_, Self::Infinity) => Self::Basic(BasicNumber::Int(false, UInt::from(0))),
+      (_, Self::Infinity) => Self::Basic(BasicNumber::Int(false, BCDUInt::from(0))),
       (Self::NegativeInfinity, _) => Self::NegativeInfinity,
-      (_, Self::NegativeInfinity) => Self::Basic(BasicNumber::Int(false, UInt::from(0))),
+      (_, Self::NegativeInfinity) => Self::Basic(BasicNumber::Int(false, BCDUInt::from(0))),
       (Self::Basic(x), Self::Basic(y)) => Self::Basic(x / y),
       (Self::Complex(a, b), Self::Complex(c, d)) => {
         let conj = (c.clone() * c.clone()) + (d.clone() * d.clone());
@@ -1162,5 +1145,10 @@ impl PartialOrd for Number {
       (Self::Basic(x), Self::Complex(a, b)) => x.partial_cmp(a).or_else(|| x.partial_cmp(b)),
       (Self::Complex(a, b), Self::Basic(x)) => a.partial_cmp(x).or_else(|| b.partial_cmp(x)),
     }
+  }
+}
+impl std::fmt::Debug for Number {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "{}", self.to_string())
   }
 }

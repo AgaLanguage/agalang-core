@@ -121,34 +121,7 @@ impl Node {
     }
   }
   pub fn get_file(&self) -> String {
-    let file: &str = match self {
-      Node::Await(node) | Node::Lazy(node) => &node.file,
-      Node::Byte(node) => &node.file,
-      Node::Program(node) => &node.file,
-      Node::String(node) => &node.file,
-      Node::Number(node) => &node.file,
-      Node::Object(node) => &node.file,
-      Node::Array(node) => &node.file,
-      Node::Identifier(node) | Node::Name(node) | Node::VarDel(node) => &node.file,
-      Node::VarDecl(node) => &node.file,
-      Node::Assignment(node) => &node.file,
-      Node::Class(node) => &node.file,
-      Node::While(node) | Node::DoWhile(node) => &node.file,
-      Node::Try(node) => &node.file,
-      Node::Function(node) => &node.file,
-      Node::If(node) => &node.file,
-      Node::Import(node) => &node.file,
-      Node::Export(node) | Node::Throw(node) => &node.file,
-      Node::UnaryFront(node) | Node::UnaryBack(node) => &node.file,
-      Node::Binary(node) => &node.file,
-      Node::Member(node) => &node.file,
-      Node::Call(node) => &node.file,
-      Node::Return(node) => &node.file,
-      Node::LoopEdit(node) => &node.file,
-      Node::For(node) => &node.file,
-      Node::Console(_) | Node::Block(..) | Node::None => "none",
-    };
-    return file.to_string();
+    self.get_location().file_name
   }
   pub fn get_type(&self) -> &str {
     match self {
@@ -428,10 +401,10 @@ impl std::fmt::Display for NodeOperator {
       Self::ExponentialEqual => "^=",
       Self::Division => "/",
       Self::DivisionEqual => "/=",
-      Self::FloorDivision => "//",
-      Self::FloorDivisionEqual => "//=",
-      Self::QuestionMark => "//",
-      Self::Nullish => "//",
+      Self::TruncDivision => "//",
+      Self::TruncDivisionEqual => "//=",
+      Self::QuestionMark => "?",
+      Self::Nullish => "??",
       Self::NullishEqual => "??=",
       Self::BitAnd => "&",
       Self::BitAndEqual => "&=",
@@ -446,6 +419,7 @@ impl std::fmt::Display for NodeOperator {
       Self::Not => "!",
       Self::NotEqual => "!=",
       Self::Assign => "=",
+      Self::PipeLine => "|>",
     };
     write!(f, "{}", str)
   }
@@ -502,7 +476,6 @@ impl IntoIterator for NodeBlock {
 pub struct NodeProgram {
   pub body: NodeBlock,
   pub location: util::Location,
-  pub file: String,
 }
 #[derive(Clone, PartialEq, Debug, Eq, Hash)]
 pub enum StringData {
@@ -513,20 +486,17 @@ pub enum StringData {
 pub struct NodeString {
   pub value: util::List<StringData>,
   pub location: util::Location,
-  pub file: String,
 }
 #[derive(Clone, PartialEq, Debug, Eq, Hash)]
 pub struct NodeNumber {
   pub base: u8,
   pub value: String,
   pub location: util::Location,
-  pub file: String,
 }
 #[derive(Clone, PartialEq, Debug, Eq, Hash)]
 pub struct NodeByte {
   pub value: u8,
   pub location: util::Location,
-  pub file: String,
 }
 #[derive(Clone, PartialEq, Debug, Eq, Hash)]
 pub enum NodeProperty {
@@ -539,13 +509,11 @@ pub enum NodeProperty {
 pub struct NodeObject {
   pub properties: util::List<NodeProperty>,
   pub location: util::Location,
-  pub file: String,
 }
 #[derive(Clone, PartialEq, Debug, Eq, Hash)]
 pub struct NodeArray {
   pub elements: util::List<NodeProperty>,
   pub location: util::Location,
-  pub file: String,
 }
 #[derive(Clone, PartialEq, Debug, Eq, Hash)]
 pub struct NodeVarDecl {
@@ -553,25 +521,21 @@ pub struct NodeVarDecl {
   pub value: Option<BNode>,
   pub is_const: bool,
   pub location: util::Location,
-  pub file: String,
 }
 #[derive(Clone, PartialEq, Debug, Eq, Hash)]
 pub struct NodeIdentifier {
   pub name: String,
   pub location: util::Location,
-  pub file: String,
 }
 #[derive(Clone, PartialEq, Debug, Eq, Hash)]
 pub struct NodeError {
   pub message: String,
   pub location: util::Location,
-  pub meta: String,
 }
 impl NodeError {
   pub fn new(token: &util::Token<TokenType>, message: Option<String>) -> Self {
     Self {
       location: token.location.clone(),
-      meta: token.meta.clone(),
       message: match message {
         Some(msg) => msg,
         None => format!("Error en {}", token.value),
@@ -584,7 +548,6 @@ pub struct NodeUnary {
   pub operator: NodeOperator,
   pub operand: BNode,
   pub location: util::Location,
-  pub file: String,
 }
 #[derive(Clone, PartialEq, Debug, Eq, Hash, Copy)]
 pub enum NodeOperator {
@@ -631,9 +594,9 @@ pub enum NodeOperator {
   /// /=
   DivisionEqual,
   /// //
-  FloorDivision,
+  TruncDivision,
   /// //=
-  FloorDivisionEqual,
+  TruncDivisionEqual,
   /// ?
   QuestionMark,
   /// ??
@@ -668,6 +631,8 @@ pub enum NodeOperator {
   Assign,
   /// ==
   Equal,
+  /// |>
+  PipeLine,
 }
 #[derive(Clone, PartialEq, Debug, Eq, Hash)]
 pub struct NodeBinary {
@@ -675,14 +640,12 @@ pub struct NodeBinary {
   pub left: BNode,
   pub right: BNode,
   pub location: util::Location,
-  pub file: String,
 }
 #[derive(Clone, PartialEq, Debug, Eq, Hash)]
 pub struct NodeAssignment {
   pub identifier: BNode,
   pub value: BNode,
   pub location: util::Location,
-  pub file: String,
 }
 #[derive(Clone, PartialEq, Debug, Eq, Hash)]
 pub struct NodeMember {
@@ -691,21 +654,18 @@ pub struct NodeMember {
   pub instance: bool,
   pub computed: bool,
   pub location: util::Location,
-  pub file: String,
 }
 #[derive(Clone, PartialEq, Debug, Eq, Hash)]
 pub struct NodeCall {
   pub callee: BNode,
   pub arguments: util::List<Node>,
   pub location: util::Location,
-  pub file: String,
 }
 #[derive(Clone, PartialEq, Debug, Eq, Hash)]
 pub struct NodeWhile {
   pub condition: BNode,
   pub body: NodeBlock,
   pub location: util::Location,
-  pub file: String,
 }
 #[derive(Clone, PartialEq, Debug, Eq, Hash)]
 pub struct NodeIf {
@@ -713,7 +673,6 @@ pub struct NodeIf {
   pub body: NodeBlock,
   pub else_body: Option<NodeBlock>,
   pub location: util::Location,
-  pub file: String,
 }
 
 #[derive(Clone, PartialEq, Debug, Eq, Hash)]
@@ -723,13 +682,11 @@ pub struct NodeFunction {
   pub params: util::List<NodeIdentifier>,
   pub body: NodeBlock,
   pub location: util::Location,
-  pub file: String,
 }
 #[derive(Clone, PartialEq, Debug, Eq, Hash)]
 pub struct NodeReturn {
   pub value: Option<BNode>,
   pub location: util::Location,
-  pub file: String,
 }
 #[derive(Clone, PartialEq, Debug, Eq, Hash)]
 pub enum NodeLoopEditType {
@@ -740,7 +697,6 @@ pub enum NodeLoopEditType {
 pub struct NodeLoopEdit {
   pub action: NodeLoopEditType,
   pub location: util::Location,
-  pub file: String,
 }
 #[derive(Clone, PartialEq, Debug, Eq, Hash)]
 pub struct NodeTry {
@@ -748,7 +704,6 @@ pub struct NodeTry {
   pub catch: Option<(String, NodeBlock)>,
   pub finally: Option<NodeBlock>,
   pub location: util::Location,
-  pub file: String,
 }
 #[derive(Clone, PartialEq, Debug, Eq, Hash)]
 pub struct NodeClassProperty {
@@ -765,7 +720,6 @@ pub struct NodeClass {
   pub extend_of: Option<NodeIdentifier>,
   pub body: util::List<NodeClassProperty>,
   pub location: util::Location,
-  pub file: String,
 }
 #[derive(Clone, PartialEq, Debug, Eq, Hash)]
 pub struct NodeImport {
@@ -773,13 +727,11 @@ pub struct NodeImport {
   pub is_lazy: bool,
   pub name: Option<String>,
   pub location: util::Location,
-  pub file: String,
 }
 #[derive(Clone, PartialEq, Debug, Eq, Hash)]
 pub struct NodeValue {
   pub value: BNode,
   pub location: util::Location,
-  pub file: String,
 }
 #[derive(Clone, PartialEq, Debug, Eq, Hash)]
 pub struct NodeFor {
@@ -788,12 +740,10 @@ pub struct NodeFor {
   pub update: BNode,
   pub body: NodeBlock,
   pub location: util::Location,
-  pub file: String,
 }
 
 #[derive(Clone, PartialEq, Debug, Eq, Hash)]
 pub struct NodeExpressionMedicator {
   pub expression: BNode,
   pub location: util::Location,
-  pub file: String,
 }
