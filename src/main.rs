@@ -1,4 +1,3 @@
-
 use std::process::ExitCode;
 
 mod bytecode;
@@ -24,7 +23,7 @@ fn main() -> ExitCode {
   };
 
   match bytecode::main(&ast) {
-    Err(e) => ExitCode::FAILURE,
+    Err(_) => ExitCode::FAILURE,
     _ => ExitCode::SUCCESS
   }
 }

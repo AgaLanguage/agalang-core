@@ -1,4 +1,4 @@
-use super::{value::Value, DataCache};
+use super::{value::{Value, STRING_TYPE}, DataCache};
 mod string;
 
 pub fn proto(value_type: String, mut cache: DataCache) -> Value {
@@ -6,7 +6,7 @@ pub fn proto(value_type: String, mut cache: DataCache) -> Value {
     return cache.get(&value_type);
   }
   let value = match value_type.as_str() {
-    "cadena" => string::string_proto(),
+    STRING_TYPE => string::string_proto(),
     _ => panic!("Tipo desconocido: {value_type}"),
   };
   cache.set(value_type, value.clone());

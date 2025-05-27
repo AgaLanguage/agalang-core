@@ -20,15 +20,28 @@ impl Compiler {
       function: function.into(),
       path: function.location.file_name.clone(),
     };
-    let mut i = function.params.len();
-    while i > 0 {
-      i -= 1;
-      let param = function.params.get(i).unwrap();
+    let mut has_rest = false;
+    let mut rest_param = None;
+    for param in &function.params {
+      if has_rest {
+        return Err(format!(
+          "El paramatro expandido {} debe estar al final de la lista de parametros",
+          rest_param.unwrap()
+        ));
+      }
+      let name = if param.name.starts_with('@') {
+        has_rest = true;
+        rest_param = Some(param.name.clone());
+        param.name.replace('@', "").into()
+      } else {
+        param.name.clone()
+      };
       let _global = compiler
         .function
         .chunk()
-        .make_arg(param.name.clone(), param.location.start.line);
+        .make_arg(name, param.location.start.line);
     }
+    compiler.function.set_rest(has_rest);
     if function.body.len() > 0 {
       compiler.node_to_bytes(&function.body.clone().to_node())?;
     } else {
@@ -123,10 +136,12 @@ impl Compiler {
       Node::UnaryFront(u) => {
         self.node_to_bytes(&u.operand)?;
         let operator = match &u.operator {
-          crate::parser::NodeOperator::Minus => OpCode::OpNegate,
-          crate::parser::NodeOperator::Not => OpCode::OpNot,
-          crate::parser::NodeOperator::QuestionMark => OpCode::OpAsBoolean,
           crate::parser::NodeOperator::Approximate => OpCode::OpApproximate,
+          crate::parser::NodeOperator::QuestionMark => OpCode::OpAsBoolean,
+          crate::parser::NodeOperator::Minus => OpCode::OpNegate,
+          crate::parser::NodeOperator::BitAnd => OpCode::OpAsRef,
+          crate::parser::NodeOperator::Not => OpCode::OpNot,
+          crate::parser::NodeOperator::At => OpCode::OpAt,
           op => {
             return Err(format!(
               "NodeOperator::{op:?}: No es un nodo valido en bytecode"
@@ -242,39 +257,42 @@ impl Compiler {
         self.write(OpCode::OpPop as u8, 0);
         self.add_loop(loop_start)?;
         self.patch_jump(jump_while)?;
+        self.set_constant(Value::Never, i.location.start.line);
       }
       Node::DoWhile(i) => {
         let jump_do = self.jump(OpCode::OpJump);
         let loop_start = self.len();
         self.node_to_bytes(&i.condition)?;
-        let jump_while = self.jump(OpCode::OpJumpIfFalse);
+        let jump_do_while = self.jump(OpCode::OpJumpIfFalse);
         self.patch_jump(jump_do)?;
         self.node_to_bytes(&i.body.clone().to_node())?;
         self.write(OpCode::OpPop as u8, 0);
         self.add_loop(loop_start)?;
-        self.patch_jump(jump_while)?;
+        self.patch_jump(jump_do_while)?;
+        self.set_constant(Value::Never, i.location.start.line);
       }
       Node::For(f) => {
         self.write(OpCode::OpNewLocals as u8, f.location.start.line);
         self.node_to_bytes(&f.init)?;
         let loop_start = self.len();
         self.node_to_bytes(&f.condition)?;
-        let jump_while = self.jump(OpCode::OpJumpIfFalse);
+        let jump_for = self.jump(OpCode::OpJumpIfFalse);
         self.node_to_bytes(&f.body.clone().to_node())?;
         self.node_to_bytes(&f.update)?;
         self.write(OpCode::OpPop as u8, 0);
         self.add_loop(loop_start)?;
-        self.patch_jump(jump_while)?;
+        self.patch_jump(jump_for)?;
         self.write(OpCode::OpRemoveLocals as u8, f.location.start.line);
       }
       Node::Function(f) => {
-        self.set_constant(
-          Value::Object(Self::parse_function(f)?.into()),
-          f.location.start.line,
-        );
+        let function = Value::Object(Self::parse_function(f)?.into());
+        self.set_constant(function.clone(), f.location.start.line);
 
         let name = self.set_value(Value::String(f.name.as_str().into()));
-        self.write_buffer(vec![OpCode::OpConstDecl as u8, name], f.location.start.line);
+        self.write_buffer(
+          vec![OpCode::OpSetScope as u8, OpCode::OpConstDecl as u8, name],
+          f.location.start.line,
+        );
       }
       Node::Call(c) => {
         for arg in &c.arguments {
@@ -513,6 +531,7 @@ impl From<&Node> for Compiler {
     let function = Function::Script {
       chunk,
       path: path.clone(),
+      scope: None.into(),
     };
     let mut compiler = Self { function, path };
     match compiler.node_to_bytes(value) {

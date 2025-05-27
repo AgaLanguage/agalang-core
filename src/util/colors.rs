@@ -67,3 +67,11 @@ impl Color {
     format!("{}{}{}", self.as_str(), text, Color::Reset.as_str())
   }
 }
+pub trait SetColor {
+  fn set_color(&self, color: Color) -> String;
+}
+impl SetColor for String {
+  fn set_color(&self, color: Color) -> String {
+    color.apply(self)
+  }
+}

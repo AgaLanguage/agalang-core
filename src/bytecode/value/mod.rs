@@ -1,254 +1,61 @@
-use std::{
-  cell::RefCell, collections::{HashMap, HashSet}, hash::{Hash, Hasher}, rc::Rc
-};
+use std::{cell::RefCell, rc::Rc};
 
-use crate::{bytecode::{ChunkGroup, DataCache}, parser::NodeFunction};
+use crate::bytecode::DataCache;
 mod number;
+mod object;
 pub use number::Number;
+use object::AS_ARRAY_PROPERTY;
+pub use object::{Function, MultiRefHash, Object};
 
-#[derive(Debug, Clone)]
-pub struct MultiRefHash<T>(Rc<RefCell<T>>);
-impl<T> PartialEq for MultiRefHash<T> {
-  fn eq(&self, other: &Self) -> bool {
-    Rc::ptr_eq(&self.0, &other.0) // compara puntero, no contenido
-  }
-}
-impl<T> MultiRefHash<T> {
-  pub fn borrow(&self) -> std::cell::Ref<T> {
-    self.0.borrow()
-  }
-  pub fn borrow_mut(&self) -> std::cell::RefMut<T> {
-    self.0.borrow_mut()
-  }
-}
-impl<T> Hash for MultiRefHash<T> {
-  fn hash<H: Hasher>(&self, state: &mut H) {
-    Rc::as_ptr(&self.0).hash(state); // usa la dirección del Rc para el hash
-  }
-}
-impl<T> From<Rc<RefCell<T>>> for MultiRefHash<T> {
-  fn from(value: Rc<RefCell<T>>) -> Self {
-    Self(value)
-  }
-}
-impl<T> From<T> for MultiRefHash<T> {
-  fn from(value: T) -> Self {
-    Self(Rc::new(RefCell::new(value)))
-  }
-}
-impl<T> Eq for MultiRefHash<T> {}
-
-#[derive(Clone, PartialEq, Eq, Hash)]
-pub enum Function {
-  Function {
-    arity: usize,
-    chunk: ChunkGroup,
-    name: String,
-    is_async: bool,
-    file: String,
-  },
-  Script {
-    chunk: ChunkGroup,
-    path: String,
-  },
-  Native {
-    name: String,
-    path: String,
-    chunk: ChunkGroup,
-    func: fn(Value, Vec<Value>) -> Result<Value, String>,
-  },
-}
-impl Function {
-  pub const fn get_type(&self) -> &str {
-    match self {
-      Self::Function { .. } => "funcion",
-      Self::Script { .. } => "script",
-      Self::Native { .. } => "nativo",
-    }
-  }
-  pub fn chunk(&mut self) -> &mut ChunkGroup {
-    match self {
-      Self::Function { chunk, .. } => chunk,
-      Self::Script { chunk, .. } => chunk,
-      Self::Native { chunk, .. } => chunk,
-    }
-  }
-  pub fn location(&self) -> String {
-    match self {
-      Self::Function {
-        name,
-        is_async,
-        file,
-        ..
-      } => format!(
-        "en {} <{file}>",
-        if *is_async {
-          format!("asinc {name}")
-        } else {
-          name.to_string()
-        }
-      ),
-      Self::Script { path, .. } => format!("en <{path}>"),
-      Self::Native { path, .. } => format!("en <{path}>"),
-    }
-  }
-}
-impl ToString for Function {
-  fn to_string(&self) -> String {
-    match self {
-      Self::Function { name, is_async, .. } => {
-        format!("<{} {name}>", if *is_async { "asinc fn" } else { "fn" })
-      }
-      Self::Script { path, .. } => format!("<script '{path}'>"),
-      Self::Native { name, .. } => format!("<nativo fn {name}>"),
-    }
-  }
-}
-impl From<&NodeFunction> for Function {
-  fn from(value: &NodeFunction) -> Self {
-    Self::Function {
-      arity: value.params.len(),
-      chunk: ChunkGroup::new(),
-      name: value.name.clone(),
-      is_async: value.is_async,
-      file: value.location.file_name.clone(),
-    }
-  }
-}
-impl std::fmt::Debug for Function {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    write!(f, "{}", self.to_string())
-  }
-}
-
-#[derive(Clone, PartialEq, Eq, Hash)]
-pub enum Object {
-  Map(
-    MultiRefHash<HashMap<String, Value>>,
-    MultiRefHash<HashMap<String, Value>>,
-  ),
-  Set(MultiRefHash<HashSet<Value>>),
-  Array(MultiRefHash<Vec<Value>>),
-  Function(Function),
-}
-impl Object {
-  pub fn new() -> Self {
-    Self::Map(HashMap::new().into(), HashMap::new().into())
-  }
-  pub const fn get_type(&self) -> &str {
-    match self {
-      Self::Function(f) => f.get_type(),
-      Self::Map(_, _) => "objeto",
-      Self::Array(_) => "lista",
-      Self::Set(_) => "conjunto",
-    }
-  }
-  pub fn is_map(&self) -> bool {
-    match self {
-      Self::Map(_, _) => true,
-      _ => false,
-    }
-  }
-  pub fn is_function(&self) -> bool {
-    match self {
-      Self::Function { .. } => true,
-      _ => false,
-    }
-  }
-  pub fn is_array(&self) -> bool {
-    match self {
-      Self::Array(_) => true,
-      _ => false,
-    }
-  }
-  pub fn as_map(
-    &self,
-  ) -> (
-    MultiRefHash<HashMap<String, Value>>,
-    MultiRefHash<HashMap<String, Value>>,
-  ) {
-    match self {
-      Self::Map(x, y) => (x.clone(), y.clone()),
-      _ => (HashMap::new().into(), HashMap::new().into()),
-    }
-  }
-  pub fn as_array(&self) -> MultiRefHash<Vec<Value>> {
-    match self {
-      Self::Array(x) => x.clone(),
-      _ => vec![].into(),
-    }
-  }
-  pub fn as_function(&self) -> Function {
-    match self {
-      Self::Function(f) => f.clone(),
-      _ => Function::Function {
-        arity: 0,
-        chunk: ChunkGroup::new(),
-        name: "[Funcion invalida]".into(),
-        is_async: false,
-        file: "<nativo>".into(),
-      },
-    }
-  }
-  pub fn get_instance_property(&self, key: &str, proto_cache: DataCache) -> Option<Value> {
-    match (self, key) {
-      (Self::Map(_, instance), key) => instance.borrow().get(key).cloned(),
-      (Self::Array(array), "longitud") => Some(Value::Number(array.borrow().len().into())),
-      (value, key) => super::proto::proto(value.get_type().to_string(), proto_cache.clone()).get_instance_property(key, proto_cache),
-    }
-  }
-}
-impl From<Function> for Object {
-  fn from(value: Function) -> Self {
-    Self::Function(value)
-  }
-}
-impl From<HashMap<String, Value>> for Object {
-  fn from(value: HashMap<String, Value>) -> Self {
-    Self::Map(value.into(), HashMap::new().into())
-  }
-}
-impl From<Vec<Value>> for Object {
-  fn from(value: Vec<Value>) -> Self {
-    Self::Array(value.into())
-  }
-}
-impl From<&str> for Object {
-  fn from(value: &str) -> Self {
-    Object::Array(
-      value
-        .chars()
-        .map(|c| Value::Char(c))
-        .collect::<Vec<_>>()
-        .into(),
-    )
-  }
-}
-impl ToString for Object {
-  fn to_string(&self) -> String {
-    match self {
-      Self::Function(f) => f.to_string(),
-      Self::Map(_, _) => format!("<Objeto {}>", self.get_type()),
-      _ => format!("<{}>", self.get_type()),
-    }
-  }
-}
-impl std::fmt::Debug for Object {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    write!(f, "{}", self.to_string())
-  }
-}
+use super::{stack::VarsManager, ChunkGroup};
 
 pub const NULL_NAME: &str = "nulo";
 pub const NEVER_NAME: &str = "nada";
 pub const TRUE_NAME: &str = "cierto";
 pub const FALSE_NAME: &str = "falso";
 
+pub const STRING_TYPE: &str = "cadena";
+pub const NUMBER_TYPE: &str = "numero";
+pub const BOOLEAN_TYPE: &str = "buleano";
+pub const ITERATOR_TYPE: &str = "iterador";
+pub const REF_TYPE: &str = "referencia";
+pub const CHAR_TYPE: &str = "caracter";
+pub const BYTE_TYPE: &str = "byte";
+
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub struct RefValue(MultiRefHash<Value>);
+impl RefValue {
+  pub fn new(value: Value) -> Self {
+    Self(MultiRefHash::from(value))
+  }
+  pub fn borrow(&self) -> std::cell::Ref<Value> {
+    self.0.borrow()
+  }
+  pub fn borrow_mut(&self) -> std::cell::RefMut<Value> {
+    self.0.borrow_mut()
+  }
+  pub fn as_number(&self) -> Number {
+    self.borrow().as_number()
+  }
+  pub fn as_boolean(&self) -> bool {
+    self.borrow().as_boolean()
+  }
+  pub fn as_string(&self) -> String {
+    self.borrow().as_string()
+  }
+}
+impl From<Value> for RefValue {
+  fn from(value: Value) -> Self {
+    Self(MultiRefHash::from(value))
+  }
+}
 #[derive(Clone, PartialEq, Eq, Default, Hash)]
 pub enum Value {
   Number(Number),
   String(String),
   Object(Object),
+  Iterator(MultiRefHash<Value>),
+  Ref(RefValue),
   Char(char),
   Byte(u8),
   False,
@@ -258,33 +65,54 @@ pub enum Value {
   Never,
 }
 impl Value {
-  pub const fn get_type(&self) -> &str {
+  pub fn get_type(&self) -> &str {
     match self {
-      Self::False | Self::True => "buleano",
-      Self::Never => "nada",
-      Self::Null => "nulo",
-      Self::Number(_) => "numero",
-      Self::String(_) => "cadena",
-      Self::Char(_) => "caracter",
-      Self::Byte(_) => "byte",
+      Self::False | Self::True => BOOLEAN_TYPE,
+      Self::Never => NEVER_NAME,
+      Self::Null => NULL_NAME,
+      Self::Number(_) => NUMBER_TYPE,
+      Self::String(_) => STRING_TYPE,
+      Self::Char(_) => CHAR_TYPE,
+      Self::Byte(_) => BYTE_TYPE,
+      Self::Iterator(_) => ITERATOR_TYPE,
+      Self::Ref(_) => REF_TYPE,
       Self::Object(o) => o.get_type(),
+    }
+  }
+  pub fn set_scope(&self, vars: Rc<RefCell<VarsManager>>) {
+    match self {
+      Self::Object(Object::Function(f)) => f.borrow().set_scope(vars),
+      _ => panic!(
+        "Error: no se puede establecer una variable local en un valor de tipo {}",
+        self.get_type()
+      ),
     }
   }
   pub fn is_number(&self) -> bool {
     match self {
       Self::Number(_) => true,
+      Self::Ref(RefValue(r)) | Self::Iterator(r) => r.borrow().is_number(),
       _ => false,
     }
   }
   pub fn is_object(&self) -> bool {
     match self {
       Self::Object(_) => true,
+      Self::Ref(RefValue(r)) | Self::Iterator(r) => r.borrow().is_object(),
       _ => false,
     }
   }
   pub fn is_string(&self) -> bool {
     match self {
       Self::String(_) => true,
+      Self::Ref(RefValue(r)) | Self::Iterator(r) => r.borrow().is_string(),
+      _ => false,
+    }
+  }
+  pub fn is_iterator(&self) -> bool {
+    match self {
+      Self::Iterator(_) => true,
+      Self::Ref(RefValue(r)) => r.borrow().is_iterator(),
       _ => false,
     }
   }
@@ -295,6 +123,7 @@ impl Value {
       Self::True => 1.into(),
       Self::Null | Self::Never | Self::False => 0.into(),
       Self::String(s) => s.parse::<Number>().unwrap_or(0.into()),
+      Self::Iterator(v) | Self::Ref(RefValue(v)) => v.borrow().as_number(),
       Self::Object(_) => 1.into(),
       Self::Byte(b) => b.to_string().parse::<Number>().unwrap_or(0.into()),
       Self::Char(c) => c.into(),
@@ -305,18 +134,28 @@ impl Value {
       Self::Char(c) => *c != '\0',
       Self::Number(x) => !x.is_zero(),
       Self::String(s) => !s.is_empty(),
+      Self::Iterator(v) | Self::Ref(RefValue(v)) => v.borrow().as_boolean(),
       Self::Object(_) | Self::True => true,
       Self::Byte(b) => *b != 0,
       Self::Null | Self::Never | Self::False => false,
     }
   }
-  pub fn as_object(&self) -> Object {
+
+  pub fn is_function(&self) -> bool {
     match self {
-      Self::String(s) => s.as_str().into(),
-      Self::Object(x) => x.clone(),
-      _ => Object::new(),
+      Self::Object(Object::Function { .. }) => true,
+      Self::Ref(RefValue(r)) | Self::Iterator(r) => r.borrow().is_function(),
+      _ => false,
     }
   }
+  pub fn is_array(&self) -> bool {
+    match self {
+      Self::Object(Object::Array(_)) => true,
+      Self::Ref(RefValue(r)) | Self::Iterator(r) => r.borrow().is_array(),
+      _ => false,
+    }
+  }
+
   pub fn as_string(&self) -> String {
     match self {
       Self::String(s) => s.clone(),
@@ -324,14 +163,77 @@ impl Value {
       Self::True => TRUE_NAME.to_string(),
       Self::Null => NULL_NAME.to_string(),
       Self::Never => NEVER_NAME.to_string(),
+      Self::Iterator(v) => format!("@{}", v.borrow().as_string()),
+      Self::Ref(v) => format!("&{}", v.borrow().as_string()),
       Self::Byte(b) => format!("0x{b:02X}"),
       Self::Number(x) => x.to_string(),
       Self::Char(c) => c.to_string(),
       Self::Object(x) => x.to_string(),
     }
   }
+  pub fn as_function(&self) -> MultiRefHash<Function> {
+    match self {
+      Self::Object(Object::Function(f)) => f.clone(),
+      Self::Ref(RefValue(r)) | Self::Iterator(r) => r.borrow().as_function(),
+      _ => Function::Script {
+        chunk: ChunkGroup::new(),
+        scope: None.into(),
+        path: "<nulo>".to_string(),
+      }
+      .into(),
+    }
+  }
+  pub fn as_strict_array(&self) -> Result<Vec<Value>, String> {
+    match self {
+      Self::Object(Object::Array(array)) => Ok(array.borrow().clone()),
+      Self::Object(Object::Map(_, instance)) => {
+        if let Some(values) = instance.borrow().get(AS_ARRAY_PROPERTY) {
+          if let Value::Object(Object::Array(array)) = values {
+            return Ok(array.borrow().clone());
+          }
+        }
+        Err(format!(
+          "No se puede convertir a lista: {}",
+          self.as_string()
+        ))
+      }
+      Self::Ref(RefValue(l)) | Self::Iterator(l) => l.borrow().as_strict_array().or_else(|_| {
+        Err(format!(
+          "No se puede convertir a lista: {}",
+          self.as_string()
+        ))
+      }),
+      _ => Err(format!(
+        "No se puede convertir a lista: {}",
+        self.as_string()
+      )),
+    }
+  }
+  pub fn set_object_property(&self, key: &str, value: Value) -> Option<Value> {
+    match self {
+      Self::Object(o) => o.set_object_property(key, value),
+      Self::Iterator(r) => r.borrow().set_object_property(key, value),
+      _ => None,
+    }
+  }
+  pub fn get_object_property(&self, key: &str) -> Option<Value> {
+    match self {
+      Self::Object(o) => o.get_object_property(key),
+      Self::Ref(RefValue(r)) => r.borrow().get_object_property(key),
+      Self::Iterator(r) => r.borrow().get_object_property(key),
+      _ => None,
+    }
+  }
+  pub fn set_instance_property(&self, key: &str, value: Value) -> Option<Value> {
+    match self {
+      Self::Iterator(r) => r.borrow().set_instance_property(key, value),
+      Self::Object(o) => o.set_instance_property(key, value),
+      _ => None,
+    }
+  }
   pub fn get_instance_property(&self, key: &str, proto_cache: DataCache) -> Option<Value> {
     match (self, key) {
+      (Self::Ref(RefValue(r)), key) => r.borrow().get_instance_property(key, proto_cache),
       (Self::Object(o), key) => o.get_instance_property(key, proto_cache),
       (Self::String(s), "longitud") => Some(Self::Number(s.len().into())),
       (Self::String(c), "bytes") => Some(Self::Object(
@@ -341,7 +243,8 @@ impl Value {
           .collect::<Vec<Self>>()
           .into(),
       )),
-      (value, key) => super::proto::proto(value.get_type().to_string(), proto_cache.clone()).get_instance_property(key, proto_cache),
+      (value, key) => super::proto::proto(value.get_type().to_string(), proto_cache.clone())
+        .get_instance_property(key, proto_cache),
     }
   }
 }
@@ -357,11 +260,11 @@ impl From<Number> for Value {
 }
 impl From<bool> for Value {
   fn from(value: bool) -> Self {
-      if value {
-        Self::True
-      }else {
-        Self::False
-      }
+    if value {
+      Self::True
+    } else {
+      Self::False
+    }
   }
 }
 impl std::fmt::Debug for Value {

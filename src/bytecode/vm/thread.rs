@@ -1,11 +1,11 @@
-use std::cell::RefCell;
+use std::cell::{RefCell, RefMut};
 use std::path::Path;
 use std::rc::Rc;
 
 use crate::bytecode::compiler::{ChunkGroup, OpCode};
 use crate::bytecode::libs::libs;
 use crate::bytecode::stack::{CallFrame, InterpretResult, VarsManager};
-use crate::bytecode::value::{Function, Value};
+use crate::bytecode::value::{Function, Value, REF_TYPE};
 
 use super::{ModuleThread, VM};
 
@@ -37,8 +37,11 @@ impl Thread {
   pub fn current_frame(&mut self) -> &mut CallFrame {
     self.call_stack.last_mut().unwrap()
   }
-  fn current_chunk(&mut self) -> &mut ChunkGroup {
+  fn current_chunk(&mut self) -> RefMut<ChunkGroup> {
     self.current_frame().current_chunk()
+  }
+  fn globals(&mut self) -> Rc<RefCell<VarsManager>> {
+    self.current_frame().globals()
   }
   fn current_vars(&mut self) -> Rc<RefCell<VarsManager>> {
     self.current_frame().current_vars()
@@ -102,7 +105,21 @@ impl Thread {
   fn call_value(&mut self, this: Value, callee: Value, arity: usize) -> InterpretResult {
     let mut args = vec![];
     for _ in 0..arity {
-      args.push(self.pop());
+      let value = self.pop();
+      if value.is_iterator() {
+        let mut list = match value.as_strict_array() {
+          Ok(list) => list,
+          Err(error) => {
+            return InterpretResult::RuntimeError(error);
+          }
+        };
+        list.reverse();
+        for item in list.iter() {
+          args.push(item.clone());
+        }
+      } else {
+        args.push(value);
+      }
     }
     args.reverse();
     if !callee.is_object() {
@@ -126,37 +143,80 @@ impl Thread {
       self.push(value);
       return InterpretResult::Continue;
     }
-    let obj = callee.as_object();
-    if !obj.is_function() {
+    if !callee.is_function() {
       return InterpretResult::RuntimeError("Se esperaba llamar una funcion [2]".into());
     }
-    let function = obj.as_function();
-    if let Function::Native { func, .. } = function {
-      let value = func(this, args);
-      return if let Err(error) = value {
-        InterpretResult::RuntimeError(error)
-      } else {
-        self.push(value.unwrap());
-        InterpretResult::Continue
-      };
+    let fun = callee.as_function();
+    let fun_clone = fun.clone();
+    let function = fun_clone.borrow();
+
+    // En el caso de que la funcion no tenga un scope definido, se usa el scope actual (esto deberia de pasar)
+    let vars = function.get_scope().unwrap_or_else(|| self.current_vars());
+    let locals = vec![Rc::new(RefCell::new(
+      VarsManager::crate_child(vars.clone()).set_this(this.clone()),
+    ))];
+    self.call_stack.push(CallFrame::new(fun, locals));
+
+    let (arity, has_rest) = match &*function {
+      Function::Function {
+        arity, has_rest, ..
+      } => (*arity, *has_rest),
+      Function::Script { .. } => (0, false),
+      Function::Native { func, .. } => {
+        let value = func(this, args);
+        return if let Err(error) = value {
+          InterpretResult::RuntimeError(error)
+        } else {
+          self.push(value.unwrap());
+          InterpretResult::Continue
+        };
+      }
+    };
+    if arity > args.len() {
+      if arity == 1 && args.len() == 0 {
+        return InterpretResult::RuntimeError(
+          "Se esperaba llamar una funcion con un argumento".into(),
+        );
+      }
+      return InterpretResult::RuntimeError(format!(
+        "Se esperaban {} argumentos, pero se recibieron {}",
+        arity,
+        args.len()
+      ));
     }
-    for arg in args {
+    let mut arguments = vec![];
+    let mut rest = vec![];
+    for i in 0..args.len() {
+      if i >= arity {
+        rest.push(args[i].clone());
+        continue;
+      }
+      arguments.push(args[i].clone());
+    }
+    if has_rest {
+      arguments.push(Value::Object(rest.into()));
+    }
+    arguments.reverse();
+    for arg in arguments {
       self.push(arg);
     }
-    let vars = self.current_vars();
-    let locals = vec![Rc::new(RefCell::new(
-      VarsManager::crate_child(vars.clone()).set_this(this),
-    ))];
-    self.call_stack.push(CallFrame::new(function, locals));
     InterpretResult::Continue
   }
   pub fn run_instruction(&mut self) -> InterpretResult {
     let byte_instruction = self.read();
     let instruction: OpCode = byte_instruction.into();
 
-    //println!("{:<16} | {:?}", format!("{:?}", instruction), self.stack);
+    println!("{:<16} | {:?}", format!("{:?}", instruction), self.stack);
 
     let value: Value = match instruction {
+      OpCode::OpSetScope => {
+        let value = self.pop();
+        let vars = self.current_vars();
+        value.set_scope(vars);
+        value
+      }
+      OpCode::OpAt => Value::Iterator(self.pop().into()),
+      OpCode::OpAsRef => Value::Ref(self.pop().into()),
       OpCode::OpCopy => {
         let value = self.pop();
         self.push(value.clone());
@@ -167,61 +227,78 @@ impl Thread {
         if !value.is_number() {
           return InterpretResult::RuntimeError(format!("No se pudo operar '~x'"));
         }
-        Value::Number(value.as_number().round())
+        Value::Number(value.as_number().trunc())
       }
       OpCode::OpSetMember => {
         let value = self.pop();
         let key = self.pop();
         let object = self.pop();
         let is_instance = self.read() == 1u8;
-        if !object.is_object() {
-          return InterpretResult::RuntimeError(format!(
-            "Se esperaba un objeto para asignar la propiedad '{}' [1]",
-            key.as_string()
-          ));
-        }
         if is_instance {
-          return InterpretResult::RuntimeError(format!(
-            "Las propiedades de instancia no se pueden asignar fuera de su clase"
-          ));
-        }
-        let obj = object.as_object();
-        if let Value::Never = value {
+          let key = key.as_string();
+          if let Some(value) = object.set_instance_property(&key, value) {
+            self.push(value);
+            return InterpretResult::Continue;
+          }
           let type_name = object.get_type();
           return InterpretResult::RuntimeError(format!(
-            "No se puede asignar un valor '{type_name}' a una propiedad en su lugar usa '{}'",
-            Value::Null.get_type()
+            "No se pudo asignar la propiedad de instancia '{key}' de '{type_name}'"
           ));
         }
-        if obj.is_map() {
-          let map = obj.as_map();
-          let mut map = map.0.borrow_mut();
-          let value = map.insert(key.as_string(), value).unwrap_or_default();
-          value
-        } else if obj.is_array() {
-          let vec = obj.as_array();
-          if !key.is_number() {
-            return InterpretResult::RuntimeError(format!("Se esperaba un indice de propiedad"));
-          }
-          let key = key.as_number();
-          let index = key.abs().trunc();
-          if key != index {
-            return InterpretResult::RuntimeError(format!(
-              "El indice debe ser un numero entero positivo"
-            ));
-          }
-          let index = index.to_string().parse::<usize>().unwrap_or(0);
-          let mut vec = vec.borrow_mut();
-          if index >= vec.len() {
-            vec.resize(index + 1, Value::Never);
-          }
-          vec[index] = value.clone();
-          value
-        } else {
+        if !object.is_object() {
           return InterpretResult::RuntimeError(format!(
-            "Se esperaba un objeto para asignar la propiedad '{}' [2]",
+            "Se esperaba un objeto para asignar la propiedad '{}' [3]",
             key.as_string()
           ));
+        }
+        let key = if object.is_array() {
+          if !key.is_number() {
+            return InterpretResult::RuntimeError(format!(
+              "Se esperaba un indice de propiedad, pero se obtuvo '{}'",
+              key.get_type()
+            ));
+          }
+          let key = key.as_number();
+          let index = match key {
+            crate::bytecode::value::Number::Basic(n) => n,
+            crate::bytecode::value::Number::Complex(_, _) => {
+              return InterpretResult::RuntimeError(format!(
+                "El indice no puede ser un valor complejo (asignar propiedad)"
+              ));
+            }
+            crate::bytecode::value::Number::Infinity
+            | crate::bytecode::value::Number::NaN
+            | crate::bytecode::value::Number::NegativeInfinity => {
+              return InterpretResult::RuntimeError(format!(
+                "El indice no puede ser NaN o infinito (asignar propiedad)"
+              ));
+            }
+          };
+          if index.is_negative() {
+            return InterpretResult::RuntimeError(format!(
+              "El indice debe ser un numero entero positivo (asignar propiedad)"
+            ));
+          }
+          if index.is_int() {
+            index.to_string()
+          } else {
+            return InterpretResult::RuntimeError(format!(
+              "El indice debe ser entero (asignar propiedad)"
+            ));
+          }
+        } else {
+          key.as_string()
+        };
+        match object.set_object_property(&key, value) {
+          Some(value) => value,
+          None => {
+            let type_name = object.get_type();
+            return InterpretResult::RuntimeError(if type_name == REF_TYPE {
+              format!("Una referencia no puede ser modificada (asignar propiedad '{key}')",)
+            } else {
+              format!("No se pudo asignar la propiedad '{key}' a '{type_name}'",)
+            });
+          }
         }
       }
       OpCode::OpGetMember => {
@@ -246,36 +323,53 @@ impl Thread {
             key.as_string()
           ));
         }
-        let obj = object.as_object();
-        if obj.is_map() {
-          let map = obj.as_map();
-          let value = map.0.borrow().get(&key.as_string()).cloned();
-          let value = if let Some(value) = value {
-            value
-          } else {
-            Value::Never
-          };
-          value
-        } else if obj.is_array() {
-          let vec = obj.as_array();
+        let key = if object.is_array() {
           if !key.is_number() {
-            return InterpretResult::RuntimeError(format!("Se esperaba un indice de propiedad"));
-          }
-          let key = key.as_number();
-          let index = key.abs().trunc();
-          if key != index {
             return InterpretResult::RuntimeError(format!(
-              "El indice debe ser un numero entero positivo"
+              "Se esperaba un indice de propiedad, pero se obtuvo '{}'",
+              key.get_type()
             ));
           }
-          let index = index.to_string().parse::<usize>().unwrap_or(0);
-          let value = vec.borrow().get(index).cloned().unwrap_or_default();
-          value
+          let key = key.as_number();
+          let index = match key {
+            crate::bytecode::value::Number::Basic(n) => n,
+            crate::bytecode::value::Number::Complex(_, _) => {
+              return InterpretResult::RuntimeError(format!(
+                "El indice no puede ser un valor complejo (obtener propiedad)"
+              ));
+            }
+            crate::bytecode::value::Number::Infinity
+            | crate::bytecode::value::Number::NaN
+            | crate::bytecode::value::Number::NegativeInfinity => {
+              return InterpretResult::RuntimeError(format!(
+                "El indice no puede ser NaN o infinito (obtener propiedad)"
+              ));
+            }
+          };
+          if index.is_negative() {
+            return InterpretResult::RuntimeError(format!(
+              "El indice debe ser un numero entero positivo (obtener propiedad)"
+            ));
+          }
+          if index.is_int() {
+            index.to_string()
+          } else {
+            return InterpretResult::RuntimeError(format!(
+              "El indice debe ser entero (obtener propiedad)"
+            ));
+          }
         } else {
-          return InterpretResult::RuntimeError(format!(
-            "Se esperaba un objeto para obtener la propiedad '{}' [4]",
-            key.as_string()
-          ));
+          key.as_string()
+        };
+        match object.get_object_property(&key) {
+          Some(value) => value,
+          None => {
+            let type_name = object.get_type();
+            return InterpretResult::RuntimeError(format!(
+              "No se pudo obtener la propiedad '{}' de '{}'",
+              key, type_name
+            ));
+          }
         }
       }
       OpCode::OpConstant => self.read_constant(),
@@ -299,13 +393,13 @@ impl Thread {
             .to_str()
             .unwrap()
             .to_string()
-        };
+        }.replace("\\\\?\\", "");
         let proto = self.vm.borrow().as_ref().unwrap().cache.libs.clone();
         let value = libs(lib_name, proto, |path| {
-          let thread = Rc::new(RefCell::new(VM::resolve(
+          let module = Rc::new(RefCell::new(VM::resolve(
             self.vm.clone(),
             path,
-            self.current_vars(),
+            self.globals(),
           )));
           *self
             .module
@@ -313,8 +407,8 @@ impl Thread {
             .as_ref()
             .unwrap()
             .sub_module
-            .borrow_mut() = Some(thread.clone());
-          let x = thread.borrow().clone().as_value();
+            .borrow_mut() = Some(module.clone());
+          let x = module.borrow().clone().as_value();
           x
         });
         if alias {
@@ -355,7 +449,6 @@ impl Thread {
         return InterpretResult::Continue;
       }
       OpCode::OpNewLocals => {
-        self.current_vars();
         self.current_frame().add_vars();
         return InterpretResult::Continue;
       }
@@ -372,12 +465,14 @@ impl Thread {
         if !module.is_object() {
           return InterpretResult::RuntimeError("Se esperaba un objeto como modulo".to_string());
         }
-        let obj = module.as_object();
-        if !obj.is_map() {
-          return InterpretResult::RuntimeError("Se esperaba un objeto como modulo".to_string());
+        match module.set_instance_property(&name, value.clone()) {
+          Some(value) => value,
+          None => {
+            return InterpretResult::RuntimeError(format!(
+              "No se pudo exportar la variable '{name}'"
+            ))
+          }
         }
-        obj.as_map().1.borrow_mut().insert(name, value.clone());
-        value
       }
       OpCode::OpVarDecl => {
         let name = self.read_string();

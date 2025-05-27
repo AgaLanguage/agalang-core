@@ -14,9 +14,9 @@ pub fn string_proto() -> Value {
 
   hashmap.insert(
     REPLACE.into(),
-    Value::Object(Object::Function(Function::Native {
-      name: REPLACE.into(),
-      path: format!("<cadena>::{REPLACE}"),
+    Value::Object(Function::Native {
+      path: "".into(),
+      name: format!("<cadena>::{REPLACE}"),
       func: |this, args| {
         let old = args.get(0);
         if old.is_none() {
@@ -33,14 +33,14 @@ pub fn string_proto() -> Value {
         Ok(Value::String(string.into()))
       },
       chunk: ChunkGroup::default(),
-    })),
+    }.into()),
   );
 
   hashmap.insert(
     BYTES.into(),
-    Value::Object(Object::Function(Function::Native {
-      name: BYTES.into(),
-      path: format!("<cadena>::{BYTES}"),
+    Value::Object(Function::Native {
+      path: "".into(),
+      name: format!("<cadena>::{BYTES}"),
       func: |this, _| {
         let string = this.as_string();
         let list = string
@@ -51,14 +51,14 @@ pub fn string_proto() -> Value {
         Ok(Value::Object(list.into()))
       },
       chunk: ChunkGroup::default(),
-    })),
+    }.into()),
   );
 
   hashmap.insert(
     SPLIT.into(),
-    Value::Object(Object::Function(Function::Native {
-      name: SPLIT.into(),
-      path: format!("<cadena>::{SPLIT}"),
+    Value::Object(Function::Native {
+      path: "".into(),
+      name: format!("<cadena>::{SPLIT}"),
       func: |this, args| {
         let separator = args.get(0);
         if separator.is_none() {
@@ -73,7 +73,7 @@ pub fn string_proto() -> Value {
         Ok(Value::Object(list.into()))
       },
       chunk: ChunkGroup::default(),
-    })),
+    }.into()),
   );
   Value::Object(Object::Map(HashMap::new().into(), hashmap.into()))
 }

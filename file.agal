@@ -1,2 +1,12 @@
 importa ':consola' como Consola;
-233//-2 |> Consola::pintar;
+importa './sort.la' como Sort;
+
+fn main(primero, @otros) {
+  Consola::pintar("Argumento 1: "::remplaza(), primero);
+  Consola::pintar("Argumentos: ", otros);
+  def lista = &[3, 7, 8, 5, 4, 10, 2, 1];
+  Consola::pintar("Lista original: ", lista);
+  lista |> Sort::ordenar;
+  Consola::pintar("Lista ordenada: ", lista);
+}
+main(@[1,2,3], @[4,5,6]);

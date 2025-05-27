@@ -73,4 +73,7 @@ impl VarsManager {
     self.declare_keyword(THIS_NAME, this);
     self
   }
+  pub fn get_link(&self) -> Option<Rc<RefCell<Self>>> {
+    self.link.clone()
+  }
 }

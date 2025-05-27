@@ -29,6 +29,8 @@ pub enum OperatorType {
   GreaterThan,
   /// ?
   QuestionMark,
+  /// @
+  At
 }
 impl OperatorType {
   pub fn from(c: char) -> Self {
@@ -47,6 +49,7 @@ impl OperatorType {
       '<' => Self::LessThan,
       '>' => Self::GreaterThan,
       '?' => Self::QuestionMark,
+      '@' => Self::At,
       _ => Self::None,
     }
   }

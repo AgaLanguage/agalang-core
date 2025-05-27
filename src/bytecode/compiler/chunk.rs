@@ -13,6 +13,8 @@ pub enum OpCode {
   // Expr
   OpNot,
   OpApproximate,
+  OpAt,
+  OpAsRef,
   OpAsBoolean,
   OpAsString,
   OpCall,
@@ -44,6 +46,7 @@ pub enum OpCode {
   OpBreak,
   OpContinue,
   OpCopy, // Para duplicar el ultimo valor en el stack (obtener el padre de un objeto)
+  OpSetScope, // Agrega el scope actual a el ultimo valor de la pila (para funciones)
   // Invalid
   OpNull,
 }
@@ -87,9 +90,12 @@ impl From<u8> for OpCode {
       x if x == Self::OpJump as u8 => Self::OpJump,
       x if x == Self::OpReturn as u8 => Self::OpReturn,
       x if x == Self::OpCopy as u8 => Self::OpCopy,
+      x if x == Self::OpSetScope as u8 => Self::OpSetScope,
       x if x == Self::OpImport as u8 => Self::OpImport,
       x if x == Self::OpExport as u8 => Self::OpExport,
 
+      x if x == Self::OpAt as u8 => Self::OpAt,
+      x if x == Self::OpAsRef as u8 => Self::OpAsRef,
       _ => Self::OpNull,
     }
   }
@@ -148,7 +154,7 @@ impl Chunk {
     self.code.len() - 2
   }
   pub fn patch_jump(&mut self, offset: usize) -> Result<(), String> {
-    let jump = self.code.len() - offset - 2;
+    let jump = self.code.len() - offset - (2 /* Data bytes */);
     if jump > u16::MAX.into() {
       return Err(format!("Longitud muy alta"));
     }

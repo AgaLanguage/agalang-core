@@ -18,9 +18,9 @@ pub fn math_lib() -> Value {
 
   hashmap.insert(
     FLOOR.into(),
-    Value::Object(Object::Function(Function::Native {
+    Value::Object(Function::Native {
       name: format!("<{MATH_LIB}>::{FLOOR}"),
-      path: format!("<{MATH_LIB}>::{FLOOR}"),
+      path: format!("<{MATH_LIB}>"),
       chunk: crate::bytecode::ChunkGroup::default(),
       func: |_, args| {
         let number = args
@@ -34,13 +34,13 @@ pub fn math_lib() -> Value {
           Err(format!("{FLOOR}: se esperaba un número"))
         }
       },
-    })),
+    }.into()),
   );
     hashmap.insert(
     IS_INFINITE.into(),
-    Value::Object(Object::Function(Function::Native {
+    Value::Object(Function::Native {
       name: format!("<{MATH_LIB}>::{IS_INFINITE}"),
-      path: format!("<{MATH_LIB}>::{IS_INFINITE}"),
+      path: format!("<{MATH_LIB}>"),
       chunk: crate::bytecode::ChunkGroup::default(),
       func: |_, args| {
         let number = args
@@ -54,13 +54,13 @@ pub fn math_lib() -> Value {
           Err(format!("{IS_INFINITE}: se esperaba un número"))
         }
       },
-    })),
+    }.into()),
   );
   hashmap.insert(
     ROUND.into(),
-    Value::Object(Object::Function(Function::Native {
+    Value::Object(Function::Native {
       name: format!("<{MATH_LIB}>::{ROUND}"),
-      path: format!("<{MATH_LIB}>::{ROUND}"),
+      path: format!("<{MATH_LIB}>"),
       chunk: crate::bytecode::ChunkGroup::default(),
       func: |_, args| {
         let number = args
@@ -74,13 +74,13 @@ pub fn math_lib() -> Value {
           Err(format!("{ROUND}: se esperaba un número"))
         }
       },
-    })),
+    }.into()),
   );
   hashmap.insert(
     CEIL.into(),
-    Value::Object(Object::Function(Function::Native {
+    Value::Object(Function::Native {
       name: format!("<{MATH_LIB}>::{CEIL}"),
-      path: format!("<{MATH_LIB}>::{CEIL}"),
+      path: format!("<{MATH_LIB}>"),
       chunk: crate::bytecode::ChunkGroup::default(),
       func: |_, args| {
         let number = args
@@ -94,13 +94,13 @@ pub fn math_lib() -> Value {
           Err(format!("{CEIL}: se esperaba un número"))
         }
       },
-    })),
+    }.into()),
   );
   hashmap.insert(
     MAX.into(),
-    Value::Object(Object::Function(Function::Native {
+    Value::Object(Function::Native {
       name: format!("<{MATH_LIB}>::{MAX}"),
-      path: format!("<{MATH_LIB}>::{MAX}"),
+      path: format!("<{MATH_LIB}>"),
       chunk: crate::bytecode::ChunkGroup::default(),
       func: |_, args| {
         let mut max = Number::NegativeInfinity;
@@ -116,13 +116,13 @@ pub fn math_lib() -> Value {
         }
         Ok(Value::Number(max))
       },
-    })),
+    }.into()),
   );
   hashmap.insert(
     MIN.into(),
-    Value::Object(Object::Function(Function::Native {
+    Value::Object(Function::Native {
       name: format!("<{MATH_LIB}>::{MIN}"),
-      path: format!("<{MATH_LIB}>::{MIN}"),
+      path: format!("<{MATH_LIB}>"),
       chunk: crate::bytecode::ChunkGroup::default(),
       func: |_, args| {
         let mut min = Number::Infinity;
@@ -138,7 +138,7 @@ pub fn math_lib() -> Value {
         }
         Ok(Value::Number(min))
       },
-    })),
+    }.into()),
   );
   hashmap.insert(PI.into(), Value::Number("3.1415926535897932384626433832795028841971693993751058209749445923078164062862089986280348253421170679".parse::<Number>().unwrap()));
   hashmap.insert(TAU.into(), Value::Number("6.2831853071795864769252867665590057683943387987502116419498891846156328125724179972560696506842341359".parse::<Number>().unwrap()));

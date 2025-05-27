@@ -3,7 +3,7 @@ mod tokenize;
 mod colors;
 
 pub use tokenize::*;
-pub use colors::Color;
+pub use colors::*;
 pub use list::*;
 pub fn is_valid_char(valid_chars: &str, eval_char: char) -> bool {
   for c in valid_chars.chars() {

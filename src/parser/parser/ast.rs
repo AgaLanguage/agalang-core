@@ -420,6 +420,7 @@ impl std::fmt::Display for NodeOperator {
       Self::NotEqual => "!=",
       Self::Assign => "=",
       Self::PipeLine => "|>",
+      Self::At => "@",
     };
     write!(f, "{}", str)
   }
@@ -633,6 +634,8 @@ pub enum NodeOperator {
   Equal,
   /// |>
   PipeLine,
+  /// @
+  At,
 }
 #[derive(Clone, PartialEq, Debug, Eq, Hash)]
 pub struct NodeBinary {

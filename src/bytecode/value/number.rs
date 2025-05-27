@@ -6,7 +6,7 @@ use std::{
 
 const DIVISION_DECIMALS: usize = 100;
 
-#[derive(Clone, Eq, PartialOrd, Hash)]
+#[derive(Clone, Eq, Hash, Debug)]
 pub struct Decimals(Vec<u8>);
 impl Decimals {
   pub fn is_zero(&self) -> bool {
@@ -32,6 +32,11 @@ impl Display for Decimals {
 impl PartialEq for Decimals {
   fn eq(&self, other: &Self) -> bool {
     self.to_string() == other.to_string()
+  }
+}
+impl PartialOrd for Decimals {
+  fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+    self.cmp(other).into()
   }
 }
 impl Ord for Decimals {
@@ -65,7 +70,7 @@ impl From<String> for Decimals {
   }
 }
 
-#[derive(Clone, Eq, Ord, Hash)]
+#[derive(Clone, Eq, Hash, Debug)]
 pub struct BCDUInt(Vec<u8>);
 impl BCDUInt {
   pub fn is_zero(&self) -> bool {
@@ -185,15 +190,82 @@ impl SubAssign<&BCDUInt> for BCDUInt {
 }
 
 impl Add for BCDUInt {
-  type Output = Self;
+  type Output = BCDUInt;
   fn add(self, rhs: Self) -> Self::Output {
-    &self + &rhs
+    let self_vec = self.0;
+    let rhs_vec = rhs.0;
+    let mut carry = 0;
+    let mut result = Vec::new();
+    let max_len = self_vec.len().max(rhs_vec.len());
+    for i in 0..max_len {
+      let i = max_len - 1 - i;
+      let a = *self_vec.get(i).unwrap_or(&0);
+      let b = *rhs_vec.get(i).unwrap_or(&0);
+
+      let (a_byte_1, a_byte_0) = ((a & 0xF0) >> 4, a & 0x0F);
+      let (b_byte_1, b_byte_0) = ((b & 0xF0) >> 4, b & 0x0F);
+
+      let sum_0 = a_byte_0 + b_byte_0 + carry;
+      carry = sum_0 / 10;
+      let sum_1 = a_byte_1 + b_byte_1 + carry;
+      carry = sum_1 / 10;
+      let sum = (sum_1 % 10) << 4 | (sum_0 % 10);
+      result.push(sum as u8);
+    }
+    if carry > 0 {
+      result.push(carry);
+    }
+    result.reverse();
+    Self(result)
   }
 }
 impl Sub for BCDUInt {
   type Output = Self;
+
   fn sub(self, rhs: Self) -> Self::Output {
-    &self - &rhs
+    let lhs = self.0;
+    let rhs = rhs.0;
+
+    let mut result = Vec::new();
+    let mut carry = 0;
+
+    // Asumimos que lhs >= rhs comprobacion
+    let max_len = lhs.len().max(rhs.len());
+
+    for i in 0..max_len {
+      let a = *lhs.get(lhs.len().wrapping_sub(1 + i)).unwrap_or(&0);
+      let b = *rhs.get(rhs.len().wrapping_sub(1 + i)).unwrap_or(&0);
+
+      // Extraer nibbles altos y bajos
+      let (a1, a0) = ((a >> 4) & 0x0F, a & 0x0F);
+      let (b1, b0) = ((b >> 4) & 0x0F, b & 0x0F);
+
+      // Resta del nibble bajo
+      let mut sub0 = a0 as i8 - b0 as i8 - carry;
+      carry = 0;
+      if sub0 < 0 {
+        sub0 += 10;
+        carry = 1;
+      }
+
+      // Resta del nibble alto
+      let mut sub1 = a1 as i8 - b1 as i8 - carry;
+      carry = 0;
+      if sub1 < 0 {
+        sub1 += 10;
+        carry = 1;
+      }
+
+      result.push(((sub1 as u8) << 4) | (sub0 as u8));
+    }
+
+    // Eliminar ceros a la izquierda, excepto si es cero solo
+    while result.len() > 1 && *result.last().unwrap() == 0 {
+      result.pop();
+    }
+
+    result.reverse();
+    BCDUInt(result)
   }
 }
 impl Mul for BCDUInt {
@@ -239,80 +311,14 @@ impl Div for BCDUInt {
 impl Add for &BCDUInt {
   type Output = BCDUInt;
   fn add(self, rhs: Self) -> Self::Output {
-    let self_vec = self.clone().0;
-    let rhs_vec = rhs.clone().0;
-    let mut carry = 0;
-    let mut result = Vec::new();
-    let max_len = self_vec.len().max(rhs_vec.len());
-    for i in 0..max_len {
-      let i = max_len - 1 - i;
-      let a = *self_vec.get(i).unwrap_or(&0);
-      let b = *rhs_vec.get(i).unwrap_or(&0);
-
-      let (a_byte_1, a_byte_0) = ((a & 0xF0) >> 4, a & 0x0F);
-      let (b_byte_1, b_byte_0) = ((b & 0xF0) >> 4, b & 0x0F);
-
-      let sum_0 = a_byte_0 + b_byte_0 + carry;
-      carry = sum_0 / 10;
-      let sum_1 = a_byte_1 + b_byte_1 + carry;
-      carry = sum_1 / 10;
-      let sum = (sum_1 % 10) << 4 | (sum_0 % 10);
-      result.push(sum as u8);
-    }
-    if carry > 0 {
-      result.push(carry);
-    }
-    result.reverse();
-    BCDUInt(result)
+    self.clone() + rhs.clone()
   }
 }
 impl Sub for &BCDUInt {
   type Output = BCDUInt;
 
   fn sub(self, rhs: Self) -> Self::Output {
-    let lhs = &self.0;
-    let rhs = &rhs.0;
-
-    let mut result = Vec::new();
-    let mut carry = 0;
-
-    // Asumimos que lhs >= rhs
-    let max_len = lhs.len().max(rhs.len());
-
-    for i in 0..max_len {
-      let a = *lhs.get(lhs.len().wrapping_sub(1 + i)).unwrap_or(&0);
-      let b = *rhs.get(rhs.len().wrapping_sub(1 + i)).unwrap_or(&0);
-
-      // Extraer nibbles altos y bajos
-      let (a1, a0) = ((a >> 4) & 0x0F, a & 0x0F);
-      let (b1, b0) = ((b >> 4) & 0x0F, b & 0x0F);
-
-      // Resta del nibble bajo
-      let mut sub0 = a0 as i8 - b0 as i8 - carry;
-      carry = 0;
-      if sub0 < 0 {
-        sub0 += 10;
-        carry = 1;
-      }
-
-      // Resta del nibble alto
-      let mut sub1 = a1 as i8 - b1 as i8 - carry;
-      carry = 0;
-      if sub1 < 0 {
-        sub1 += 10;
-        carry = 1;
-      }
-
-      result.push(((sub1 as u8) << 4) | (sub0 as u8));
-    }
-
-    // Eliminar ceros a la izquierda, excepto si es cero solo
-    while result.len() > 1 && *result.last().unwrap() == 0 {
-      result.pop();
-    }
-
-    result.reverse();
-    BCDUInt(result)
+    self.clone() - rhs.clone()
   }
 }
 impl Mul for &BCDUInt {
@@ -335,7 +341,7 @@ impl Mul for &BCDUInt {
         }
       }
     }
-    
+
     while result.len() > 1 && *result.last().unwrap() == 0 {
       result.pop();
     }
@@ -351,23 +357,32 @@ impl Div for &BCDUInt {
     self.clone() / rhs.clone()
   }
 }
-
 impl PartialOrd for BCDUInt {
   fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+    self.cmp(other).into()
+  }
+}
+impl Ord for BCDUInt {
+  fn cmp(&self, other: &Self) -> std::cmp::Ordering {
     let x_digits = self.digits();
     let y_digits = other.digits();
     let x_len = x_digits.len();
     let y_len = y_digits.len();
+    if x_len > y_len {
+      return std::cmp::Ordering::Greater;
+    } else if x_len < y_len {
+      return std::cmp::Ordering::Less;
+    }
     let max = x_len.max(y_len);
-    for i in (1..=max).rev() {
-      let x = if x_len > i { x_digits[x_len - i] } else { 0 };
-      let y = if y_len > i { y_digits[y_len - i] } else { 0 };
+    for i in 0..max {
+      let x = if x_len > i { x_digits[i] } else { 0 };
+      let y = if y_len > i { y_digits[i] } else { 0 };
       let value = x.cmp(&y);
       if value != std::cmp::Ordering::Equal {
-        return Some(value);
+        return value;
       }
     }
-    Some(std::cmp::Ordering::Equal)
+    std::cmp::Ordering::Equal
   }
 }
 
@@ -388,7 +403,7 @@ impl From<u8> for BCDUInt {
     BCDUInt(vec![byte])
   }
 }
-#[derive(Clone, Eq, PartialOrd, Hash)]
+#[derive(Clone, Eq, Hash, Debug)]
 pub enum BasicNumber {
   Int(bool, BCDUInt),
   Float(bool, BCDUInt, Decimals),
@@ -398,12 +413,6 @@ impl BasicNumber {
     match self {
       Self::Int(_, x) => x.is_zero(),
       Self::Float(_, y_int, y_dec) => y_int.is_zero() && y_dec.to_string() == "0",
-    }
-  }
-  pub fn abs(&self) -> Self {
-    match self {
-      Self::Int(_, x) => Self::Int(false, x.clone()),
-      Self::Float(_, x_int, x_dec) => Self::Float(false, x_int.clone(), x_dec.clone()),
     }
   }
   pub fn floor(&self) -> Self {
@@ -469,6 +478,18 @@ impl BasicNumber {
     match self {
       Self::Int(x_neg, x) => Self::Int(*x_neg, x.clone()),
       Self::Float(x_neg, x, _) => Self::Int(*x_neg, x.clone()),
+    }
+  }
+  pub fn is_int(&self) -> bool {
+    match self {
+      Self::Int(_, _) => true,
+      Self::Float(_, _, x_dec) => x_dec.is_zero(),
+    }
+  }
+  pub fn is_negative(&self) -> bool {
+    match self {
+      Self::Int(x_neg, _) => *x_neg,
+      Self::Float(x_neg, _, _) => *x_neg,
     }
   }
 }
@@ -719,6 +740,11 @@ impl Neg for BasicNumber {
     }
   }
 }
+impl PartialOrd for BasicNumber {
+  fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+    self.cmp(other).into()
+  }
+}
 impl Ord for BasicNumber {
   fn cmp(&self, other: &Self) -> std::cmp::Ordering {
     match (self, other) {
@@ -728,9 +754,9 @@ impl Ord for BasicNumber {
         }
 
         if *x_neg && !*y_neg {
-          return std::cmp::Ordering::Greater;
-        } else if !*x_neg && *y_neg {
           return std::cmp::Ordering::Less;
+        } else if !*x_neg && *y_neg {
+          return std::cmp::Ordering::Greater;
         }
 
         if *x_neg && *y_neg {
@@ -855,15 +881,6 @@ impl Number {
       Self::NaN | Self::Infinity | Self::NegativeInfinity => false,
       Self::Basic(x) => x.is_zero(),
       Self::Complex(x, y) => x.is_zero() && y.is_zero(),
-    }
-  }
-  pub fn abs(&self) -> Self {
-    match self {
-      Self::NaN => Self::NaN,
-      Self::Infinity => Self::Infinity,
-      Self::NegativeInfinity => Self::Infinity,
-      Self::Basic(x) => Self::Basic(x.abs()),
-      Self::Complex(x, y) => Self::Complex(x.abs(), y.abs()),
     }
   }
   pub fn from_str_radix(value: &str, radix: u8) -> Self {
@@ -1133,17 +1150,35 @@ impl Neg for Number {
 }
 impl PartialOrd for Number {
   fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+    self.cmp(other).into()
+  }
+}
+impl Ord for Number {
+  fn cmp(&self, other: &Self) -> std::cmp::Ordering {
     match (self, other) {
-      (Self::NaN, _) => None,
-      (_, Self::NaN) => None,
-      (Self::Infinity, _) => Some(std::cmp::Ordering::Greater),
-      (_, Self::Infinity) => Some(std::cmp::Ordering::Less),
-      (Self::NegativeInfinity, _) => Some(std::cmp::Ordering::Less),
-      (_, Self::NegativeInfinity) => Some(std::cmp::Ordering::Greater),
-      (Self::Basic(x), Self::Basic(y)) => x.partial_cmp(y),
-      (Self::Complex(a, b), Self::Complex(c, d)) => a.partial_cmp(c).or_else(|| b.partial_cmp(d)),
-      (Self::Basic(x), Self::Complex(a, b)) => x.partial_cmp(a).or_else(|| x.partial_cmp(b)),
-      (Self::Complex(a, b), Self::Basic(x)) => a.partial_cmp(x).or_else(|| b.partial_cmp(x)),
+      (Self::NaN, Self::NaN) => std::cmp::Ordering::Equal,
+      (Self::NaN, _) => std::cmp::Ordering::Greater,
+      (_, Self::NaN) => std::cmp::Ordering::Less,
+      (Self::Infinity, _) => std::cmp::Ordering::Greater,
+      (_, Self::Infinity) => std::cmp::Ordering::Less,
+      (Self::NegativeInfinity, _) => std::cmp::Ordering::Less,
+      (_, Self::NegativeInfinity) => std::cmp::Ordering::Greater,
+      (Self::Basic(x), Self::Basic(y)) => x.cmp(y),
+      (Self::Complex(a, b), Self::Complex(c, d)) => {
+        let real = a.cmp(c);
+        if real == std::cmp::Ordering::Equal {
+          b.cmp(d)
+        } else {
+          real
+        }
+      }
+      (Self::Basic(x), Self::Complex(a, b)) => {
+        Self::Complex(x.clone(), BasicNumber::Int(false, BCDUInt::from(0)))
+          .cmp(&Self::Complex(a.clone(), b.clone()))
+      }
+      (Self::Complex(a, b), Self::Basic(x)) => Self::Complex(a.clone(), b.clone()).cmp(
+        &Self::Complex(x.clone(), BasicNumber::Int(false, BCDUInt::from(0))),
+      ),
     }
   }
 }

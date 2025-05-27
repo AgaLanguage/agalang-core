@@ -838,11 +838,21 @@ impl Parser {
         super::PunctuationType::CircularBracketClose,
       )))
     {
-      let param = self.expect(super::TokenType::Identifier, "Se esperaba un identificador")?;
-      params.push(ast::NodeIdentifier {
-        name: param.value.clone(),
-        location: param.location,
-      });
+      let param = if let super::TokenType::Operator(super::OperatorType::At) = self.at().token_type {
+        self.eat(); // @
+        let param = self.expect(super::TokenType::Identifier, "Se esperaba un identificador")?;
+       ast::NodeIdentifier {
+          name: format!("@{}", param.value),
+          location: param.location,
+        }
+      }else {
+        let param = self.expect(super::TokenType::Identifier, "Se esperaba un identificador")?;
+        ast::NodeIdentifier {
+          name: param.value.clone(),
+          location: param.location,
+        }
+      };
+      params.push(param);
       if self.match_token(super::TokenType::Punctuation(super::PunctuationType::Comma)) {
         continue;
       }
@@ -1260,12 +1270,52 @@ impl Parser {
           return Ok(left);
         };
       let right = self.parse_move_bits_expr()?;
-      left = ast::Node::Binary(ast::NodeBinary {
-        operator,
-        left: left.clone().to_box(),
-        right: right.to_box(),
-        location: left.get_location(),
-      })
+      if operator == ast::NodeOperator::GreaterThanOrEqual {
+        let greater_than = ast::Node::Binary(ast::NodeBinary {
+          operator: ast::NodeOperator::GreaterThan,
+          left: left.clone().to_box(),
+          right: right.clone().to_box(),
+          location: left.get_location(),
+        });
+        let equal = ast::Node::Binary(ast::NodeBinary {
+          operator: ast::NodeOperator::Equal,
+          left: left.clone().to_box(),
+          right: right.clone().to_box(),
+          location: left.get_location(),
+        });
+        left = ast::Node::Binary(ast::NodeBinary {
+          operator: ast::NodeOperator::Or,
+          left: greater_than.to_box(),
+          right: equal.to_box(),
+          location: left.get_location(),
+        });
+      } else if operator == ast::NodeOperator::LessThanOrEqual {
+        let less_than = ast::Node::Binary(ast::NodeBinary {
+          operator: ast::NodeOperator::LessThan,
+          left: left.clone().to_box(),
+          right: right.clone().to_box(),
+          location: left.get_location(),
+        });
+        let equal = ast::Node::Binary(ast::NodeBinary {
+          operator: ast::NodeOperator::Equal,
+          left: left.clone().to_box(),
+          right: right.clone().to_box(),
+          location: left.get_location(),
+        });
+        left = ast::Node::Binary(ast::NodeBinary {
+          operator: ast::NodeOperator::Or,
+          left: less_than.to_box(),
+          right: equal.to_box(),
+          location: left.get_location(),
+        });
+      } else {
+        left = ast::Node::Binary(ast::NodeBinary {
+          operator,
+          left: left.clone().to_box(),
+          right: right.to_box(),
+          location: left.get_location(),
+        })
+      }
     }
   }
   fn parse_move_bits_expr(&mut self) -> Result<ast::Node, NodeError> {
@@ -1903,7 +1953,8 @@ impl Parser {
         | super::OperatorType::Approximate
         | super::OperatorType::Not
         | super::OperatorType::And
-        | super::OperatorType::QuestionMark,
+        | super::OperatorType::QuestionMark
+        |super::OperatorType::At,
       ) => {
         self.eat();
         let operand = self.parse_literal_expr(message)?.to_box();
@@ -1929,7 +1980,9 @@ impl Parser {
           ast::NodeOperator::Not
         } else if operator == super::OperatorType::And {
           ast::NodeOperator::BitAnd
-        } else {
+        } else if operator == super::OperatorType::At {
+          ast::NodeOperator::At
+        }else {
           ast::NodeOperator::QuestionMark
         };
         ast::Node::UnaryFront(ast::NodeUnary {

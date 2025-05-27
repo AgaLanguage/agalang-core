@@ -11,7 +11,7 @@ use super::internal::{show_error, show_multiple_errors, ErrorNames, ErrorTypes};
 use token_identifier::token_identifier;
 
 const NUMBERS: &str = "0123456789";
-const OPERATORS: &str = "+-*/%=&|<>!^~?";
+const OPERATORS: &str = "+-*/%=&|<>!^~?@";
 const PUNCTUATION: &str = "(){}[],.;:";
 const COLOR: util::Color = util::Color::Cyan;
 

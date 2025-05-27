@@ -8,7 +8,7 @@ use crate::{
 pub const CONSOLE_LIB: &str = ":consola";
 const DRAW: &str = "pintar";
 
-fn inspect(value: &Value) -> String {
+fn inspect_value(value: &Value) -> String {
   match value {
     Value::Byte(_) => Color::Magenta,
     Value::Char(_) => Color::Blue,
@@ -16,8 +16,32 @@ fn inspect(value: &Value) -> String {
     Value::String(_) => Color::BrightGreen,
     Value::Never | Value::Null => Color::Gray,
     Value::Object(_) => Color::Cyan,
+    Value::Iterator(_) => Color::BrightCyan,
+    Value::Ref(_) => Color::BrightBlue,
   }
   .apply(&value.as_string())
+}
+fn inspect(value: &Value) -> String {
+  match value {
+    Value::Object(Object::Array(arr)) => {
+      let mut result = String::new();
+      result.push_str("[");
+      let mut is_first = true;
+      for item in arr.borrow().clone() {
+        if is_first {
+          is_first = false;
+        } else {
+          result.push_str(", ");
+        };
+        result.push_str(&format!("{}", inspect_value(&item)));
+      }
+      result.push_str("]");
+      result
+    }
+    Value::Iterator(iter) => format!("@{}", inspect(&iter.borrow())),
+    Value::Ref(item) => format!("&{}", inspect(&item.borrow())),
+    item => inspect_value(item),
+  }
 }
 
 pub fn console_lib() -> Value {
@@ -25,33 +49,22 @@ pub fn console_lib() -> Value {
 
   hashmap.insert(
     DRAW.into(),
-    Value::Object(Object::Function(Function::Native {
-      name: format!("<{CONSOLE_LIB}>::{DRAW}"),
-      path: format!("<{CONSOLE_LIB}>::{DRAW}"),
-      chunk: crate::bytecode::ChunkGroup::default(),
-      func: |_, args| {
-        let value = args
-          .get(0)
-          .ok_or_else(|| format!("{DRAW}: se esperaba 1 argumento y se recibieron 0"))?;
-        match value {
-          Value::Object(Object::Array(arr)) => {
-            print!("[");
-            let mut is_first = true;
-            for item in arr.borrow().clone() {
-              if is_first {
-                is_first = false;
-              } else {
-                print!(", ")
-              };
-              print!("{}", inspect(&item));
-            }
-            println!("]");
+    Value::Object(
+      Function::Native {
+        name: format!("<{CONSOLE_LIB}>::{DRAW}"),
+        path: format!("<{CONSOLE_LIB}>"),
+        chunk: crate::bytecode::ChunkGroup::default(),
+        func: |_, args| {
+          for value in args.iter() {
+            print!("{}", inspect(value));
+            print!(" ");
           }
-          item => println!("{}", inspect(item)),
-        }
-        Ok(Value::Never)
-      },
-    })),
+          println!("");
+          Ok(Value::Never)
+        },
+      }
+      .into(),
+    ),
   );
   Value::Object(Object::Map(HashMap::new().into(), hashmap.into()))
 }

@@ -1,20 +1,32 @@
 importa ':mate' como Mate;
+
 fn ordenar(lista) {
   def fin_c = lista::longitud;
-  si fin_c <= 0 {
+  si fin_c <= 1 {
     ret lista;
   }
   fn medioDeTres(ini, fin) {
-      def a = lista[ini];
-      def b = lista[fin];
-      def c = lista[~((ini + fin) / 2)];
-      ret Mate::min(Mate::max(a,b),Mate::max(b,c), Mate::max(c,a));
+    def mid = (ini + fin) // 2;
+    def a = lista[ini];
+    def b = lista[mid];
+    def c = lista[fin];
+    si a > b { def t = a; a = b; b = t; }
+    si b > c { def t = b; b = c; c = t; }
+    si a > b { def t = a; a = b; b = t; }
+    si b == lista[ini] ret ini;
+    si b == lista[mid] ret mid;
+    ret fin;
   }
   fn posicionPivote(ini, fin) {
-    const pivote = medioDeTres(ini, fin);
+    const pivIdx = medioDeTres(ini, fin);
+    const pivote = lista[pivIdx];
+    def temp1 = lista[pivIdx];
+    lista[pivIdx] = lista[fin];
+    lista[fin] = temp1;
+
     def i = ini;
     def j = ini;
-    mien j < fin{
+    mien j < fin {
       si lista[j] < pivote {
         def temp = lista[i];
         lista[i] = lista[j];
@@ -35,7 +47,8 @@ fn ordenar(lista) {
       quicksort(piv + 1, fin);
     }
   }
-  quicksort(0, fin_c-1);
+
+  quicksort(0, fin_c - 1);
   ret lista;
 }
 exporta nombre ordenar;
