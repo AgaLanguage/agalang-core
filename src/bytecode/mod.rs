@@ -17,7 +17,7 @@ pub use compiler::ChunkGroup;
 
 pub fn main(node: &Node) -> Result<Value, ()> {
   let binding = VM::new(node.into());
-  let mut vm = binding.borrow().clone().unwrap();
+  let mut vm = binding.borrow().clone();
   match vm.interpret() {
     InterpretResult::Ok => {}
     _ => {

@@ -31,6 +31,7 @@ pub enum OpCode {
   OpConsoleOut,
   OpVarDecl,
   OpConstDecl,
+  OpDelVar,
   OpGetVar,
   OpSetVar,
   OpLoop,
@@ -38,6 +39,9 @@ pub enum OpCode {
   OpExport,
   // Control
   OpPop,
+  OpAwait,
+  OpUnPromise, // obtiene el valor de una promesa
+  OpPromised, // mueve el frame a los asincronos
   OpNewLocals,
   OpRemoveLocals,
   OpJumpIfFalse,
@@ -93,6 +97,10 @@ impl From<u8> for OpCode {
       x if x == Self::OpSetScope as u8 => Self::OpSetScope,
       x if x == Self::OpImport as u8 => Self::OpImport,
       x if x == Self::OpExport as u8 => Self::OpExport,
+      x if x == Self::OpDelVar as u8 => Self::OpDelVar,
+      x if x == Self::OpAwait as u8 => Self::OpAwait,
+      x if x == Self::OpUnPromise as u8 => Self::OpUnPromise,
+      x if x == Self::OpPromised as u8 => Self::OpPromised,
 
       x if x == Self::OpAt as u8 => Self::OpAt,
       x if x == Self::OpAsRef as u8 => Self::OpAsRef,

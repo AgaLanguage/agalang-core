@@ -18,6 +18,7 @@ fn inspect_value(value: &Value) -> String {
     Value::Object(_) => Color::Cyan,
     Value::Iterator(_) => Color::BrightCyan,
     Value::Ref(_) => Color::BrightBlue,
+    Value::Promise(_) => Color::Red,
   }
   .apply(&value.as_string())
 }

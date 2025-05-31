@@ -136,10 +136,6 @@ impl Parser {
     self.index += 1;
     token
   }
-  fn spit(&mut self, count: usize) -> util::Token<super::TokenType> {
-    self.index -= count;
-    self.at()
-  }
   fn next(&self) -> util::Token<super::TokenType> {
     self.look(1)
   }
@@ -1492,10 +1488,28 @@ impl Parser {
   }
   fn parse_simple_expr(&mut self, message: &str) -> Result<ast::Node, NodeError> {
     let value = self.parse_literal_expr(message)?;
-    self.parse_back_unary_expr(value)
+        if self.check_in_tokens(vec![
+      super::TokenType::Punctuation(super::PunctuationType::Dot),
+      super::TokenType::Punctuation(super::PunctuationType::CircularBracketOpen),
+      super::TokenType::Punctuation(super::PunctuationType::QuadrateBracketOpen),
+      super::TokenType::Punctuation(super::PunctuationType::DoubleDot),
+    ]) {
+      self.parse_call_member_expr(value)?.into()
+    } else {
+      value.into()
+    }
   }
   fn parse_complex_expr(&mut self, left: ast::Node) -> Result<ast::Node, NodeError> {
-    let left = self.parse_back_unary_expr(left.clone())?;
+    let left: ast::Node = if self.check_in_tokens(vec![
+      super::TokenType::Punctuation(super::PunctuationType::Dot),
+      super::TokenType::Punctuation(super::PunctuationType::CircularBracketOpen),
+      super::TokenType::Punctuation(super::PunctuationType::QuadrateBracketOpen),
+      super::TokenType::Punctuation(super::PunctuationType::DoubleDot),
+    ]) {
+      self.parse_call_member_expr(left)?.into()
+    } else {
+      left.into()
+    };
     let token = self.at();
     if token.token_type == super::TokenType::Error {
       return Err(ast::NodeError {
@@ -1732,48 +1746,6 @@ impl Parser {
       .into()
     } else {
       right.into()
-    }
-  }
-  fn parse_back_unary_expr(&mut self, left: ast::Node) -> Result<ast::Node, NodeError> {
-    let token = self.at();
-    if self.match_token(super::TokenType::Operator(
-      super::OperatorType::QuestionMark,
-    ))
-    // relative index: 1
-    {
-      // the expression isn't Nullish operator (??)
-      let is_valid = if self.match_join_token(super::TokenType::Operator(
-        super::OperatorType::QuestionMark,
-      )) {
-        // relative index: 2
-        let value = !self.match_join_token(super::TokenType::Operator(
-          super::OperatorType::QuestionMark,
-        )); // if is question mark relative index: 3, else relative index: 2
-        self.spit(2); // substract two to the relative index. if relative index: 2, now is relative index: 0 else now is relative index: 1
-        value
-      } else {
-        // relative index: 1
-        true
-      };
-      if is_valid {
-        // relative index: 0, isn't a valid unary back
-        return left.into();
-      }
-      ast::Node::UnaryBack(ast::NodeUnary {
-        operator: ast::NodeOperator::QuestionMark,
-        operand: left.to_box(),
-        location: token.location.clone(),
-      })
-      .into()
-    } else if self.check_in_tokens(vec![
-      super::TokenType::Punctuation(super::PunctuationType::Dot),
-      super::TokenType::Punctuation(super::PunctuationType::CircularBracketOpen),
-      super::TokenType::Punctuation(super::PunctuationType::QuadrateBracketOpen),
-      super::TokenType::Punctuation(super::PunctuationType::DoubleDot),
-    ]) {
-      self.parse_call_member_expr(left)?.into()
-    } else {
-      left.into()
     }
   }
   fn parse_call_member_expr(&mut self, object: ast::Node) -> Result<ast::Node, NodeError> {

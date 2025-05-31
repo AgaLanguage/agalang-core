@@ -14,6 +14,7 @@ const KEYWORDS: [&str; 6] = [
   SUPER_NAME,
 ];
 
+#[derive(Debug)]
 pub struct VarsManager {
   variables: HashMap<String, Value>,
   constants: HashSet<String>,
@@ -75,5 +76,11 @@ impl VarsManager {
   }
   pub fn get_link(&self) -> Option<Rc<RefCell<Self>>> {
     self.link.clone()
+  }
+  pub fn remove(&mut self, name: &str) -> Option<Value> {
+    if !self.variables.contains_key(name) || self.constants.contains(name) || KEYWORDS.contains(&name) {
+      return None;
+    }
+    self.variables.remove(name)
   }
 }

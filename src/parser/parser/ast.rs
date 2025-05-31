@@ -50,7 +50,6 @@ pub enum Node {
 
   // Expressions //
   UnaryFront(NodeUnary),
-  UnaryBack(NodeUnary),
   Binary(NodeBinary),
   Member(NodeMember),
   Call(NodeCall),
@@ -98,7 +97,7 @@ impl Node {
       Node::If(node) => node.location.clone(),
       Node::Import(node) => node.location.clone(),
       Node::Export(node) | Node::Throw(node) => node.location.clone(),
-      Node::UnaryFront(node) | Node::UnaryBack(node) => node.location.clone(),
+      Node::UnaryFront(node) => node.location.clone(),
       Node::Binary(node) => node.location.clone(),
       Node::Member(node) => node.location.clone(),
       Node::Call(node) => node.location.clone(),
@@ -147,7 +146,6 @@ impl Node {
       Node::Import(_) => "Importar",
       Node::Export(_) => "Exportar",
       Node::UnaryFront(_) => "Operador Unario",
-      Node::UnaryBack(_) => "Operador Unario",
       Node::Binary(_) => "Operador Binario",
       Node::Member(_) => "Miembro",
       Node::Call(_) => "Llamada",
@@ -320,7 +318,7 @@ impl std::fmt::Display for Node {
         data_format(node.update.to_string()),
         data_format(node.body.join("\n"))
       ),
-      Node::UnaryFront(node) | Node::UnaryBack(node) => format!(
+      Node::UnaryFront(node)  => format!(
         "NodeUnary: \"{:?}\" para {{\n{}\n}}",
         node.operator,
         data_format(node.operand.to_string())

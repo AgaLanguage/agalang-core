@@ -42,6 +42,9 @@ impl Compiler {
         .make_arg(name, param.location.start.line);
     }
     compiler.function.set_rest(has_rest);
+    if function.is_async {
+      compiler.write(OpCode::OpPromised as u8, function.location.start.line);
+    }
     if function.body.len() > 0 {
       compiler.node_to_bytes(&function.body.clone().to_node())?;
     } else {
@@ -514,12 +517,19 @@ impl Compiler {
           e.location.start.line,
         );
       }
-      a => {
-        return Err(format!(
-          "{}: No es un nodo valido en bytecode",
-          a.get_type()
-        ))
+      Node::VarDel(id) => {
+        self.read_var(id.name.clone(), id.location.start.line);
+        self.write(OpCode::OpDelVar as u8, id.location.start.line);
       }
+      Node::Await(value) => {
+        self.node_to_bytes(&value.expression)?;
+        self.write_buffer(vec![OpCode::OpAwait as u8, OpCode::OpUnPromise as u8], value.location.start.line);
+      },
+      Node::Lazy(node_expression_medicator) => todo!(),
+      Node::Class(node_class) => todo!(),
+      Node::Throw(node_value) => todo!(),
+      Node::Try(node_try) => todo!(),
+      Node::None => todo!(),
     };
     Ok(())
   }

@@ -4,10 +4,7 @@ use crate::{
   util::{Color, SetColor},
 };
 use std::{
-  cell::RefCell,
-  collections::HashMap,
-  hash::{Hash, Hasher},
-  rc::Rc,
+  cell::RefCell, collections::HashMap, hash::{Hash, Hasher}, rc::Rc
 };
 
 use super::Value;
@@ -45,6 +42,16 @@ impl<T> From<T> for MultiRefHash<T> {
   }
 }
 impl<T> Eq for MultiRefHash<T> {}
+impl<T> MultiRefHash<T> where T: Clone {
+  pub fn cloned(&self) -> T {
+    self.borrow().clone()
+  }
+}
+impl<T> Default for MultiRefHash<T> where T: Default {
+  fn default() -> Self {
+    Self(Default::default())
+  }
+}
 
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub enum Function {

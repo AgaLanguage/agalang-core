@@ -6,33 +6,45 @@ use crate::bytecode::compiler::{ChunkGroup, OpCode};
 use crate::bytecode::libs::libs;
 use crate::bytecode::stack::{CallFrame, InterpretResult, VarsManager};
 use crate::bytecode::value::{Function, Value, REF_TYPE};
+use crate::bytecode::vm::{AsyncThread, BlockingThread};
 
 use super::{ModuleThread, VM};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Thread {
-  pub stack: Vec<Value>,
-  pub call_stack: Vec<CallFrame>,
-  pub module: Rc<RefCell<Option<ModuleThread>>>,
-  pub vm: Rc<RefCell<Option<VM>>>,
+  stack: Vec<Value>,
+  call_stack: Vec<CallFrame>,
+  module: Rc<RefCell<Option<ModuleThread>>>,
+  vm: Rc<RefCell<VM>>,
 }
 
 impl Thread {
-  pub fn new(
-    vm: Rc<RefCell<Option<VM>>>,
-    module: Option<Rc<RefCell<Option<ModuleThread>>>>,
-  ) -> Self {
-    let module = if let Some(module) = module {
-      module
-    } else {
-      Rc::new(RefCell::new(None))
-    };
-    Self {
+  pub fn new(vm: Rc<RefCell<VM>>) -> Rc<RefCell<Self>> {
+    let module = vm.borrow().module.clone();
+    Rc::new(RefCell::new(Self {
       stack: vec![],
       call_stack: vec![],
       module,
       vm,
-    }
+    }))
+  }
+  pub fn set_module(&self, module: ModuleThread) {
+    *self.module.borrow_mut() = Some(module);
+  }
+  pub fn get_stack(&self) -> &Vec<Value> {
+    &self.stack
+  }
+  pub fn get_calls(&self) -> &Vec<CallFrame> {
+    &self.call_stack
+  }
+  pub fn get_vm(&self) -> Rc<RefCell<VM>> {
+    self.vm.clone()
+  }
+  pub fn clear_stack(&mut self) {
+    self.stack.clear();
+  }
+  pub fn push_call(&mut self, frame: CallFrame) {
+    self.call_stack.push(frame);
   }
   pub fn current_frame(&mut self) -> &mut CallFrame {
     self.call_stack.last_mut().unwrap()
@@ -47,7 +59,7 @@ impl Thread {
     self.current_frame().current_vars()
   }
   fn resolve(&mut self, name: &str) -> Rc<RefCell<VarsManager>> {
-    let mut vars = self.vm.borrow().as_ref().unwrap().globals.clone();
+    let mut vars = self.vm.borrow().globals.clone();
     for call in &mut self.call_stack {
       let local_vars = call.resolve_vars(name);
       if local_vars.borrow().has(name) {
@@ -84,11 +96,14 @@ impl Thread {
   fn push(&mut self, value: Value) {
     self.stack.push(value);
   }
-  fn pop(&mut self) -> Value {
+  pub fn pop(&mut self) -> Value {
     self.stack.pop().unwrap()
   }
   fn read(&mut self) -> u8 {
     self.current_frame().read()
+  }
+  pub fn peek(&mut self) -> OpCode {
+    self.current_frame().peek().into()
   }
   fn read_constant(&mut self) -> Value {
     let constant_index = self.read();
@@ -150,18 +165,14 @@ impl Thread {
     let fun_clone = fun.clone();
     let function = fun_clone.borrow();
 
-    // En el caso de que la funcion no tenga un scope definido, se usa el scope actual (esto deberia de pasar)
-    let vars = function.get_scope().unwrap_or_else(|| self.current_vars());
-    let locals = vec![Rc::new(RefCell::new(
-      VarsManager::crate_child(vars.clone()).set_this(this.clone()),
-    ))];
-    self.call_stack.push(CallFrame::new(fun, locals));
-
-    let (arity, has_rest) = match &*function {
+    let (arity, has_rest, is_async) = match &*function {
       Function::Function {
-        arity, has_rest, ..
-      } => (*arity, *has_rest),
-      Function::Script { .. } => (0, false),
+        arity,
+        has_rest,
+        is_async,
+        ..
+      } => (*arity, *has_rest, *is_async),
+      Function::Script { .. } => (0, false, false),
       Function::Native { func, .. } => {
         let value = func(this, args);
         return if let Err(error) = value {
@@ -172,6 +183,14 @@ impl Thread {
         };
       }
     };
+    // En el caso de que la funcion no tenga un scope definido, se usa el scope actual (esto deberia de pasar)
+    let vars = function.get_scope().unwrap_or_else(|| self.current_vars());
+    let locals = vec![Rc::new(RefCell::new(
+      VarsManager::crate_child(vars.clone()).set_this(this.clone()),
+    ))];
+    if is_async {}
+    self.call_stack.push(CallFrame::new(fun, locals));
+
     if arity > args.len() {
       if arity == 1 && args.len() == 0 {
         return InterpretResult::RuntimeError(
@@ -206,9 +225,38 @@ impl Thread {
     let byte_instruction = self.read();
     let instruction: OpCode = byte_instruction.into();
 
-    println!("{:<16} | {:?}", format!("{:?}", instruction), self.stack);
+    //println!("{:<16} | {:?}", format!("{:?}", instruction), self.stack);
 
     let value: Value = match instruction {
+      OpCode::OpAwait => {
+        let value = self.pop();
+        if value.is_promise() {
+          let module = self.module.borrow().clone().unwrap();
+          let blocking = BlockingThread::Await(value.as_promise());
+
+          *module.sub_module.borrow_mut() = blocking;
+        }
+        value
+      }
+      OpCode::OpUnPromise => {
+        let value = self.pop();
+        match value.as_promise().get_data() {
+          crate::bytecode::value::PromiseData::Err(e) => return InterpretResult::RuntimeError(e),
+          crate::bytecode::value::PromiseData::Pending => {
+            return InterpretResult::RuntimeError(format!(
+              "El programa encontro un error de compilación en tiempo de ejecución"
+            ))
+          }
+          crate::bytecode::value::PromiseData::Ok(v) => v.cloned(),
+        }
+      }
+      OpCode::OpPromised => {
+        // Debe existir el frame
+        let frame = self.call_stack.pop().unwrap();
+        let (async_thread, promise) = AsyncThread::from_frame(&*self, frame);
+        self.vm.borrow_mut().push_sub_thread(async_thread);
+        Value::Promise(promise)
+      }
       OpCode::OpSetScope => {
         let value = self.pop();
         let vars = self.current_vars();
@@ -225,7 +273,10 @@ impl Thread {
       OpCode::OpApproximate => {
         let value = self.pop();
         if !value.is_number() {
-          return InterpretResult::RuntimeError(format!("No se pudo operar '~x'"));
+          return InterpretResult::RuntimeError(format!(
+            "No se pudo operar '~{}'",
+            value.get_type()
+          ));
         }
         Value::Number(value.as_number().trunc())
       }
@@ -307,7 +358,7 @@ impl Thread {
         let is_instance = self.read() == 1u8;
         if is_instance {
           let key = key.as_string();
-          let proto = self.vm.borrow().as_ref().unwrap().cache.proto.clone();
+          let proto = self.vm.borrow().cache.proto.clone();
           if let Some(value) = object.get_instance_property(&key, proto) {
             self.push(value);
             return InterpretResult::Continue;
@@ -384,7 +435,8 @@ impl Thread {
         let lib_name = if path.starts_with(":") {
           path
         } else {
-          Path::new(&self.module.borrow().as_ref().unwrap().path)
+          let m_path = self.module.borrow().clone().unwrap().path.clone();
+          Path::new(&m_path)
             .parent()
             .unwrap()
             .join(path)
@@ -393,8 +445,9 @@ impl Thread {
             .to_str()
             .unwrap()
             .to_string()
-        }.replace("\\\\?\\", "");
-        let proto = self.vm.borrow().as_ref().unwrap().cache.libs.clone();
+        }
+        .replace("\\\\?\\", "");
+        let proto = self.vm.borrow().cache.libs.clone();
         let value = libs(lib_name, proto, |path| {
           let module = Rc::new(RefCell::new(VM::resolve(
             self.vm.clone(),
@@ -404,10 +457,10 @@ impl Thread {
           *self
             .module
             .borrow()
-            .as_ref()
+            .clone()
             .unwrap()
             .sub_module
-            .borrow_mut() = Some(module.clone());
+            .borrow_mut() = BlockingThread::Module(module.clone());
           let x = module.borrow().clone().as_value();
           x
         });
@@ -461,7 +514,7 @@ impl Thread {
       OpCode::OpExport => {
         let name = self.read_string();
         let value = self.pop();
-        let module = self.module.borrow().as_ref().unwrap().module.clone();
+        let module = self.module.borrow().clone().unwrap().value.clone();
         if !module.is_object() {
           return InterpretResult::RuntimeError("Se esperaba un objeto como modulo".to_string());
         }
@@ -496,6 +549,24 @@ impl Thread {
             ))
           }
           _ => value,
+        }
+      }
+      OpCode::OpDelVar => {
+        let name = self.read_string();
+        let vars = self.resolve(&name);
+        if !vars.borrow().has(&name) {
+          return InterpretResult::RuntimeError(format!(
+            "No se pudo eliminar la variable '{name}'"
+          ));
+        }
+        let value = vars.borrow_mut().remove(&name);
+        match value {
+          None => {
+            return InterpretResult::RuntimeError(format!(
+              "No se pudo eliminar la variable '{name}'"
+            ))
+          }
+          Some(value) => value,
         }
       }
       OpCode::OpGetVar => {
@@ -544,13 +615,21 @@ impl Thread {
           self.push(Value::Object(format!("{a}{b}").as_str().into()));
           return InterpretResult::Continue;
         }
-        return InterpretResult::RuntimeError(format!("No se pudo operar 'a + b'"));
+        return InterpretResult::RuntimeError(format!(
+          "No se pudo operar '{} + {}'",
+          a.get_type(),
+          b.get_type()
+        ));
       }
       OpCode::OpSubtract => {
         let b = self.pop();
         let a = self.pop();
         if !a.is_number() || !b.is_number() {
-          return InterpretResult::RuntimeError(format!("No se pudo operar 'a - b'"));
+          return InterpretResult::RuntimeError(format!(
+            "No se pudo operar '{} - {}'",
+            a.get_type(),
+            b.get_type()
+          ));
         }
         let a = a.as_number();
         let b = b.as_number();
@@ -560,7 +639,11 @@ impl Thread {
         let b = self.pop();
         let a = self.pop();
         if !a.is_number() || !b.is_number() {
-          return InterpretResult::RuntimeError(format!("No se pudo operar 'a * b'"));
+          return InterpretResult::RuntimeError(format!(
+            "No se pudo operar '{} * {}'",
+            a.get_type(),
+            b.get_type()
+          ));
         }
         let a = a.as_number();
         let b = b.as_number();
@@ -570,7 +653,11 @@ impl Thread {
         let b = self.pop();
         let a = self.pop();
         if !a.is_number() || !b.is_number() {
-          return InterpretResult::RuntimeError(format!("No se pudo operar 'a / b'"));
+          return InterpretResult::RuntimeError(format!(
+            "No se pudo operar '{} / {}'",
+            a.get_type(),
+            b.get_type()
+          ));
         }
         let a = a.as_number();
         let b = b.as_number();
@@ -597,7 +684,10 @@ impl Thread {
       OpCode::OpNegate => {
         let value = self.pop();
         if !value.is_number() {
-          return InterpretResult::RuntimeError(format!("No se pudo operar '-x'"));
+          return InterpretResult::RuntimeError(format!(
+            "No se pudo operar '-{}'",
+            value.get_type()
+          ));
         }
         Value::Number(-value.as_number())
       }
@@ -654,7 +744,11 @@ impl Thread {
         let b = self.pop();
         let a = self.pop();
         if !a.is_number() || !b.is_number() {
-          return InterpretResult::RuntimeError(format!("No se pudo operar 'a > b'"));
+          return InterpretResult::RuntimeError(format!(
+            "No se pudo operar '{} > {}'",
+            a.get_type(),
+            b.get_type()
+          ));
         }
         let a = a.as_number();
         let b = b.as_number();

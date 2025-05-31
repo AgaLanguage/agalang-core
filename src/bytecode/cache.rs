@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use super::value::{MultiRefHash, Value};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct DataManager<K: Eq + std::hash::Hash, V: Clone>
 {
   data: MultiRefHash<HashMap<K, V>>,
@@ -26,7 +26,7 @@ impl<K: Eq + std::hash::Hash, V: Clone> DataManager<K, V> {
 
 pub type DataCache = DataManager<String, Value>;
 
-#[derive(Clone)]
+#[derive(Clone, Debug, Default)]
 pub struct Cache {
   pub proto: DataCache,
   pub libs: DataCache,

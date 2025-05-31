@@ -7,13 +7,13 @@ use super::value::{Function, MultiRefHash};
 mod vars_manager;
 pub use vars_manager::VarsManager;
 
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Clone, Debug)]
 pub enum InterpretResult {
   Ok,
   Continue,
   CompileError(String),
   RuntimeError(String),
-  NativeError
+  NativeError,
 }
 
 #[derive(Clone)]
@@ -54,6 +54,11 @@ impl CallFrame {
     self.ip += 1;
     byte
   }
+  pub fn peek(&mut self) -> u8 {
+    let ip = self.ip;
+    let byte = self.current_chunk().read(ip);
+    byte
+  }
   pub fn back(&mut self, offset: usize) {
     self.ip -= offset;
   }
@@ -73,11 +78,13 @@ impl CallFrame {
       let ref_vars = vars.borrow();
       let vars_manager = ref_vars.borrow();
 
-      if vars_manager.has(name) {break;}
+      if vars_manager.has(name) {
+        break;
+      }
 
       let link = vars_manager.get_link();
 
-      // important (already borrowed error)
+      // no hacer provoca un error de prestamos
       drop(vars_manager);
       drop(ref_vars);
 
@@ -88,7 +95,8 @@ impl CallFrame {
         break;
       }
     }
-    let x = vars.borrow().clone(); x
+    let x = vars.borrow().clone();
+    x
   }
   pub fn add_vars(&mut self) {
     self
@@ -116,7 +124,10 @@ pub fn call_stack_to_string(stack: &Vec<CallFrame>) -> String {
   let mut index = stack.len();
   while index > 0 {
     index -= 1;
-    string.push_str(&format!("\n\t{}", stack[index].function.borrow().location()));
+    string.push_str(&format!(
+      "\n\t{}",
+      stack[index].function.borrow().location()
+    ));
   }
   string
 }

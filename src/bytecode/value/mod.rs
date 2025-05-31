@@ -3,9 +3,11 @@ use std::{cell::RefCell, rc::Rc};
 use crate::bytecode::DataCache;
 mod number;
 mod object;
+mod promise;
 pub use number::Number;
 use object::AS_ARRAY_PROPERTY;
 pub use object::{Function, MultiRefHash, Object};
+pub use promise::{Promise, PromiseData, PROMISE_TYPE};
 
 use super::{stack::VarsManager, ChunkGroup};
 
@@ -25,23 +27,8 @@ pub const BYTE_TYPE: &str = "byte";
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct RefValue(MultiRefHash<Value>);
 impl RefValue {
-  pub fn new(value: Value) -> Self {
-    Self(MultiRefHash::from(value))
-  }
   pub fn borrow(&self) -> std::cell::Ref<Value> {
     self.0.borrow()
-  }
-  pub fn borrow_mut(&self) -> std::cell::RefMut<Value> {
-    self.0.borrow_mut()
-  }
-  pub fn as_number(&self) -> Number {
-    self.borrow().as_number()
-  }
-  pub fn as_boolean(&self) -> bool {
-    self.borrow().as_boolean()
-  }
-  pub fn as_string(&self) -> String {
-    self.borrow().as_string()
   }
 }
 impl From<Value> for RefValue {
@@ -49,12 +36,14 @@ impl From<Value> for RefValue {
     Self(MultiRefHash::from(value))
   }
 }
+
 #[derive(Clone, PartialEq, Eq, Default, Hash)]
 pub enum Value {
   Number(Number),
   String(String),
   Object(Object),
   Iterator(MultiRefHash<Value>),
+  Promise(Promise),
   Ref(RefValue),
   Char(char),
   Byte(u8),
@@ -76,6 +65,7 @@ impl Value {
       Self::Byte(_) => BYTE_TYPE,
       Self::Iterator(_) => ITERATOR_TYPE,
       Self::Ref(_) => REF_TYPE,
+      Self::Promise(_) => PROMISE_TYPE,
       Self::Object(o) => o.get_type(),
     }
   }
@@ -116,9 +106,24 @@ impl Value {
       _ => false,
     }
   }
+  pub fn is_promise(&self) -> bool {
+    match self {
+      Self::Promise(_) => true,
+      Self::Ref(RefValue(r)) => r.borrow().is_promise(),
+      _ => false,
+    }
+  }
+  pub fn as_promise(&self) -> Promise {
+    match self {
+      Self::Promise(promise) => promise.clone(),
+      Self::Ref(RefValue(r)) => r.borrow().as_promise(),
+      v => v.clone().into()
+    }
+  }
 
   pub fn as_number(&self) -> Number {
     match self {
+      Self::Promise(_) => 0.into(),
       Self::Number(x) => x.clone(),
       Self::True => 1.into(),
       Self::Null | Self::Never | Self::False => 0.into(),
@@ -132,6 +137,7 @@ impl Value {
   pub fn as_boolean(&self) -> bool {
     match self {
       Self::Char(c) => *c != '\0',
+      Self::Promise(x) => !matches!(x.get_data(), PromiseData::Pending),
       Self::Number(x) => !x.is_zero(),
       Self::String(s) => !s.is_empty(),
       Self::Iterator(v) | Self::Ref(RefValue(v)) => v.borrow().as_boolean(),
@@ -159,6 +165,7 @@ impl Value {
   pub fn as_string(&self) -> String {
     match self {
       Self::String(s) => s.clone(),
+      Self::Promise(p) => p.to_string(),
       Self::False => FALSE_NAME.to_string(),
       Self::True => TRUE_NAME.to_string(),
       Self::Null => NULL_NAME.to_string(),

@@ -1,11 +1,12 @@
 # Expresiones
+- `@(value)` convierte a iterador.
 - `?(value)` convierte el valor a un booleano.
 - `!(value) == !?(value)` niega el valor booleano.
 - `&(value)` convierte el valor a inmutable.
 - `+(value)` convierte el valor a número.
 - `-(value)` convierte el valor a número negativo.
 - `~(value)` convierte el valor a número entero.
-- `(value)?` si el valor es un error (lanzado), se convierte en nulo. Ejemplo: `1/0?` es nulo.
+- `(value)?` si el valor es un error (lanzado), se convierte en nulo. Ejemplo: `1/{}?` es nulo.
 - `(value1) && (value2)` retorna el primer valor falso o el último verdadero.
 - `(value1) || (value2)` retorna el primer valor verdadero o el último falso.
 - `(value1) ?? (value2)` si `value1` es nulo, retorna `value2`.
