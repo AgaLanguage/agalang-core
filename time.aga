@@ -1,0 +1,79 @@
+importa ':tmp' como TMP;
+
+const NS_POR_SEGUNDO = 1_000_000_000;
+const SEGUNDOS_POR_MINUTO = 60;
+const MINUTOS_POR_HORA = 60;
+const HORAS_POR_DIA = 24;
+const SEGUNDOS_POR_HORA = SEGUNDOS_POR_MINUTO * MINUTOS_POR_HORA;
+const SEGUNDOS_POR_DIA = SEGUNDOS_POR_HORA * HORAS_POR_DIA;
+
+fn esBisiesto(año) {
+  ret ((año % 4 == 0) && (año % 100 != 0)) || (año % 400 == 0);
+}
+
+fn diasEnYear(año){
+  ret si esBisiesto(año) {366;} ent {365;};
+}
+fn diasEnMeses(bisiesto){
+  ret [
+    31, si bisiesto {29;}ent{28;}, 31, 30, 31, 30,
+    31, 31, 30, 31, 30, 31
+  ];
+}
+
+fn nanosegundosToUTC(nanos) {
+  const segundosTotales = nanos // NS_POR_SEGUNDO;
+  const restoDeNanos = nanos % NS_POR_SEGUNDO;
+
+  def dias = segundosTotales // SEGUNDOS_POR_DIA;
+  def segundosEnDia = segundosTotales % SEGUNDOS_POR_DIA;
+
+  const hora = segundosEnDia // SEGUNDOS_POR_HORA;
+  segundosEnDia %= SEGUNDOS_POR_HORA;
+
+  const minutos = segundosEnDia // SEGUNDOS_POR_MINUTO;
+  const segundo = segundosEnDia % SEGUNDOS_POR_MINUTO;
+
+  def año = 1970;
+
+  mien dias >= diasEnYear(año) {
+    dias -= diasEnYear(año);
+    año+=1;
+  }
+
+  const meses = diasEnMeses(esBisiesto(año));
+  def mes = 0;
+  mien dias >= meses[mes] {
+    dias -= meses[mes];
+    mes+=1;
+  }
+
+  ret {
+    año,
+    mes: mes + 1,
+    dia: dias + 1,
+    hora,
+    minutos,
+    segundo,
+    milis: (nanos // 1_000_000) % 1000,
+    micros: (nanos // 1000) % 1000,
+    nanos: nanos % 1000,
+  };
+}
+
+fn nanosegundosToLocal(nanos) {
+  const h = TMP::ZONA[0] * SEGUNDOS_POR_HORA;
+  const m = TMP::ZONA[1] * SEGUNDOS_POR_MINUTO;
+  const s = h + m;
+  const n = s * NS_POR_SEGUNDO;
+  ret nanosegundosToUTC(nanos + n);
+}
+
+exporta fn ahoraUTC(){
+  const nanos = TMP::ahora();
+  ret nanosegundosToUTC(nanos);
+}
+exporta fn ahoraLocal(){
+  const nanos = TMP::ahora();
+  ret nanosegundosToLocal(nanos);
+}

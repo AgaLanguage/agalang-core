@@ -17,7 +17,7 @@ pub fn string_proto() -> Value {
     Value::Object(Function::Native {
       path: "".into(),
       name: format!("<cadena>::{REPLACE}"),
-      func: |this, args| {
+      func: |this, args, _| {
         let old = args.get(0);
         if old.is_none() {
           return Err("remplaza: se esperaban 2 argumentos y se recibieron 0".into());
@@ -41,7 +41,7 @@ pub fn string_proto() -> Value {
     Value::Object(Function::Native {
       path: "".into(),
       name: format!("<cadena>::{BYTES}"),
-      func: |this, _| {
+      func: |this, _, _| {
         let string = this.as_string();
         let list = string
           .as_bytes()
@@ -59,7 +59,7 @@ pub fn string_proto() -> Value {
     Value::Object(Function::Native {
       path: "".into(),
       name: format!("<cadena>::{SPLIT}"),
-      func: |this, args| {
+      func: |this, args, _| {
         let separator = args.get(0);
         if separator.is_none() {
           return Err("remplaza: se esperaba 1 argumento y se recibieron 0".into());

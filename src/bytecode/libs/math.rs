@@ -22,7 +22,7 @@ pub fn math_lib() -> Value {
       name: format!("<{MATH_LIB}>::{FLOOR}"),
       path: format!("<{MATH_LIB}>"),
       chunk: crate::bytecode::ChunkGroup::default(),
-      func: |_, args| {
+      func: |_, args, _| {
         let number = args
           .get(0)
           .ok_or_else(|| format!("{FLOOR}: se esperaba 1 argumento y se recibieron 0"))?;
@@ -42,7 +42,7 @@ pub fn math_lib() -> Value {
       name: format!("<{MATH_LIB}>::{IS_INFINITE}"),
       path: format!("<{MATH_LIB}>"),
       chunk: crate::bytecode::ChunkGroup::default(),
-      func: |_, args| {
+      func: |_, args, _| {
         let number = args
           .get(0)
           .ok_or_else(|| format!("{IS_INFINITE}: se esperaba 1 argumento y se recibieron 0"))?;
@@ -62,7 +62,7 @@ pub fn math_lib() -> Value {
       name: format!("<{MATH_LIB}>::{ROUND}"),
       path: format!("<{MATH_LIB}>"),
       chunk: crate::bytecode::ChunkGroup::default(),
-      func: |_, args| {
+      func: |_, args, _| {
         let number = args
           .get(0)
           .ok_or_else(|| format!("{ROUND}: se esperaba 1 argumento y se recibieron 0"))?;
@@ -82,7 +82,7 @@ pub fn math_lib() -> Value {
       name: format!("<{MATH_LIB}>::{CEIL}"),
       path: format!("<{MATH_LIB}>"),
       chunk: crate::bytecode::ChunkGroup::default(),
-      func: |_, args| {
+      func: |_, args, _| {
         let number = args
           .get(0)
           .ok_or_else(|| format!("{CEIL}: se esperaba 1 argumento y se recibieron 0"))?;
@@ -102,7 +102,7 @@ pub fn math_lib() -> Value {
       name: format!("<{MATH_LIB}>::{MAX}"),
       path: format!("<{MATH_LIB}>"),
       chunk: crate::bytecode::ChunkGroup::default(),
-      func: |_, args| {
+      func: |_, args, _| {
         let mut max = Number::NegativeInfinity;
         for arg in args {
           if arg.is_number() {
@@ -124,7 +124,7 @@ pub fn math_lib() -> Value {
       name: format!("<{MATH_LIB}>::{MIN}"),
       path: format!("<{MATH_LIB}>"),
       chunk: crate::bytecode::ChunkGroup::default(),
-      func: |_, args| {
+      func: |_, args, _| {
         let mut min = Number::Infinity;
         for arg in args {
           if arg.is_number() {

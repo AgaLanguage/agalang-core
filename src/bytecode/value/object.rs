@@ -1,5 +1,5 @@
 use crate::{
-  bytecode::{proto, stack::VarsManager, ChunkGroup, DataCache},
+  bytecode::{proto, stack::VarsManager, vm::AsyncThread, ChunkGroup, DataCache},
   parser::NodeFunction,
   util::{Color, SetColor},
 };
@@ -73,7 +73,7 @@ pub enum Function {
     name: String,
     path: String,
     chunk: ChunkGroup,
-    func: fn(Value, Vec<Value>) -> Result<Value, String>,
+    func: fn(Value, Vec<Value>, Rc<RefCell<Vec<AsyncThread>>>) -> Result<Value, String>,
   },
 }
 impl Function {

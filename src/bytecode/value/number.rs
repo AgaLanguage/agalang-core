@@ -1,6 +1,6 @@
 use std::{
   fmt::Display,
-  ops::{Add, Div, Mul, Neg, Sub, SubAssign},
+  ops::{Add, Div, Mul, Neg, Rem, Sub, SubAssign},
   str::FromStr,
 };
 
@@ -192,29 +192,46 @@ impl SubAssign<&BCDUInt> for BCDUInt {
 impl Add for BCDUInt {
   type Output = BCDUInt;
   fn add(self, rhs: Self) -> Self::Output {
-    let self_vec = self.0;
-    let rhs_vec = rhs.0;
-    let mut carry = 0;
+    let lhs = self.0;
+    let rhs = rhs.0;
+
     let mut result = Vec::new();
-    let max_len = self_vec.len().max(rhs_vec.len());
+    let mut carry = 0;
+
+    let max_len = lhs.len().max(rhs.len());
+
     for i in 0..max_len {
-      let i = max_len - 1 - i;
-      let a = *self_vec.get(i).unwrap_or(&0);
-      let b = *rhs_vec.get(i).unwrap_or(&0);
+      let a = *lhs.get(lhs.len().wrapping_sub(1 + i)).unwrap_or(&0);
+      let b = *rhs.get(rhs.len().wrapping_sub(1 + i)).unwrap_or(&0);
 
-      let (a_byte_1, a_byte_0) = ((a & 0xF0) >> 4, a & 0x0F);
-      let (b_byte_1, b_byte_0) = ((b & 0xF0) >> 4, b & 0x0F);
+      // Extraer nibbles altos y bajos
+      let (a1, a0) = ((a >> 4) & 0x0F, a & 0x0F);
+      let (b1, b0) = ((b >> 4) & 0x0F, b & 0x0F);
 
-      let sum_0 = a_byte_0 + b_byte_0 + carry;
-      carry = sum_0 / 10;
-      let sum_1 = a_byte_1 + b_byte_1 + carry;
-      carry = sum_1 / 10;
-      let sum = (sum_1 % 10) << 4 | (sum_0 % 10);
-      result.push(sum as u8);
+      let mut sub0 = a0 + b0 + carry;
+      carry = 0;
+      if sub0 >= 10 {
+        sub0 -= 10;
+        carry = 1;
+      }
+
+      let mut sub1 = a1 + b1 + carry;
+      carry = 0;
+      if sub1 >= 10 {
+        sub1 -= 10;
+        carry = 1;
+      }
+
+      // restar 10 es suficiente y menos costoso
+
+      result.push(((sub1 as u8) << 4) | (sub0 as u8));
     }
-    if carry > 0 {
-      result.push(carry);
+
+    // Eliminar ceros a la izquierda, excepto si es cero solo
+    while result.len() > 1 && *result.last().unwrap() == 0 {
+      result.pop();
     }
+
     result.reverse();
     Self(result)
   }
@@ -265,7 +282,7 @@ impl Sub for BCDUInt {
     }
 
     result.reverse();
-    BCDUInt(result)
+    Self(result)
   }
 }
 impl Mul for BCDUInt {
@@ -306,6 +323,14 @@ impl Div for BCDUInt {
     }
 
     Self::from_digits(result)
+  }
+}
+impl Rem for BCDUInt {
+  type Output = BCDUInt;
+  fn rem(self, rhs: Self) -> Self::Output {
+    let div = self.clone() / rhs.clone();
+    let mul = rhs * div;
+    self - mul
   }
 }
 impl Add for &BCDUInt {
@@ -355,6 +380,14 @@ impl Div for &BCDUInt {
 
   fn div(self, rhs: Self) -> Self::Output {
     self.clone() / rhs.clone()
+  }
+}
+impl Rem for &BCDUInt {
+  type Output = BCDUInt;
+  fn rem(self, rhs: Self) -> Self::Output {
+    let ref div = self / rhs;
+    let ref mul = rhs * div;
+    self - mul
   }
 }
 impl PartialOrd for BCDUInt {
@@ -740,6 +773,14 @@ impl Neg for BasicNumber {
     }
   }
 }
+impl Rem for BasicNumber {
+  type Output = BasicNumber;
+  fn rem(self, rhs: Self) -> Self::Output {
+    let div = (self.clone() / rhs.clone()).trunc();
+    let mul = rhs * div;
+    self - mul
+  }
+}
 impl PartialOrd for BasicNumber {
   fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
     self.cmp(other).into()
@@ -966,6 +1007,16 @@ impl From<usize> for Number {
     Self::Basic(BasicNumber::Int(false, value.to_string().into()))
   }
 }
+impl From<u128> for Number {
+  fn from(value: u128) -> Self {
+    Self::Basic(BasicNumber::Int(false, value.to_string().into()))
+  }
+}
+impl From<i32> for Number {
+  fn from(value: i32) -> Self {
+    Self::Basic(BasicNumber::Int(value.is_negative(), value.abs().to_string().into()))
+  }
+}
 impl ToString for Number {
   fn to_string(&self) -> String {
     match self {
@@ -1146,6 +1197,14 @@ impl Neg for Number {
       Self::Basic(x) => Self::Basic(-x),
       Self::Complex(x, y) => Self::Complex(-x, -y),
     }
+  }
+}
+impl Rem for Number {
+  type Output = Number;
+  fn rem(self, rhs: Self) -> Self::Output {
+    let div = (self.clone() / rhs.clone()).trunc();
+    let mul = rhs * div;
+    self - mul
   }
 }
 impl PartialOrd for Number {

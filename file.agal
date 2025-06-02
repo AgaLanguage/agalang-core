@@ -1,10 +1,13 @@
 importa ':consola' como Consola;
+importa ':tmp' como TMP;
 
-asinc fn test() {
-  Consola::pintar('asinc Hola');
-  Consola::pintar('asinc mundo!');
+asinc fn esperar(segundos){
+  const nanos = segundos * 1_000_000_000;
+  const inicio = TMP::ahora();
+  mien (TMP::ahora() - inicio) < nanos {}
+  ret 1;
 }
-const a = test();
-Consola::pintar('sinc Hola');
-Consola::pintar('sinc mundo!');
-espera a;
+para (def i=0;i<5;i+=1) {
+  espera esperar(1);
+  Consola::pintar(i);
+}

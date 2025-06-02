@@ -21,6 +21,7 @@
 - `(value1) - (value2)` resta `value1` y `value2`.
 - `(value1) * (value2)` multiplica `value1` y `value2`.
 - `(value1) / (value2)` divide `value1` entre `value2`.
+- `(value1) // (value2)` divide enteramente `value1` entre `value2`.
 - `(value1) % (value2)` retorna el residuo de la división.
 - `(value1) ^ (value2)` eleva `value1` a la potencia de `value2`.
 - `(value1) &&= (value2)` si `value1` es verdadero, asigna `value2`.
@@ -30,8 +31,10 @@
 - `(value1) -= (value2)` resta `value2` de `value1` y asigna el resultado.
 - `(value1) *= (value2)` multiplica `value1` por `value2` y asigna el resultado.
 - `(value1) /= (value2)` divide `value1` entre `value2` y asigna el resultado.
+- `(value1) //= (value2)` divide enteramente `value1` entre `value2` y asigna el resultado.
 - `(value1) %= (value2)` obtiene el residuo de la división y asigna el resultado.
 - `(value1) ^= (value2)` eleva `value1` a `value2` y asigna el resultado.
+- `(value1) |> (value2)` llama a `value2` con `value1` como argumento. `(value2)(value1)`
 
 # Tipos de Datos
 ## Primitivos

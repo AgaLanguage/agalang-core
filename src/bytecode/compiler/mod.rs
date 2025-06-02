@@ -107,6 +107,7 @@ impl Compiler {
           crate::parser::NodeOperator::GreaterThan => vec![OpCode::OpGreaterThan as u8],
           crate::parser::NodeOperator::Equal => vec![OpCode::OpEquals as u8],
           crate::parser::NodeOperator::LessThan => vec![OpCode::OpLessThan as u8],
+          crate::parser::NodeOperator::Modulo => vec![OpCode::OpModulo as u8],
           crate::parser::NodeOperator::And => vec![OpCode::OpAnd as u8],
           crate::parser::NodeOperator::Or => vec![OpCode::OpOr as u8],
           a => {
@@ -127,10 +128,10 @@ impl Compiler {
       }
       Node::Block(b, _is_async) => {
         self.write(OpCode::OpNewLocals as u8, b.location.start.line);
-        let last_index = b.body.len();
+        let code_len = b.body.len();
         for (index, node) in b.body.clone().enumerate() {
           self.node_to_bytes(&node)?;
-          if index < (last_index - 1) {
+          if index < (code_len - 1) {
             self.write(OpCode::OpPop as u8, node.get_location().end.line);
           }
         }
@@ -257,7 +258,9 @@ impl Compiler {
         self.node_to_bytes(&i.condition)?;
         let jump_while = self.jump(OpCode::OpJumpIfFalse);
         self.node_to_bytes(&i.body.clone().to_node())?;
-        self.write(OpCode::OpPop as u8, 0);
+        if i.body.len() > 0 {
+          self.write(OpCode::OpPop as u8, 0);
+        }
         self.add_loop(loop_start)?;
         self.patch_jump(jump_while)?;
         self.set_constant(Value::Never, i.location.start.line);
@@ -269,7 +272,9 @@ impl Compiler {
         let jump_do_while = self.jump(OpCode::OpJumpIfFalse);
         self.patch_jump(jump_do)?;
         self.node_to_bytes(&i.body.clone().to_node())?;
-        self.write(OpCode::OpPop as u8, 0);
+        if i.body.len() > 0 {
+          self.write(OpCode::OpPop as u8, 0);
+        }
         self.add_loop(loop_start)?;
         self.patch_jump(jump_do_while)?;
         self.set_constant(Value::Never, i.location.start.line);
@@ -281,6 +286,9 @@ impl Compiler {
         self.node_to_bytes(&f.condition)?;
         let jump_for = self.jump(OpCode::OpJumpIfFalse);
         self.node_to_bytes(&f.body.clone().to_node())?;
+        if f.body.len() > 0 {
+          self.write(OpCode::OpPop as u8, 0);
+        }
         self.node_to_bytes(&f.update)?;
         self.write(OpCode::OpPop as u8, 0);
         self.add_loop(loop_start)?;
@@ -523,8 +531,11 @@ impl Compiler {
       }
       Node::Await(value) => {
         self.node_to_bytes(&value.expression)?;
-        self.write_buffer(vec![OpCode::OpAwait as u8, OpCode::OpUnPromise as u8], value.location.start.line);
-      },
+        self.write_buffer(
+          vec![OpCode::OpAwait as u8, OpCode::OpUnPromise as u8],
+          value.location.start.line,
+        );
+      }
       Node::Lazy(node_expression_medicator) => todo!(),
       Node::Class(node_class) => todo!(),
       Node::Throw(node_value) => todo!(),

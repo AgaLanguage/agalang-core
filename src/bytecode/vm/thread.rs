@@ -81,12 +81,12 @@ impl Thread {
     self.resolve(name).borrow().get(name).cloned()
   }
   pub fn runtime_error(&mut self, message: &str) {
-    eprintln!(
-      "[linea {}] en {}",
-      self.current_frame().current_line(),
-      self.current_frame().to_string()
-    );
-    eprintln!("{}", message);
+    let frame = self.call_stack.last_mut();
+    let (line, name) = match frame {
+      Some(frame) => (frame.current_line().to_string(), frame.to_string()),
+      None => ("?".to_string(), "?".to_string()),
+    };
+    eprintln!("[linea {line}] en {name}\n{message}");
 
     self.reset_stack();
   }
@@ -174,7 +174,7 @@ impl Thread {
       } => (*arity, *has_rest, *is_async),
       Function::Script { .. } => (0, false, false),
       Function::Native { func, .. } => {
-        let value = func(this, args);
+        let value = func(this, args, self.get_vm().borrow().sub_threads.clone());
         return if let Err(error) = value {
           InterpretResult::RuntimeError(error)
         } else {
@@ -244,7 +244,7 @@ impl Thread {
           crate::bytecode::value::PromiseData::Err(e) => return InterpretResult::RuntimeError(e),
           crate::bytecode::value::PromiseData::Pending => {
             return InterpretResult::RuntimeError(format!(
-              "El programa encontro un error de compilación en tiempo de ejecución"
+              "El programa encontro un error de compilación en tiempo de ejecución (promesa no resuelta)"
             ))
           }
           crate::bytecode::value::PromiseData::Ok(v) => v.cloned(),
@@ -612,7 +612,7 @@ impl Thread {
         if a.is_string() || b.is_string() {
           let a = a.as_string();
           let b = b.as_string();
-          self.push(Value::Object(format!("{a}{b}").as_str().into()));
+          self.push(Value::String(format!("{a}{b}")));
           return InterpretResult::Continue;
         }
         return InterpretResult::RuntimeError(format!(
@@ -662,6 +662,20 @@ impl Thread {
         let a = a.as_number();
         let b = b.as_number();
         Value::Number(a / b)
+      }
+      OpCode::OpModulo => {
+        let b = self.pop();
+        let a = self.pop();
+        if !a.is_number() || !b.is_number() {
+          return InterpretResult::RuntimeError(format!(
+            "No se pudo operar '{} % {}'",
+            a.get_type(),
+            b.get_type()
+          ));
+        }
+        let a = a.as_number();
+        let b = b.as_number();
+        Value::Number(a % b)
       }
       OpCode::OpOr => {
         let b = self.pop();

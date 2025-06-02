@@ -55,7 +55,7 @@ pub fn console_lib() -> Value {
         name: format!("<{CONSOLE_LIB}>::{DRAW}"),
         path: format!("<{CONSOLE_LIB}>"),
         chunk: crate::bytecode::ChunkGroup::default(),
-        func: |_, args| {
+        func: |_, args, _| {
           for value in args.iter() {
             print!("{}", inspect(value));
             print!(" ");

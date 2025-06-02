@@ -24,6 +24,10 @@ fn number_literal(
       break;
     }
     let c = c.unwrap();
+    if c == '_' {
+      i+=1;
+      continue;
+    }
     if !is_number(c, use_dot) {
       break;
     }

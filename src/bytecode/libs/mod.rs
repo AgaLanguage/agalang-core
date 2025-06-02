@@ -1,5 +1,6 @@
 use super::{value::Value, DataCache};
 
+mod time;
 mod math;
 mod console;
 
@@ -10,6 +11,7 @@ pub fn libs(lib_name: String, mut cache: DataCache, resolver: impl FnOnce(&str) 
   let value = match lib_name.as_str() {
     math::MATH_LIB => math::math_lib(),
     console::CONSOLE_LIB => console::console_lib(),
+    time::TIME_LIB => time::time_lib(),
     path => resolver(path),
   };
   cache.set(lib_name, value.clone());

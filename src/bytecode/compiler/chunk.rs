@@ -10,6 +10,7 @@ pub enum OpCode {
   OpMultiply,
   OpDivide,
   OpNegate,
+  OpModulo,
   // Expr
   OpNot,
   OpApproximate,
@@ -101,6 +102,7 @@ impl From<u8> for OpCode {
       x if x == Self::OpAwait as u8 => Self::OpAwait,
       x if x == Self::OpUnPromise as u8 => Self::OpUnPromise,
       x if x == Self::OpPromised as u8 => Self::OpPromised,
+      x if x == Self::OpModulo as u8 => Self::OpModulo,
 
       x if x == Self::OpAt as u8 => Self::OpAt,
       x if x == Self::OpAsRef as u8 => Self::OpAsRef,

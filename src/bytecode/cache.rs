@@ -8,11 +8,6 @@ pub struct DataManager<K: Eq + std::hash::Hash, V: Clone>
   data: MultiRefHash<HashMap<K, V>>,
 }
 impl<K: Eq + std::hash::Hash, V: Clone> DataManager<K, V> {
-  pub fn new() -> Self {
-    DataManager {
-      data: HashMap::new().into(),
-    }
-  }
   pub fn get(&self, key: &K) -> V {
     self.data.borrow().get(key).cloned().unwrap()
   }
@@ -30,12 +25,4 @@ pub type DataCache = DataManager<String, Value>;
 pub struct Cache {
   pub proto: DataCache,
   pub libs: DataCache,
-}
-impl Cache {
-  pub fn new() -> Self {
-    Self {
-      proto: DataManager::new(),
-      libs: DataManager::new(),
-    }
-  }
 }

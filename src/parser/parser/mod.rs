@@ -834,14 +834,15 @@ impl Parser {
         super::PunctuationType::CircularBracketClose,
       )))
     {
-      let param = if let super::TokenType::Operator(super::OperatorType::At) = self.at().token_type {
+      let param = if let super::TokenType::Operator(super::OperatorType::At) = self.at().token_type
+      {
         self.eat(); // @
         let param = self.expect(super::TokenType::Identifier, "Se esperaba un identificador")?;
-       ast::NodeIdentifier {
+        ast::NodeIdentifier {
           name: format!("@{}", param.value),
           location: param.location,
         }
-      }else {
+      } else {
         let param = self.expect(super::TokenType::Identifier, "Se esperaba un identificador")?;
         ast::NodeIdentifier {
           name: param.value.clone(),
@@ -1226,12 +1227,26 @@ impl Parser {
         return Ok(left);
       };
       let right = self.parse_comparison_expr()?;
-      left = ast::Node::Binary(ast::NodeBinary {
-        operator,
-        left: left.clone().to_box(),
-        right: right.to_box(),
-        location: left.get_location(),
-      })
+      if operator == NodeOperator::NotEqual {
+        let equals = ast::Node::Binary(ast::NodeBinary {
+          operator: ast::NodeOperator::Equal,
+          left: left.clone().to_box(),
+          right: right.clone().to_box(),
+          location: left.get_location(),
+        });
+        left = ast::Node::UnaryFront(ast::NodeUnary {
+          operator: ast::NodeOperator::Not,
+          location: equals.get_location(),
+          operand: equals.to_box(),
+        });
+      } else {
+        left = ast::Node::Binary(ast::NodeBinary {
+          operator,
+          left: left.clone().to_box(),
+          right: right.to_box(),
+          location: left.get_location(),
+        })
+      }
     }
   }
   fn parse_comparison_expr(&mut self) -> Result<ast::Node, NodeError> {
@@ -1377,9 +1392,17 @@ impl Parser {
         return Ok(left);
       }
       let operator = if self.match_token(super::TokenType::Operator(super::OperatorType::And)) {
-        ast::NodeOperator::BitAnd
+        if self.match_join_token(super::TokenType::Operator(super::OperatorType::And)) {
+          ast::NodeOperator::And
+        } else {
+          ast::NodeOperator::BitAnd
+        }
       } else if self.match_token(super::TokenType::Operator(super::OperatorType::Or)) {
-        ast::NodeOperator::BitOr
+        if self.match_join_token(super::TokenType::Operator(super::OperatorType::Or)) {
+          ast::NodeOperator::Or
+        } else {
+          ast::NodeOperator::BitOr
+        }
       } else {
         return Ok(left);
       };
@@ -1488,7 +1511,7 @@ impl Parser {
   }
   fn parse_simple_expr(&mut self, message: &str) -> Result<ast::Node, NodeError> {
     let value = self.parse_literal_expr(message)?;
-        if self.check_in_tokens(vec![
+    if self.check_in_tokens(vec![
       super::TokenType::Punctuation(super::PunctuationType::Dot),
       super::TokenType::Punctuation(super::PunctuationType::CircularBracketOpen),
       super::TokenType::Punctuation(super::PunctuationType::QuadrateBracketOpen),
@@ -1926,7 +1949,7 @@ impl Parser {
         | super::OperatorType::Not
         | super::OperatorType::And
         | super::OperatorType::QuestionMark
-        |super::OperatorType::At,
+        | super::OperatorType::At,
       ) => {
         self.eat();
         let operand = self.parse_literal_expr(message)?.to_box();
@@ -1954,7 +1977,7 @@ impl Parser {
           ast::NodeOperator::BitAnd
         } else if operator == super::OperatorType::At {
           ast::NodeOperator::At
-        }else {
+        } else {
           ast::NodeOperator::QuestionMark
         };
         ast::Node::UnaryFront(ast::NodeUnary {
