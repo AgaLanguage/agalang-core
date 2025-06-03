@@ -538,10 +538,10 @@ impl Compiler {
           value.location.start.line,
         );
       }
-      Node::Lazy(node_expression_medicator) => todo!(),
-      Node::Class(node_class) => todo!(),
-      Node::Throw(node_value) => todo!(),
-      Node::Try(node_try) => todo!(),
+      Node::Lazy(_node_expression_medicator) => todo!(),
+      Node::Class(_node_class) => todo!(),
+      Node::Throw(_node_value) => todo!(),
+      Node::Try(_node_try) => todo!(),
       Node::None => todo!(),
     };
     Ok(())

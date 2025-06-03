@@ -4,10 +4,10 @@ importa ':tmp' como TMP;
 asinc fn esperar(segundos){
   const nanos = segundos * 1_000_000_000;
   const inicio = TMP::ahora();
-  mien (TMP::ahora() - inicio) < nanos {}
-  ret 1;
+  const fin = inicio + nanos;
+  mien TMP::ahora() < fin {}
 }
-para (def i=0;i<5;i+=1) {
+para (def i=1;i<=5;i+=1) {
   espera esperar(1);
   Consola::pintar(i);
 }

@@ -112,7 +112,7 @@ impl From<u8> for OpCode {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Chunk {
+struct Chunk {
   pub code: Vec<u8>,
   pub lines: Vec<usize>,
   pub constants: ValueArray,
