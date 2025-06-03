@@ -282,6 +282,7 @@ impl Compiler {
       Node::For(f) => {
         self.write(OpCode::OpNewLocals as u8, f.location.start.line);
         self.node_to_bytes(&f.init)?;
+          self.write(OpCode::OpPop as u8, 0);
         let loop_start = self.len();
         self.node_to_bytes(&f.condition)?;
         let jump_for = self.jump(OpCode::OpJumpIfFalse);
@@ -294,6 +295,7 @@ impl Compiler {
         self.add_loop(loop_start)?;
         self.patch_jump(jump_for)?;
         self.write(OpCode::OpRemoveLocals as u8, f.location.start.line);
+        self.set_constant(Value::Never, f.location.end.line);
       }
       Node::Function(f) => {
         let function = Value::Object(Self::parse_function(f)?.into());
