@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-  bytecode::value::{Function, Object, Value},
+  bytecode::value::{Function, Instance, Object, Value},
   util::Color,
 };
 
@@ -46,9 +46,9 @@ fn inspect(value: &Value) -> String {
 }
 
 pub fn console_lib() -> Value {
-  let mut hashmap = HashMap::new();
+  let hashmap = Instance::new(format!("<{CONSOLE_LIB}>"));
 
-  hashmap.insert(
+  hashmap.set_instance_property(
     DRAW.into(),
     Value::Object(
       Function::Native {
@@ -67,5 +67,6 @@ pub fn console_lib() -> Value {
       .into(),
     ),
   );
-  Value::Object(Object::Map(HashMap::new().into(), hashmap.into()))
+  hashmap.set_public_property(DRAW, true);
+  Value::Object(Object::Map(HashMap::new().into(), Some(hashmap.into())))
 }

@@ -450,13 +450,6 @@ impl Parser {
     let is_static_bit: u8 = if is_static { 1 } else { 0 };
     let is_public_bit: u8 = if is_public { 1 << 1 } else { 0 };
     let meta: u8 = is_static_bit | is_public_bit;
-    if token.token_type == super::TokenType::Punctuation(super::PunctuationType::SemiColon) {
-      return Ok(ast::NodeClassProperty {
-        name: name.value.clone(),
-        value: None,
-        meta,
-      });
-    }
     let value: ast::Node = if token.token_type
       == super::TokenType::Punctuation(super::PunctuationType::CircularBracketOpen)
     {
@@ -484,7 +477,7 @@ impl Parser {
     )?;
     Ok(ast::NodeClassProperty {
       name: name.value.clone(),
-      value: Some(value.to_box()),
+      value: value.to_box(),
       meta,
     })
   }

@@ -47,7 +47,7 @@ impl VM {
   fn run_instruction(&self) -> InterpretResult {
     let mut sub_threads = vec![];
     for async_thread in &mut self.sub_threads.borrow().iter() {
-      let data = async_thread.borrow().run_instruction_as_module();
+      let data = async_thread.borrow().run_instruction(true);
       if matches!(data, InterpretResult::Continue) {
         sub_threads.push(async_thread.clone());
       }
@@ -77,11 +77,14 @@ impl VM {
     let result = self.run();
     let thread = self.module.borrow().get_async().borrow().get_thread();
     match &result {
-      InterpretResult::RuntimeError(e) => thread.borrow_mut().runtime_error(&format!(
-        "Error en tiempo de ejecucion\n\t{}\n\t{}\n",
-        e,
-        call_stack_to_string(thread.borrow_mut().get_calls())
-      )),
+      InterpretResult::RuntimeError(e) => {
+        let calls = thread.borrow().get_calls().clone();
+        thread.borrow_mut().runtime_error(&format!(
+          "Error en tiempo de ejecucion\n\t{}\n\t{}\n",
+          e,
+          call_stack_to_string(&calls)
+        ))
+      }
       InterpretResult::CompileError(e) => thread
         .borrow_mut()
         .runtime_error(&format!("Error en compilacion\n\t{}", e,)),

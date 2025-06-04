@@ -1,13 +1,14 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::bytecode::DataCache;
+mod class;
 mod number;
 mod object;
 mod promise;
 pub use number::Number;
-use object::AS_ARRAY_PROPERTY;
 pub use object::{Function, MultiRefHash, Object};
 pub use promise::{Promise, PromiseData, PROMISE_TYPE};
+pub use class::{Instance, Class};
 
 use super::{stack::VarsManager, ChunkGroup};
 
@@ -117,7 +118,7 @@ impl Value {
     match self {
       Self::Promise(promise) => promise.clone(),
       Self::Ref(RefValue(r)) => r.borrow().as_promise(),
-      v => v.clone().into()
+      v => v.clone().into(),
     }
   }
 
@@ -150,6 +151,13 @@ impl Value {
   pub fn is_function(&self) -> bool {
     match self {
       Self::Object(Object::Function { .. }) => true,
+      Self::Ref(RefValue(r)) | Self::Iterator(r) => r.borrow().is_function(),
+      _ => false,
+    }
+  }
+  pub fn is_class(&self) -> bool {
+    match self {
+      Self::Object(Object::Class { .. }) => true,
       Self::Ref(RefValue(r)) | Self::Iterator(r) => r.borrow().is_function(),
       _ => false,
     }
@@ -190,15 +198,45 @@ impl Value {
       .into(),
     }
   }
+  pub fn _as_map(&self) -> (MultiRefHash<HashMap<String, Value>>, Option<MultiRefHash<Instance>>) {
+    match self {
+      Self::Object(Object::Map(prop, instance)) => (prop.clone(), instance.clone()),
+      Self::Ref(RefValue(r)) | Self::Iterator(r) => r.borrow()._as_map(),
+      _ => (HashMap::new().into(), None),
+    }
+  }
+  pub fn as_class(&self) -> MultiRefHash<Class> {
+    match self {
+      Self::Object(Object::Class(c)) => c.clone(),
+      Self::Ref(RefValue(r)) | Self::Iterator(r) => r.borrow().as_class(),
+      _ => Class::new("<nulo>".to_string()).0
+    }
+  }
   pub fn as_strict_array(&self) -> Result<Vec<Value>, String> {
     match self {
       Self::Object(Object::Array(array)) => Ok(array.borrow().clone()),
       Self::Object(Object::Map(_, instance)) => {
-        if let Some(values) = instance.borrow().get(AS_ARRAY_PROPERTY) {
-          if let Value::Object(Object::Array(array)) = values {
-            return Ok(array.borrow().clone());
-          }
+        if matches!(instance, None) {
+          return Err(format!(
+            "No se puede convertir a lista: {}",
+            self.as_string()
+          ));
         }
+        let value = instance
+          .clone()
+          .unwrap()
+          .borrow()
+          .get_instance_property(crate::functions_names::TO_AGAL_ARRAY);
+        if matches!(value, None) {
+          return Err(format!(
+            "No se puede convertir a lista: {}",
+            self.as_string()
+          ));
+        }
+        if let Value::Object(Object::Array(array)) = value.unwrap() {
+          return Ok(array.borrow().clone());
+        }
+
         Err(format!(
           "No se puede convertir a lista: {}",
           self.as_string()
@@ -312,7 +350,7 @@ impl ValueArray {
   pub fn get_index(&self, value: &Value) -> Option<u8> {
     self.values.iter().position(|v| v == value).map(|i| i as u8)
   }
-  pub fn enumerate(&self) -> impl Iterator<Item = (u8, &Value)> {
+  pub fn _enumerate(&self) -> impl Iterator<Item = (u8, &Value)> {
     self.values.iter().enumerate().map(|(i, v)| (i as u8, v))
   }
 }

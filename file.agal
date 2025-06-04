@@ -1,13 +1,14 @@
 importa ':consola' como Consola;
-importa ':tmp' como TMP;
 
-asinc fn esperar(segundos){
-  const nanos = segundos * 1_000_000_000;
-  const inicio = TMP::ahora();
-  const fin = inicio + nanos;
-  mien TMP::ahora() < fin {}
+clase Animal {
+  sonar(){
+    Consola::pintar("Hu");
+  };
+  est sonar(){
+    Consola::pintar("~~");
+  };
 }
-para (def i=1;i<=5;i+=1) {
-  espera esperar(1);
-  Consola::pintar(i);
-}
+
+const animal = Animal();
+animal::sonar();
+Animal::sonar();

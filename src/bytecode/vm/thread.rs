@@ -6,7 +6,7 @@ use std::rc::Rc;
 use crate::bytecode::compiler::{ChunkGroup, OpCode};
 use crate::bytecode::libs::libs;
 use crate::bytecode::stack::{CallFrame, InterpretResult, VarsManager};
-use crate::bytecode::value::{Function, Object, Promise, PromiseData, Value, REF_TYPE};
+use crate::bytecode::value::{Function, Instance, Object, Promise, PromiseData, Value, REF_TYPE};
 use crate::bytecode::vm::VM;
 
 #[derive(Clone, Debug)]
@@ -24,7 +24,10 @@ impl ModuleThread {
     let module = Rc::new(RefCell::new(Self {
       path: path.to_string(),
       async_thread: async_thread.clone(),
-      value: Value::Object(Object::Map(HashMap::new().into(), HashMap::new().into())),
+      value: Value::Object(Object::Map(
+        HashMap::new().into(),
+        Some(Instance::new(format!("<{path}>")).into()),
+      )),
       status: InterpretResult::Continue,
       vm: None,
     }));
@@ -190,15 +193,9 @@ impl AsyncThread {
     }
     self.thread.borrow_mut().push_call(frame)
   }
-  fn run_instruction(&self) -> InterpretResult {
+  pub fn run_instruction(&self, contain_error: bool) -> InterpretResult {
     let code = self.thread.borrow_mut().peek();
     match code {
-      OpCode::OpReturn => {
-        self.thread.borrow_mut().read();
-        let value = self.thread.borrow_mut().pop();
-        self.promise.set_value(value);
-        return InterpretResult::Ok;
-      }
       OpCode::OpAwait => {
         self.thread.borrow_mut().read();
         let value = self.pop();
@@ -207,25 +204,34 @@ impl AsyncThread {
           *self.await_thread.borrow_mut() = blocking;
         }
         self.push(value);
-        return InterpretResult::Continue;
+        InterpretResult::Continue
       }
-      _ => {}
-    };
-    let result = self.thread.borrow_mut().run_instruction();
-    match result {
-      InterpretResult::RuntimeError(err) => {
-        self.promise.set_err(err);
-        // Este es un error de la promesa, no de el programa
-        InterpretResult::Ok
+      _ => {
+        let result = self.thread.borrow_mut().run_instruction();
+        match result {
+          InterpretResult::RuntimeError(err) => {
+            self.promise.set_err(err.clone());
+            if contain_error {
+              // Este es un error de la promesa, no de el programa
+              InterpretResult::Ok
+            } else {
+              InterpretResult::RuntimeError(err)
+            }
+          }
+          InterpretResult::Ok => {
+            self.promise.set_value(self.pop());
+            InterpretResult::Ok
+          }
+          result => result,
+        }
       }
-      result => result,
     }
   }
   pub fn run_instruction_as_module(&self) -> InterpretResult {
     let sub_module = self.await_thread.borrow().clone();
 
     if matches!(sub_module, BlockingThread::Void) {
-      return self.run_instruction();
+      return self.run_instruction(false);
     }
 
     let data = self.await_thread.borrow().run_instruction();
@@ -362,10 +368,8 @@ impl Thread {
       }
     }
     args.reverse();
-    if !callee.is_object() {
-      if !callee.is_number() {
-        return InterpretResult::RuntimeError("Se esperaba llamar una funcion [1]".into());
-      }
+
+    if callee.is_number() {
       if arity != 1 || args.len() != 1 {
         return InterpretResult::RuntimeError(
           "Solo se puede multiplicar un numero (llamada)".into(),
@@ -381,6 +385,11 @@ impl Thread {
       let arg = arg.as_number();
       let value = Value::Number(num * arg);
       self.push(value);
+      return InterpretResult::Continue;
+    }
+    if callee.is_class() {
+      let this = callee.as_class().borrow().get_instance();
+      self.push(this);
       return InterpretResult::Continue;
     }
     if !callee.is_function() {
@@ -893,11 +902,10 @@ impl Thread {
       }
       OpCode::OpReturn => {
         self.call_stack.pop();
-        let value = self.pop();
         if self.call_stack.len() == 0 {
           return InterpretResult::Ok;
         }
-        value
+        self.pop()
       }
       OpCode::OpEquals => {
         let b = self.pop();

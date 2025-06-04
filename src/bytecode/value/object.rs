@@ -1,15 +1,18 @@
 use crate::{
-  bytecode::{proto, stack::VarsManager, vm::Thread, ChunkGroup, DataCache},
+  bytecode::{
+    proto, stack::VarsManager, value::class::Instance, vm::Thread, ChunkGroup, DataCache,
+  },
   parser::NodeFunction,
   util::{Color, SetColor},
 };
 use std::{
-  cell::RefCell, collections::HashMap, hash::{Hash, Hasher}, rc::Rc
+  cell::RefCell,
+  collections::HashMap,
+  hash::{Hash, Hasher},
+  rc::Rc,
 };
 
-use super::Value;
-
-pub const AS_ARRAY_PROPERTY: &str = "aLista";
+use super::{class::Class, Value};
 
 #[derive(Debug, Clone)]
 pub struct MultiRefHash<T>(Rc<RefCell<T>>);
@@ -42,12 +45,18 @@ impl<T> From<T> for MultiRefHash<T> {
   }
 }
 impl<T> Eq for MultiRefHash<T> {}
-impl<T> MultiRefHash<T> where T: Clone {
+impl<T> MultiRefHash<T>
+where
+  T: Clone,
+{
   pub fn cloned(&self) -> T {
     self.borrow().clone()
   }
 }
-impl<T> Default for MultiRefHash<T> where T: Default {
+impl<T> Default for MultiRefHash<T>
+where
+  T: Default,
+{
   fn default() -> Self {
     Self(Default::default())
   }
@@ -134,14 +143,25 @@ impl Function {
           .set_color(Color::Yellow)
       ),
       Self::Script { path, .. } => {
-        format!("en <{}:{}>", path.set_color(Color::Cyan), "script".to_string().set_color(Color::Gray))
-      },
+        format!(
+          "en <{}:{}>",
+          path.set_color(Color::Cyan),
+          "script".to_string().set_color(Color::Gray)
+        )
+      }
       Self::Native { path, name, .. } => {
         if path.is_empty() {
-          return format!("en {name} <{}>", "nativo".to_string().set_color(Color::Gray));
+          return format!(
+            "en {name} <{}>",
+            "nativo".to_string().set_color(Color::Gray)
+          );
         }
-        format!("en {name} <{}:{}>", path.set_color(Color::Cyan), "nativo".to_string().set_color(Color::Gray))
-      },
+        format!(
+          "en {name} <{}:{}>",
+          path.set_color(Color::Cyan),
+          "nativo".to_string().set_color(Color::Gray)
+        )
+      }
     }
   }
 }
@@ -153,29 +173,6 @@ impl ToString for Function {
       }
       Self::Script { path, .. } => format!("<script '{path}'>"),
       Self::Native { name, .. } => format!("<nativo fn {name}>"),
-    }
-  }
-}
-impl
-  From<(
-    &NodeFunction,
-    MultiRefHash<Option<Rc<RefCell<VarsManager>>>>,
-  )> for Function
-{
-  fn from(
-    value: (
-      &NodeFunction,
-      MultiRefHash<Option<Rc<RefCell<VarsManager>>>>,
-    ),
-  ) -> Self {
-    Self::Function {
-      arity: value.0.params.len(),
-      chunk: ChunkGroup::new(),
-      name: value.0.name.clone(),
-      is_async: value.0.is_async,
-      location: value.0.location.clone(),
-      scope: value.1,
-      has_rest: false,
     }
   }
 }
@@ -202,11 +199,12 @@ impl std::fmt::Debug for Function {
 pub enum Object {
   Map(
     MultiRefHash<HashMap<String, Value>>,
-    MultiRefHash<HashMap<String, Value>>,
+    Option<MultiRefHash<Instance>>,
   ),
   //Set(MultiRefHash<HashSet<Value>>),
   Array(MultiRefHash<Vec<Value>>),
   Function(MultiRefHash<Function>),
+  Class(MultiRefHash<Class>),
 }
 impl Object {
   pub fn get_type(&self) -> &str {
@@ -214,6 +212,7 @@ impl Object {
       Self::Function(f) => f.borrow().get_type(),
       Self::Map(_, _) => "objeto",
       Self::Array(_) => "lista",
+      Self::Class(_) => "clase",
       //Self::Set(_) => "conjunto",
     }
   }
@@ -255,19 +254,21 @@ impl Object {
 
   pub fn set_instance_property(&self, key: &str, value: Value) -> Option<Value> {
     match self {
-      // se usa Some(option.unwrap_or_default()) para que se envie por defecto un valor vacio en vez de un error con None
-      Self::Map(_, instance) => Some(
-        instance
-          .borrow_mut()
-          .insert(key.to_string(), value)
-          .unwrap_or_default(),
-      ),
+      Self::Map(_, Some(instance)) => instance.borrow_mut().set_instance_property(key, value),
+      Self::Class(class) => class.borrow().set_instance_property(key, value),
       _ => None,
     }
   }
   pub fn get_instance_property(&self, key: &str, proto_cache: DataCache) -> Option<Value> {
     match (self, key) {
-      (Self::Map(_, instance), key) => instance.borrow().get(key).cloned(),
+      (Self::Map(_, instance), key) => {
+        if let Some(instance) = instance {
+          instance.borrow().get_instance_property(key)
+        } else {
+          None
+        }
+      }
+      (Self::Class(class), key) => class.borrow().get_instance_property(key),
       (Self::Array(array), "longitud") => Some(Value::Number(array.borrow().len().into())),
       (value, key) => proto::proto(value.get_type().to_string(), proto_cache.clone())
         .get_instance_property(key, proto_cache),
@@ -281,7 +282,7 @@ impl From<Function> for Object {
 }
 impl From<HashMap<String, Value>> for Object {
   fn from(value: HashMap<String, Value>) -> Self {
-    Self::Map(value.into(), HashMap::new().into())
+    Self::Map(value.into(), None)
   }
 }
 impl From<Vec<Value>> for Object {

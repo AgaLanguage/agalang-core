@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::bytecode::value::{Function, Number, Object, Value};
+use crate::bytecode::value::{Function, Instance, Number, Object, Value};
 
 pub const MATH_LIB: &str = ":mate";
 const CEIL: &str = "techo";
@@ -14,9 +14,9 @@ const TAU: &str = "TAU";
 const IS_INFINITE: &str = "esInfinito";
 
 pub fn math_lib() -> Value {
-  let mut hashmap = HashMap::new();
+  let hashmap = Instance::new(format!("<{MATH_LIB}>"));
 
-  hashmap.insert(
+  hashmap.set_instance_property(
     FLOOR.into(),
     Value::Object(Function::Native {
       name: format!("<{MATH_LIB}>::{FLOOR}"),
@@ -36,7 +36,7 @@ pub fn math_lib() -> Value {
       },
     }.into()),
   );
-    hashmap.insert(
+  hashmap.set_instance_property(
     IS_INFINITE.into(),
     Value::Object(Function::Native {
       name: format!("<{MATH_LIB}>::{IS_INFINITE}"),
@@ -56,7 +56,7 @@ pub fn math_lib() -> Value {
       },
     }.into()),
   );
-  hashmap.insert(
+  hashmap.set_instance_property(
     ROUND.into(),
     Value::Object(Function::Native {
       name: format!("<{MATH_LIB}>::{ROUND}"),
@@ -76,7 +76,7 @@ pub fn math_lib() -> Value {
       },
     }.into()),
   );
-  hashmap.insert(
+  hashmap.set_instance_property(
     CEIL.into(),
     Value::Object(Function::Native {
       name: format!("<{MATH_LIB}>::{CEIL}"),
@@ -96,7 +96,7 @@ pub fn math_lib() -> Value {
       },
     }.into()),
   );
-  hashmap.insert(
+  hashmap.set_instance_property(
     MAX.into(),
     Value::Object(Function::Native {
       name: format!("<{MATH_LIB}>::{MAX}"),
@@ -118,7 +118,7 @@ pub fn math_lib() -> Value {
       },
     }.into()),
   );
-  hashmap.insert(
+  hashmap.set_instance_property(
     MIN.into(),
     Value::Object(Function::Native {
       name: format!("<{MATH_LIB}>::{MIN}"),
@@ -140,8 +140,17 @@ pub fn math_lib() -> Value {
       },
     }.into()),
   );
-  hashmap.insert(PI.into(), Value::Number("3.1415926535897932384626433832795028841971693993751058209749445923078164062862089986280348253421170679".parse::<Number>().unwrap()));
-  hashmap.insert(TAU.into(), Value::Number("6.2831853071795864769252867665590057683943387987502116419498891846156328125724179972560696506842341359".parse::<Number>().unwrap()));
-  hashmap.insert(EULER.into(), Value::Number("2.7182818284590452353602874713526624977572470936999595749669676277240766303535475945713821785251664274".parse::<Number>().unwrap()));
-  Value::Object(Object::Map(HashMap::new().into(), hashmap.into()))
+  hashmap.set_instance_property(PI.into(), Value::Number("3.1415926535897932384626433832795028841971693993751058209749445923078164062862089986280348253421170679".parse::<Number>().unwrap()));
+  hashmap.set_instance_property(TAU.into(), Value::Number("6.2831853071795864769252867665590057683943387987502116419498891846156328125724179972560696506842341359".parse::<Number>().unwrap()));
+  hashmap.set_instance_property(EULER.into(), Value::Number("2.7182818284590452353602874713526624977572470936999595749669676277240766303535475945713821785251664274".parse::<Number>().unwrap()));
+  hashmap.set_public_property(CEIL, true);
+  hashmap.set_public_property(FLOOR, true);
+  hashmap.set_public_property(  ROUND, true);
+  hashmap.set_public_property(MAX, true);
+  hashmap.set_public_property(MIN, true);
+  hashmap.set_public_property(PI, true);
+  hashmap.set_public_property(EULER, true);
+  hashmap.set_public_property(TAU, true);
+  hashmap.set_public_property(IS_INFINITE, true);
+  Value::Object(Object::Map(HashMap::new().into(), Some(hashmap.into())))
 }

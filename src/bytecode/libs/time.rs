@@ -4,16 +4,16 @@ use std::{
   time::{SystemTime, UNIX_EPOCH},
 };
 
-use crate::bytecode::value::{Function, Object, Value};
+use crate::bytecode::value::{Function, Instance, Object, Value};
 
 pub const TIME_LIB: &str = ":tmp";
 const NOW: &str = "ahora";
 const ZONE: &str = "ZONA";
 
 pub fn time_lib() -> Value {
-  let mut hashmap = HashMap::new();
+  let hashmap = Instance::new( format!("<{TIME_LIB}>"));
 
-  hashmap.insert(
+  hashmap.set_instance_property(
     NOW.into(),
     Value::Object(
       Function::Native {
@@ -31,7 +31,8 @@ pub fn time_lib() -> Value {
       .into(),
     ),
   );
-  hashmap.insert(
+  hashmap.set_public_property(NOW, true);
+  hashmap.set_instance_property(
     ZONE.into(),
     Value::Object(unsafe {
       let now: time_t = time(std::ptr::null_mut());
@@ -63,5 +64,6 @@ pub fn time_lib() -> Value {
       vec![Value::Number(hours.into()), Value::Number(minutes.into())]
     }.into()),
   );
-  Value::Object(Object::Map(HashMap::new().into(), hashmap.into()))
+  hashmap.set_public_property(ZONE, true);
+  Value::Object(Object::Map(HashMap::new().into(), Some(hashmap.into())))
 }

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::bytecode::{
-  value::{Function, Object, Value},
+  value::{Function, Instance, Object, Value},
   ChunkGroup,
 };
 
@@ -10,9 +10,9 @@ const SPLIT: &str = "separa";
 const BYTES: &str = "bytes";
 
 pub fn string_proto() -> Value {
-  let mut hashmap = HashMap::new();
+  let hashmap = Instance::new(format!("<cadena>"));
 
-  hashmap.insert(
+  hashmap.set_instance_property(
     REPLACE.into(),
     Value::Object(Function::Native {
       path: "".into(),
@@ -35,8 +35,9 @@ pub fn string_proto() -> Value {
       chunk: ChunkGroup::default(),
     }.into()),
   );
+  hashmap.set_public_property(REPLACE, true);
 
-  hashmap.insert(
+  hashmap.set_instance_property(
     BYTES.into(),
     Value::Object(Function::Native {
       path: "".into(),
@@ -53,8 +54,9 @@ pub fn string_proto() -> Value {
       chunk: ChunkGroup::default(),
     }.into()),
   );
+  hashmap.set_public_property(BYTES, true);
 
-  hashmap.insert(
+  hashmap.set_instance_property(
     SPLIT.into(),
     Value::Object(Function::Native {
       path: "".into(),
@@ -75,5 +77,7 @@ pub fn string_proto() -> Value {
       chunk: ChunkGroup::default(),
     }.into()),
   );
-  Value::Object(Object::Map(HashMap::new().into(), hashmap.into()))
+  hashmap.set_public_property(SPLIT, true);
+
+  Value::Object(Object::Map(HashMap::new().into(), Some(hashmap.into())))
 }

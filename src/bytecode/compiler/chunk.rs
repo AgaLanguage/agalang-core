@@ -172,12 +172,12 @@ impl Chunk {
     self.overwrite(offset + 1, (jump & 0xff) as u8);
     Ok(())
   }
-  fn print(&self, name: String) {
+  fn _print(&self, name: String) {
     println!("===== {name} =====");
     
     println!("-- {name} consts -");
     println!("Index | Value",);
-    for (i, value) in self.constants.enumerate() {
+    for (i, value) in self.constants._enumerate() {
       println!("   {i:02x} | {value:?}");
     }
     println!("-- {name} consts -");
@@ -250,10 +250,10 @@ impl ChunkGroup {
     self.aggregate_len.len() - 1
   }
 
-  pub fn current_chunk_mut(&mut self) -> &mut Chunk {
+  pub(self) fn current_chunk_mut(&mut self) -> &mut Chunk {
     &mut self.chunks[self.current]
   }
-  pub fn current_chunk(&self) -> &Chunk {
+  pub(self) fn current_chunk(&self) -> &Chunk {
     &self.chunks[self.current]
   }
   pub fn update_aggregate_len(&mut self) {
@@ -364,9 +364,9 @@ impl ChunkGroup {
     self.update_aggregate_len();
     v
   }
-  pub fn print(&mut self) {
+  pub fn _print(&mut self) {
     for (i, chunk) in self.chunks.iter().enumerate() {
-      chunk.print(format!("chunk {i}"));
+      chunk._print(format!("chunk {i}"));
     }
   }
 }

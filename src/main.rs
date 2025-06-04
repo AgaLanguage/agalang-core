@@ -1,5 +1,6 @@
 use std::process::ExitCode;
 
+mod functions_names;
 mod bytecode;
 mod parser;
 mod util;
@@ -41,8 +42,7 @@ fn code(path: &str) -> Option<String> {
 }
 
 fn file() -> Option<String> {
-  let mut args: Vec<String> = std::env::args().collect();
-  args.push("file.agal".to_string());
+  let args: Vec<String> = std::env::args().collect();
   if args.len() < 2 {
     let blue_usage = "\x1b[94m\x1b[1mUsage\x1b[39m:\x1b[0m";
     println!("{} {} <filename>", blue_usage, args[0]);

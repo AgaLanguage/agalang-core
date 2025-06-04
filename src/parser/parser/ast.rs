@@ -246,12 +246,7 @@ impl std::fmt::Display for Node {
           let str_public = format!("public: {is_public}");
           let str_info = format!("{str_static}\n{str_const}\n{str_public}");
           let str_info = format!("{}:\n{}", p.name, data_format(str_info));
-          match &p.value {
-            Some(value) => {
-              format!("{str_info}\n{}", data_format(value.to_string()))
-            }
-            None => str_info,
-          }
+          format!("{str_info}\n{}", data_format(p.value.to_string()))
         });
         format!(
           "NodeClass: {}\n{}",
@@ -709,7 +704,7 @@ pub struct NodeTry {
 #[derive(Clone, PartialEq, Debug, Eq, Hash)]
 pub struct NodeClassProperty {
   pub name: String,
-  pub value: Option<BNode>,
+  pub value: BNode,
   /** bits
   1: is_static
   2: is_public */
