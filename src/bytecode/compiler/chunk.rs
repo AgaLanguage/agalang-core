@@ -52,6 +52,7 @@ pub enum OpCode {
   OpContinue,
   OpCopy, // Para duplicar el ultimo valor en el stack (obtener el padre de un objeto)
   OpSetScope, // Agrega el scope actual a el ultimo valor de la pila (para funciones)
+  OpInClass, // Determina que el scope actual es una clase (metodos de clase)
   // Invalid
   OpNull,
 }
@@ -103,6 +104,7 @@ impl From<u8> for OpCode {
       x if x == Self::OpUnPromise as u8 => Self::OpUnPromise,
       x if x == Self::OpPromised as u8 => Self::OpPromised,
       x if x == Self::OpModulo as u8 => Self::OpModulo,
+      x if x == Self::OpInClass as u8 => Self::OpInClass,
 
       x if x == Self::OpAt as u8 => Self::OpAt,
       x if x == Self::OpAsRef as u8 => Self::OpAsRef,

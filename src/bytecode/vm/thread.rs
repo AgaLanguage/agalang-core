@@ -6,8 +6,9 @@ use std::rc::Rc;
 use crate::bytecode::compiler::{ChunkGroup, OpCode};
 use crate::bytecode::libs::libs;
 use crate::bytecode::stack::{CallFrame, InterpretResult, VarsManager};
-use crate::bytecode::value::{Function, Instance, Object, Promise, PromiseData, Value, REF_TYPE};
+use crate::bytecode::value::{Function, Instance, MultiRefHash, Object, Promise, PromiseData, Value, REF_TYPE};
 use crate::bytecode::vm::VM;
+use crate::functions_names::CONSTRUCTOR;
 
 #[derive(Clone, Debug)]
 pub struct ModuleThread {
@@ -116,7 +117,7 @@ impl ModuleThread {
   pub fn set_status(&mut self, status: InterpretResult) {
     self.status = status;
   }
-  fn get_vm(&self) -> Rc<RefCell<VM>> {
+  pub fn get_vm(&self) -> Rc<RefCell<VM>> {
     self.vm.clone().unwrap()
   }
   pub fn get_async(&self) -> Rc<RefCell<AsyncThread>> {
@@ -161,6 +162,9 @@ pub struct AsyncThread {
 impl AsyncThread {
   fn set_module(&mut self, module: Rc<RefCell<ModuleThread>>) {
     self.module = Some(module);
+  }
+  pub fn get_module(&self) -> Rc<RefCell<ModuleThread>> {
+    self.module.clone().unwrap()
   }
   fn pop(&self) -> Value {
     self.thread.borrow_mut().pop()
@@ -265,6 +269,9 @@ impl Thread {
   fn set_async(&mut self, async_thread: Rc<RefCell<AsyncThread>>) {
     self.async_thread = Some(async_thread);
   }
+  pub fn get_async(&self) -> Rc<RefCell<AsyncThread>> {
+    self.async_thread.clone().unwrap()
+  }
   pub fn get_stack(&self) -> &Vec<Value> {
     &self.stack
   }
@@ -348,54 +355,7 @@ impl Thread {
     let b = self.read() as u16;
     (a << 8) | b
   }
-  fn call_value(&mut self, this: Value, callee: Value, arity: usize) -> InterpretResult {
-    let mut args = vec![];
-    for _ in 0..arity {
-      let value = self.pop();
-      if value.is_iterator() {
-        let mut list = match value.as_strict_array() {
-          Ok(list) => list,
-          Err(error) => {
-            return InterpretResult::RuntimeError(error);
-          }
-        };
-        list.reverse();
-        for item in list.iter() {
-          args.push(item.clone());
-        }
-      } else {
-        args.push(value);
-      }
-    }
-    args.reverse();
-
-    if callee.is_number() {
-      if arity != 1 || args.len() != 1 {
-        return InterpretResult::RuntimeError(
-          "Solo se puede multiplicar un numero (llamada)".into(),
-        );
-      }
-      let arg = args.get(0).unwrap();
-      if !arg.is_number() {
-        return InterpretResult::RuntimeError(
-          "Solo se pueden multiplicar numeros (llamada)".into(),
-        );
-      }
-      let num = callee.as_number();
-      let arg = arg.as_number();
-      let value = Value::Number(num * arg);
-      self.push(value);
-      return InterpretResult::Continue;
-    }
-    if callee.is_class() {
-      let this = callee.as_class().borrow().get_instance();
-      self.push(this);
-      return InterpretResult::Continue;
-    }
-    if !callee.is_function() {
-      return InterpretResult::RuntimeError("Se esperaba llamar una funcion [2]".into());
-    }
-    let fun = callee.as_function();
+  fn call_function(&mut self, this: Value, fun: MultiRefHash<Function>, args: Vec<Value>) -> InterpretResult {
     let fun_clone = fun.clone();
     let function = fun_clone.borrow();
 
@@ -455,6 +415,66 @@ impl Thread {
     }
     InterpretResult::Continue
   }
+  fn call_value(&mut self, this: Value, callee: Value, arity: usize) -> InterpretResult {
+    let mut args = vec![];
+    for _ in 0..arity {
+      let value = self.pop();
+      if !value.is_iterator() {
+        args.push(value);
+        continue;
+      }
+      let mut list = match value.as_strict_array(self) {
+        Ok(list) => list,
+        Err(error) => {
+          return InterpretResult::RuntimeError(error);
+        }
+      };
+      loop {
+        match list.pop() {
+          Some(value) => args.push(value),
+          None => break,
+        }
+      }
+    }
+    args.reverse();
+
+    if callee.is_number() {
+      if arity != 1 || args.len() != 1 {
+        return InterpretResult::RuntimeError(
+          "Solo se puede multiplicar un numero (llamada)".into(),
+        );
+      }
+      let arg = args.get(0).unwrap();
+      if !arg.is_number() {
+        return InterpretResult::RuntimeError(
+          "Solo se pueden multiplicar numeros (llamada)".into(),
+        );
+      }
+      let num = callee.as_number();
+      let arg = arg.as_number();
+      let value = Value::Number(num * arg);
+      self.push(value);
+      return InterpretResult::Continue;
+    }
+    if callee.is_class() {
+      let class = callee.as_class();
+      let this = class.borrow().get_instance();
+      let constructor = class.borrow().get_instance_property(CONSTRUCTOR);
+      if let Some(Value::Object(Object::Function(fun))) = constructor {
+        self.call_function(this.clone(), fun, args);
+      }else if let Some(_) = constructor {
+        return InterpretResult::RuntimeError("Se esperaba llamar un constructor".into())
+      }else {
+        self.push(this);
+      }
+
+      return InterpretResult::Continue;
+    }
+    if !callee.is_function() {
+      return InterpretResult::RuntimeError("Se esperaba llamar una funcion".into());
+    }
+    self.call_function(this, callee.as_function(), args)
+  }
   fn run_instruction(&mut self) -> InterpretResult {
     let byte_instruction = self.read();
     let instruction: OpCode = byte_instruction.into();
@@ -477,6 +497,11 @@ impl Thread {
           }
           crate::bytecode::value::PromiseData::Ok(v) => v.cloned(),
         }
+      }
+      OpCode::OpInClass => {
+        let value = self.pop();
+        value.set_in_class();
+        value
       }
       OpCode::OpPromised => {
         // Debe existir el frame
@@ -590,11 +615,7 @@ impl Thread {
         let is_instance = self.read() == 1u8;
         if is_instance {
           let key = key.as_string();
-          let async_thread = self.async_thread.clone().unwrap();
-          let module = async_thread.borrow().module.clone().unwrap();
-          let vm = module.borrow().get_vm();
-          let proto = vm.borrow().cache.proto.clone();
-          if let Some(value) = object.get_instance_property(&key, proto) {
+          if let Some(value) = object.get_instance_property(&key, self) {
             self.push(value);
             return InterpretResult::Continue;
           }

@@ -149,7 +149,7 @@ impl Compiler {
             self.write(OpCode::OpPop as u8, node.get_location().end.line);
           }
         }
-        self.write(OpCode::OpRemoveLocals as u8, node_block.location.start.line);
+        self.write(OpCode::OpRemoveLocals as u8, node_block.location.end.line);
       }
       Node::UnaryFront(node_unary) => {
         self.node_to_bytes(&node_unary.operand)?;
@@ -596,6 +596,7 @@ impl Compiler {
           self.node_value_to_bytes(&prop.value)?;
           self.write_buffer(
             vec![
+              OpCode::OpInClass as u8,
               OpCode::OpSetMember as u8,
               INSTANCE_MEMBER,
               OpCode::OpPop as u8,

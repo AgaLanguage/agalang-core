@@ -1,14 +1,14 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
-use crate::bytecode::DataCache;
+use crate::bytecode::vm::Thread;
 mod class;
 mod number;
 mod object;
 mod promise;
+pub use class::{Class, Instance};
 pub use number::Number;
 pub use object::{Function, MultiRefHash, Object};
 pub use promise::{Promise, PromiseData, PROMISE_TYPE};
-pub use class::{Instance, Class};
 
 use super::{stack::VarsManager, ChunkGroup};
 
@@ -77,6 +77,12 @@ impl Value {
         "Error: no se puede establecer una variable local en un valor de tipo {}",
         self.get_type()
       ),
+    }
+  }
+  pub fn set_in_class(&self) {
+    match self {
+      Self::Object(Object::Function(f)) => f.borrow_mut().set_in_class(),
+      _ => {}
     }
   }
   pub fn is_number(&self) -> bool {
@@ -198,7 +204,12 @@ impl Value {
       .into(),
     }
   }
-  pub fn _as_map(&self) -> (MultiRefHash<HashMap<String, Value>>, Option<MultiRefHash<Instance>>) {
+  pub fn _as_map(
+    &self,
+  ) -> (
+    MultiRefHash<HashMap<String, Value>>,
+    Option<MultiRefHash<Instance>>,
+  ) {
     match self {
       Self::Object(Object::Map(prop, instance)) => (prop.clone(), instance.clone()),
       Self::Ref(RefValue(r)) | Self::Iterator(r) => r.borrow()._as_map(),
@@ -209,10 +220,10 @@ impl Value {
     match self {
       Self::Object(Object::Class(c)) => c.clone(),
       Self::Ref(RefValue(r)) | Self::Iterator(r) => r.borrow().as_class(),
-      _ => Class::new("<nulo>".to_string()).0
+      _ => Class::new("<nulo>".to_string()).0,
     }
   }
-  pub fn as_strict_array(&self) -> Result<Vec<Value>, String> {
+  pub fn as_strict_array(&self, thread: &Thread) -> Result<Vec<Value>, String> {
     match self {
       Self::Object(Object::Array(array)) => Ok(array.borrow().clone()),
       Self::Object(Object::Map(_, instance)) => {
@@ -226,7 +237,7 @@ impl Value {
           .clone()
           .unwrap()
           .borrow()
-          .get_instance_property(crate::functions_names::TO_AGAL_ARRAY);
+          .get_instance_property(crate::functions_names::TO_AGAL_ARRAY, thread);
         if matches!(value, None) {
           return Err(format!(
             "No se puede convertir a lista: {}",
@@ -242,12 +253,14 @@ impl Value {
           self.as_string()
         ))
       }
-      Self::Ref(RefValue(l)) | Self::Iterator(l) => l.borrow().as_strict_array().or_else(|_| {
-        Err(format!(
-          "No se puede convertir a lista: {}",
-          self.as_string()
-        ))
-      }),
+      Self::Ref(RefValue(l)) | Self::Iterator(l) => {
+        l.borrow().as_strict_array(thread).or_else(|_| {
+          Err(format!(
+            "No se puede convertir a lista: {}",
+            self.as_string()
+          ))
+        })
+      }
       _ => Err(format!(
         "No se puede convertir a lista: {}",
         self.as_string()
@@ -276,10 +289,20 @@ impl Value {
       _ => None,
     }
   }
-  pub fn get_instance_property(&self, key: &str, proto_cache: DataCache) -> Option<Value> {
+  pub fn get_instance_property(&self, key: &str, thread: &Thread) -> Option<Value> {
+    let proto_cache = thread
+      .get_async()
+      .borrow()
+      .get_module()
+      .borrow()
+      .get_vm()
+      .borrow()
+      .cache
+      .proto
+      .clone();
     match (self, key) {
-      (Self::Ref(RefValue(r)), key) => r.borrow().get_instance_property(key, proto_cache),
-      (Self::Object(o), key) => o.get_instance_property(key, proto_cache),
+      (Self::Ref(RefValue(r)), key) => r.borrow().get_instance_property(key, thread),
+      (Self::Object(o), key) => o.get_instance_property(key, thread),
       (Self::String(s), "longitud") => Some(Self::Number(s.len().into())),
       (Self::String(c), "bytes") => Some(Self::Object(
         c.as_bytes()
@@ -289,7 +312,7 @@ impl Value {
           .into(),
       )),
       (value, key) => super::proto::proto(value.get_type().to_string(), proto_cache.clone())
-        .get_instance_property(key, proto_cache),
+        .get_instance_property(key, thread),
     }
   }
 }

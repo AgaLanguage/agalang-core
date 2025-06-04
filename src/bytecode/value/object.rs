@@ -1,7 +1,5 @@
 use crate::{
-  bytecode::{
-    proto, stack::VarsManager, value::class::Instance, vm::Thread, ChunkGroup, DataCache,
-  },
+  bytecode::{proto, stack::VarsManager, value::class::Instance, vm::Thread, ChunkGroup},
   parser::NodeFunction,
   util::{Color, SetColor},
 };
@@ -69,6 +67,7 @@ pub enum Function {
     chunk: ChunkGroup,
     name: String,
     is_async: bool,
+    in_class: bool,
     location: crate::util::Location,
     scope: MultiRefHash<Option<Rc<RefCell<VarsManager>>>>,
     has_rest: bool,
@@ -97,6 +96,18 @@ impl Function {
       Self::Function { .. } => "funcion",
       Self::Script { .. } => "script",
       Self::Native { .. } => "nativo",
+    }
+  }
+  pub fn set_in_class(&mut self) {
+    match self {
+      Self::Function { in_class, .. } => *in_class = true,
+      Self::Script { .. } | Self::Native { .. } => {}
+    }
+  }
+  pub fn get_in_class(&self) -> bool {
+    match self {
+      Self::Function { in_class, .. } => *in_class,
+      Self::Script { .. } | Self::Native { .. } => false,
     }
   }
   pub fn set_scope(&self, vars: Rc<RefCell<VarsManager>>) {
@@ -186,6 +197,7 @@ impl From<&NodeFunction> for Function {
       location: value.location.clone(),
       scope: None.into(),
       has_rest: false,
+      in_class: false,
     }
   }
 }
@@ -259,19 +271,31 @@ impl Object {
       _ => None,
     }
   }
-  pub fn get_instance_property(&self, key: &str, proto_cache: DataCache) -> Option<Value> {
+  pub fn get_instance_property(&self, key: &str, thread: &Thread) -> Option<Value> {
     match (self, key) {
       (Self::Map(_, instance), key) => {
         if let Some(instance) = instance {
-          instance.borrow().get_instance_property(key)
+          instance.borrow().get_instance_property(key, thread)
         } else {
           None
         }
       }
       (Self::Class(class), key) => class.borrow().get_instance_property(key),
       (Self::Array(array), "longitud") => Some(Value::Number(array.borrow().len().into())),
-      (value, key) => proto::proto(value.get_type().to_string(), proto_cache.clone())
-        .get_instance_property(key, proto_cache),
+      (value, key) => {
+        let proto_cache = thread
+          .get_async()
+          .borrow()
+          .get_module()
+          .borrow()
+          .get_vm()
+          .borrow()
+          .cache
+          .proto
+          .clone();
+        proto::proto(value.get_type().to_string(), proto_cache.clone())
+          .get_instance_property(key, thread)
+      }
     }
   }
 }

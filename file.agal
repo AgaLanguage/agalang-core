@@ -1,14 +1,21 @@
 importa ':consola' como Consola;
 
 clase Animal {
-  sonar(){
+  pub sonar(){
     Consola::pintar("Hu");
+    esto::mover();
+  };
+  mover(){
+    Consola::pintar("Moviendo...");
   };
   est sonar(){
     Consola::pintar("~~");
+  };
+  est __constructor__(){
+    Consola::pintar("creando un animal");
+    ret esto;
   };
 }
 
 const animal = Animal();
 animal::sonar();
-Animal::sonar();

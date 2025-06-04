@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::functions_names::CONSTRUCTOR;
+use crate::{bytecode::vm::Thread, functions_names::CONSTRUCTOR};
 
 use super::{MultiRefHash, Value};
 
@@ -21,8 +21,14 @@ impl Instance {
       public_properties: HashSet::new().into(),
     }
   }
-  pub fn get_instance_property(&self, key: &str) -> Option<Value> {
-    self.poperties.borrow().get(key).cloned()
+  pub fn get_instance_property(&self, key: &str, thread: &Thread) -> Option<Value> {
+    // Si estamos dentro del metodo de clase o la propiedad es publica tenemos acceso
+    let access = thread.get_calls().last().unwrap().in_class() || self.public_properties.borrow().contains(key);
+    if access {
+      self.poperties.borrow().get(key).cloned()
+    } else {
+      None
+    }
   }
   pub fn set_instance_property(&self, key: &str, value: Value) -> Option<Value> {
     if self.poperties.borrow().contains_key(key) {
@@ -93,7 +99,7 @@ impl Class {
     .into();
     instance.borrow().set_instance_property(
       CONSTRUCTOR,
-      Value::Object(super::Object::Class(class.clone())),
+      Value::Ref(Value::Object(super::Object::Class(class.clone())).into()),
     );
     (class, instance)
   }
@@ -108,7 +114,8 @@ impl Class {
         .insert(key.to_string(), value.clone())
         .unwrap_or_default(),
     )
-  }  pub fn get_instance_property(&self, key: &str) -> Option<Value> {
+  }
+  pub fn get_instance_property(&self, key: &str) -> Option<Value> {
     self.poperties.borrow().get(key).cloned()
   }
   pub fn get_instance(&self) -> Value {

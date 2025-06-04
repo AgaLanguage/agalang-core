@@ -108,6 +108,9 @@ impl CallFrame {
   pub fn pop_vars(&mut self) -> Rc<RefCell<VarsManager>> {
     self.locals.pop().unwrap()
   }
+  pub fn in_class(&self) -> bool {
+    self.function.borrow().get_in_class()
+  }
 }
 impl std::fmt::Debug for CallFrame {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
