@@ -2,12 +2,14 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::bytecode::vm::Thread;
 mod class;
+mod function;
 mod number;
 mod object;
 mod promise;
 pub use class::{Class, Instance};
+pub use function::Function;
 pub use number::Number;
-pub use object::{Function, MultiRefHash, Object};
+pub use object::{MultiRefHash, Object};
 pub use promise::{Promise, PromiseData, PROMISE_TYPE};
 
 use super::{stack::VarsManager, ChunkGroup};
@@ -79,9 +81,9 @@ impl Value {
       ),
     }
   }
-  pub fn set_in_class(&self) {
+  pub fn set_in_class(&self, class: MultiRefHash<Class>) {
     match self {
-      Self::Object(Object::Function(f)) => f.borrow_mut().set_in_class(),
+      Self::Object(Object::Function(f)) => f.borrow_mut().set_in_class(class),
       _ => {}
     }
   }
@@ -208,12 +210,12 @@ impl Value {
     &self,
   ) -> (
     MultiRefHash<HashMap<String, Value>>,
-    Option<MultiRefHash<Instance>>,
+    MultiRefHash<Option<Instance>>,
   ) {
     match self {
       Self::Object(Object::Map(prop, instance)) => (prop.clone(), instance.clone()),
       Self::Ref(RefValue(r)) | Self::Iterator(r) => r.borrow()._as_map(),
-      _ => (HashMap::new().into(), None),
+      _ => (HashMap::new().into(), None.into()),
     }
   }
   pub fn as_class(&self) -> MultiRefHash<Class> {
@@ -227,21 +229,18 @@ impl Value {
     match self {
       Self::Object(Object::Array(array)) => Ok(array.borrow().clone()),
       Self::Object(Object::Map(_, instance)) => {
+        let instance = instance.cloned();
         if matches!(instance, None) {
           return Err(format!(
             "No se puede convertir a lista: {}",
-            self.as_string()
+            self.get_type()
           ));
         }
-        let value = instance
-          .clone()
-          .unwrap()
-          .borrow()
-          .get_instance_property(crate::functions_names::TO_AGAL_ARRAY, thread);
+        let value = instance.unwrap().get_instance_property(crate::functions_names::TO_AGAL_ARRAY, thread);
         if matches!(value, None) {
           return Err(format!(
             "No se puede convertir a lista: {}",
-            self.as_string()
+            self.get_type()
           ));
         }
         if let Value::Object(Object::Array(array)) = value.unwrap() {
@@ -250,20 +249,24 @@ impl Value {
 
         Err(format!(
           "No se puede convertir a lista: {}",
-          self.as_string()
+          self.get_type()
         ))
       }
       Self::Ref(RefValue(l)) | Self::Iterator(l) => {
         l.borrow().as_strict_array(thread).or_else(|_| {
           Err(format!(
             "No se puede convertir a lista: {}",
-            self.as_string()
+            self.get_type()
           ))
         })
       }
+      Self::String(string) => {
+        let chars = string.chars().map(Value::from).collect::<Vec<Value>>();
+        Ok(chars)
+      }
       _ => Err(format!(
         "No se puede convertir a lista: {}",
-        self.as_string()
+        self.get_type()
       )),
     }
   }
@@ -314,6 +317,11 @@ impl Value {
       (value, key) => super::proto::proto(value.get_type().to_string(), proto_cache.clone())
         .get_instance_property(key, thread),
     }
+  }
+}
+impl From<char> for Value {
+  fn from(value: char) -> Self {
+    Self::Char(value)
   }
 }
 impl From<&str> for Value {

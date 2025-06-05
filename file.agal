@@ -1,9 +1,14 @@
 importa ':consola' como Consola;
 
+clase Gorro {
+  poner(){
+    Consola::pintar("Poniendo...");
+  };
+}
+
 clase Animal {
   pub sonar(){
     Consola::pintar("Hu");
-    esto::mover();
   };
   mover(){
     Consola::pintar("Moviendo...");
@@ -18,5 +23,12 @@ clase Animal {
   };
 }
 
-const animal = Animal("le puedes","mandar un","argumento");
-animal::sonar();
+clase Gato extiende Animal {
+  pub miau(){
+    esto::sonar();
+    esto::mover();
+  };
+}
+
+const animal = Gato();
+animal::miau();

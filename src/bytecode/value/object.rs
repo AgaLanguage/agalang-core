@@ -1,7 +1,7 @@
-use crate::{
-  bytecode::{proto, stack::VarsManager, value::class::Instance, vm::Thread, ChunkGroup},
-  parser::NodeFunction,
-  util::{Color, SetColor},
+use crate::bytecode::{
+  proto,
+  value::{class::Instance, Function},
+  vm::Thread,
 };
 use std::{
   cell::RefCell,
@@ -42,6 +42,11 @@ impl<T> From<T> for MultiRefHash<T> {
     Self(Rc::new(RefCell::new(value)))
   }
 }
+impl<T> From<T> for MultiRefHash<Option<T>> {
+  fn from(value: T) -> Self {
+    Self(Rc::new(RefCell::new(Some(value))))
+  }
+}
 impl<T> Eq for MultiRefHash<T> {}
 impl<T> MultiRefHash<T>
 where
@@ -59,151 +64,26 @@ where
     Self(Default::default())
   }
 }
-
-#[derive(Clone, PartialEq, Eq, Hash)]
-pub enum Function {
-  Function {
-    arity: usize,
-    chunk: ChunkGroup,
-    name: String,
-    is_async: bool,
-    in_class: bool,
-    location: crate::util::Location,
-    scope: MultiRefHash<Option<Rc<RefCell<VarsManager>>>>,
-    has_rest: bool,
-  },
-  Script {
-    chunk: ChunkGroup,
-    path: String,
-    scope: MultiRefHash<Option<Rc<RefCell<VarsManager>>>>,
-  },
-  Native {
-    name: String,
-    path: String,
-    chunk: ChunkGroup,
-    func: fn(Value, Vec<Value>, &mut Thread) -> Result<Value, String>,
-  },
-}
-impl Function {
-  pub fn set_rest(&mut self, rest: bool) {
-    match self {
-      Self::Function { has_rest, .. } => *has_rest = rest,
-      _ => {}
+impl<T> MultiRefHash<Option<T>> {
+  pub fn on_ok<V>(&self, cb: impl FnOnce(&T) -> Option<V>) -> Option<V> {
+    match self.borrow().as_ref() {
+      Some(t) => cb(t),
+      None => None,
     }
   }
-  pub fn get_type(&self) -> &'static str {
-    match self {
-      Self::Function { .. } => "funcion",
-      Self::Script { .. } => "script",
-      Self::Native { .. } => "nativo",
+  pub fn on_some<V>(&self, cb: impl FnOnce(&T) -> V) -> Option<V> {
+    match self.borrow().as_ref() {
+      Some(t) => Some(cb(t)),
+      None => None,
     }
   }
-  pub fn set_in_class(&mut self) {
-    match self {
-      Self::Function { in_class, .. } => *in_class = true,
-      Self::Script { .. } | Self::Native { .. } => {}
+  pub fn as_ref(&self) -> Option<std::cell::Ref<T>> {
+    let ref_opcion = self.borrow();
+    if ref_opcion.is_some() {
+      Some(std::cell::Ref::map(ref_opcion, |opt| opt.as_ref().unwrap()))
+    } else {
+      None
     }
-  }
-  pub fn get_in_class(&self) -> bool {
-    match self {
-      Self::Function { in_class, .. } => *in_class,
-      Self::Script { .. } | Self::Native { .. } => false,
-    }
-  }
-  pub fn set_scope(&self, vars: Rc<RefCell<VarsManager>>) {
-    match self {
-      Self::Function { scope: v, .. } => *v.borrow_mut() = Some(vars),
-      Self::Script { scope: v, .. } => *v.borrow_mut() = Some(vars),
-      Self::Native { .. } => {}
-    }
-  }
-  pub fn get_scope(&self) -> Option<Rc<RefCell<VarsManager>>> {
-    match self {
-      Self::Function { scope: vars, .. } => vars.borrow().clone(),
-      Self::Script { scope: vars, .. } => vars.borrow().clone(),
-      Self::Native { .. } => None,
-    }
-  }
-  pub fn chunk(&mut self) -> &mut ChunkGroup {
-    match self {
-      Self::Function { chunk, .. } => chunk,
-      Self::Script { chunk, .. } => chunk,
-      Self::Native { chunk, .. } => chunk,
-    }
-  }
-  pub fn location(&self) -> String {
-    match self {
-      Self::Function {
-        name,
-        is_async,
-        location,
-        ..
-      } => format!(
-        "en {} <{}:{}:{}>",
-        if *is_async {
-          format!("asinc {name}")
-        } else {
-          name.to_string()
-        },
-        location.file_name.set_color(Color::Cyan),
-        (location.start.line + 1)
-          .to_string()
-          .set_color(Color::Yellow),
-        (location.start.column + 1)
-          .to_string()
-          .set_color(Color::Yellow)
-      ),
-      Self::Script { path, .. } => {
-        format!(
-          "en <{}:{}>",
-          path.set_color(Color::Cyan),
-          "script".to_string().set_color(Color::Gray)
-        )
-      }
-      Self::Native { path, name, .. } => {
-        if path.is_empty() {
-          return format!(
-            "en {name} <{}>",
-            "nativo".to_string().set_color(Color::Gray)
-          );
-        }
-        format!(
-          "en {name} <{}:{}>",
-          path.set_color(Color::Cyan),
-          "nativo".to_string().set_color(Color::Gray)
-        )
-      }
-    }
-  }
-}
-impl ToString for Function {
-  fn to_string(&self) -> String {
-    match self {
-      Self::Function { name, is_async, .. } => {
-        format!("<{} {name}>", if *is_async { "asinc fn" } else { "fn" })
-      }
-      Self::Script { path, .. } => format!("<script '{path}'>"),
-      Self::Native { name, .. } => format!("<nativo fn {name}>"),
-    }
-  }
-}
-impl From<&NodeFunction> for Function {
-  fn from(value: &NodeFunction) -> Self {
-    Self::Function {
-      arity: value.params.len(),
-      chunk: ChunkGroup::new(),
-      name: value.name.clone(),
-      is_async: value.is_async,
-      location: value.location.clone(),
-      scope: None.into(),
-      has_rest: false,
-      in_class: false,
-    }
-  }
-}
-impl std::fmt::Debug for Function {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    write!(f, "{}", self.to_string())
   }
 }
 
@@ -211,7 +91,7 @@ impl std::fmt::Debug for Function {
 pub enum Object {
   Map(
     MultiRefHash<HashMap<String, Value>>,
-    Option<MultiRefHash<Instance>>,
+    MultiRefHash<Option<Instance>>,
   ),
   //Set(MultiRefHash<HashSet<Value>>),
   Array(MultiRefHash<Vec<Value>>),
@@ -266,20 +146,14 @@ impl Object {
 
   pub fn set_instance_property(&self, key: &str, value: Value) -> Option<Value> {
     match self {
-      Self::Map(_, Some(instance)) => instance.borrow_mut().set_instance_property(key, value),
+      Self::Map(_, instance) => instance.on_ok(|v| v.set_instance_property(key, value)),
       Self::Class(class) => class.borrow().set_instance_property(key, value),
       _ => None,
     }
   }
   pub fn get_instance_property(&self, key: &str, thread: &Thread) -> Option<Value> {
     match (self, key) {
-      (Self::Map(_, instance), key) => {
-        if let Some(instance) = instance {
-          instance.borrow().get_instance_property(key, thread)
-        } else {
-          None
-        }
-      }
+      (Self::Map(_, instance), key) => instance.on_ok(|t| t.get_instance_property(key, thread)),
       (Self::Class(class), key) => class.borrow().get_instance_property(key),
       (Self::Array(array), "longitud") => Some(Value::Number(array.borrow().len().into())),
       (value, key) => {
@@ -306,7 +180,7 @@ impl From<Function> for Object {
 }
 impl From<HashMap<String, Value>> for Object {
   fn from(value: HashMap<String, Value>) -> Self {
-    Self::Map(value.into(), None)
+    Self::Map(value.into(), None.into())
   }
 }
 impl From<Vec<Value>> for Object {
@@ -329,7 +203,26 @@ impl ToString for Object {
   fn to_string(&self) -> String {
     match self {
       Self::Function(f) => f.borrow().to_string(),
-      Self::Map(_, _) => format!("<Objeto {}>", self.get_type()),
+      Self::Map(_, i) => i
+        .on_some(|t| format!("<Instancia {}>", t.get_type()))
+        .unwrap_or("<objeto>".to_string()),
+      Self::Class(c) => {
+        let has_parent = c.borrow().has_parent();
+        let class = c.borrow().get_type().to_string();
+        format!(
+          "<clase {}>",
+          if has_parent {
+            let c_ref = c.borrow();
+            let parent = c_ref.get_parent();
+
+            let parent_ref = parent.borrow();
+            let v = parent_ref.as_ref().unwrap().get_type();
+            format!("{class} ext {v}")
+          } else {
+            class
+          }
+        )
+      }
       _ => format!("<{}>", self.get_type()),
     }
   }

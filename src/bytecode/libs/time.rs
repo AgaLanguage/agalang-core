@@ -65,5 +65,5 @@ pub fn time_lib() -> Value {
     }.into()),
   );
   hashmap.set_public_property(ZONE, true);
-  Value::Object(Object::Map(HashMap::new().into(), Some(hashmap.into())))
+  Value::Object(Object::Map(HashMap::new().into(), hashmap.into()))
 }

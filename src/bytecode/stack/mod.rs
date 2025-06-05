@@ -108,7 +108,7 @@ impl CallFrame {
   pub fn pop_vars(&mut self) -> Rc<RefCell<VarsManager>> {
     self.locals.pop().unwrap()
   }
-  pub fn in_class(&self) -> bool {
+  pub fn in_class(&self) -> Option<MultiRefHash<super::value::Class>> {
     self.function.borrow().get_in_class()
   }
 }

@@ -1,10 +1,10 @@
+mod colors;
 pub mod list;
 mod tokenize;
-mod colors;
 
-pub use tokenize::*;
 pub use colors::*;
 pub use list::*;
+pub use tokenize::*;
 pub fn is_valid_char(valid_chars: &str, eval_char: char) -> bool {
   for c in valid_chars.chars() {
     if c == eval_char {
@@ -54,6 +54,31 @@ impl<T, E, V> OnError<T, E, V> for Result<T, V> {
     match self {
       Ok(v) => Ok(v),
       Err(e) => Err(error(e)),
+    }
+  }
+}
+
+pub trait OnOk<T, V> {
+  fn _on_ok(self, ok: impl FnOnce(T) -> Option<V>) -> Option<V>;
+}
+
+impl<T, V> OnOk<T, V> for Option<T> {
+  fn _on_ok(self, ok: impl FnOnce(T) -> Option<V>) -> Option<V> {
+    match self {
+      Some(t) => ok(t),
+      None => None,
+    }
+  }
+}
+pub trait OnSome<T, V> {
+  fn on_some(self, some: impl FnOnce(T) -> V) -> Option<V>;
+}
+
+impl<T, V> OnSome<T, V> for Option<T> {
+  fn on_some(self, some: impl FnOnce(T) -> V) -> Option<V> {
+    match self {
+      Some(t) => Some(some(t)),
+      None => None,
     }
   }
 }

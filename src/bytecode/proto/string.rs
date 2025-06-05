@@ -79,5 +79,5 @@ pub fn string_proto() -> Value {
   );
   hashmap.set_public_property(SPLIT, true);
 
-  Value::Object(Object::Map(HashMap::new().into(), Some(hashmap.into())))
+  Value::Object(Object::Map(HashMap::new().into(), hashmap.into()))
 }

@@ -574,16 +574,19 @@ impl Compiler {
       Node::Lazy(_node_expression) => todo!(),
       Node::Class(node_class) => {
         let (class, instance) = Class::new(node_class.name.clone());
+
         for prop in &node_class.body {
           let is_static = prop.meta & 0b01 == 0b01;
           let is_public = prop.meta & 0b10 == 0b10;
 
+          let class = Object::Class(class.clone());
+
           let object = if is_static {
-            Object::Class(class.clone())
+            class.clone()
           } else {
-            let obj = Object::Map(HashMap::new().into(), Some(instance.clone()));
+            let obj = Object::Map(HashMap::new().into(), instance.clone());
             if is_public {
-              instance.borrow().set_public_property(&prop.name, true);
+              instance.on_some(|v|v.set_public_property(&prop.name, true));
             }
             obj
           };
@@ -594,6 +597,7 @@ impl Compiler {
             prop.value.get_location().start.line,
           );
           self.node_value_to_bytes(&prop.value)?;
+          self.set_constant(Value::Object(class), prop.value.get_location().start.line);
           self.write_buffer(
             vec![
               OpCode::OpInClass as u8,
@@ -608,6 +612,13 @@ impl Compiler {
           Value::Object(Object::Class(class)),
           node_class.location.start.line,
         );
+        if let Some(node_identifier) = &node_class.extend_of {
+          self.read_var(
+            node_identifier.name.clone(),
+            node_identifier.location.start.line,
+          );
+          self.write(OpCode::OpExtendClass as u8, node_identifier.location.end.line);
+        }
         let name = self.set_value(Value::String(node_class.name.as_str().into()));
         self.write_buffer(
           vec![OpCode::OpConstDecl as u8, name],

@@ -29,7 +29,7 @@ impl ModuleThread {
       async_thread: async_thread.clone(),
       value: Value::Object(Object::Map(
         HashMap::new().into(),
-        Some(Instance::new(format!("<{path}>")).into()),
+        Instance::new(format!("<{path}>")).into(),
       )),
       status: InterpretResult::Continue,
       vm: None,
@@ -372,7 +372,11 @@ impl Thread {
         has_rest,
         is_async,
         ..
-      } => (if *has_rest {arity - 1} else {*arity}, *has_rest, *is_async),
+      } => (
+        if *has_rest { arity - 1 } else { *arity },
+        *has_rest,
+        *is_async,
+      ),
       Function::Script { .. } => (0, false, false),
       Function::Native { func, .. } => {
         let value = func(this, args, self);
@@ -505,9 +509,24 @@ impl Thread {
           crate::bytecode::value::PromiseData::Ok(v) => v.cloned(),
         }
       }
-      OpCode::OpInClass => {
+      OpCode::OpExtendClass => {
+        let parent_class = match self.pop() {
+          Value::Object(Object::Class(class)) => class.cloned(),
+          value => {
+            return InterpretResult::RuntimeError(format!(
+              "No se puede usar '{}' para extender una clase",
+              value.get_type()
+            ))
+          }
+        };
         let value = self.pop();
-        value.set_in_class();
+        value.as_class().borrow().set_parent(parent_class);
+        value
+      }
+      OpCode::OpInClass => {
+        let class = self.pop().as_class();
+        let value = self.pop();
+        value.set_in_class(class);
         value
       }
       OpCode::OpPromised => {

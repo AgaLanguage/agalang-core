@@ -152,5 +152,5 @@ pub fn math_lib() -> Value {
   hashmap.set_public_property(EULER, true);
   hashmap.set_public_property(TAU, true);
   hashmap.set_public_property(IS_INFINITE, true);
-  Value::Object(Object::Map(HashMap::new().into(), Some(hashmap.into())))
+  Value::Object(Object::Map(HashMap::new().into(), hashmap.into()))
 }
