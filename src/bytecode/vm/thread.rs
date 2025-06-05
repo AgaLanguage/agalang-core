@@ -6,7 +6,9 @@ use std::rc::Rc;
 use crate::bytecode::compiler::{ChunkGroup, OpCode};
 use crate::bytecode::libs::libs;
 use crate::bytecode::stack::{CallFrame, InterpretResult, VarsManager};
-use crate::bytecode::value::{Function, Instance, MultiRefHash, Object, Promise, PromiseData, Value, REF_TYPE};
+use crate::bytecode::value::{
+  Function, Instance, MultiRefHash, Object, Promise, PromiseData, Value, REF_TYPE,
+};
 use crate::bytecode::vm::VM;
 use crate::functions_names::CONSTRUCTOR;
 
@@ -355,7 +357,12 @@ impl Thread {
     let b = self.read() as u16;
     (a << 8) | b
   }
-  fn call_function(&mut self, this: Value, fun: MultiRefHash<Function>, args: Vec<Value>) -> InterpretResult {
+  fn call_function(
+    &mut self,
+    this: Value,
+    fun: MultiRefHash<Function>,
+    args: Vec<Value>,
+  ) -> InterpretResult {
     let fun_clone = fun.clone();
     let function = fun_clone.borrow();
 
@@ -365,7 +372,7 @@ impl Thread {
         has_rest,
         is_async,
         ..
-      } => (*arity, *has_rest, *is_async),
+      } => (if *has_rest {arity - 1} else {*arity}, *has_rest, *is_async),
       Function::Script { .. } => (0, false, false),
       Function::Native { func, .. } => {
         let value = func(this, args, self);
@@ -462,9 +469,9 @@ impl Thread {
       let constructor = class.borrow().get_instance_property(CONSTRUCTOR);
       if let Some(Value::Object(Object::Function(fun))) = constructor {
         self.call_function(this.clone(), fun, args);
-      }else if let Some(_) = constructor {
-        return InterpretResult::RuntimeError("Se esperaba llamar un constructor".into())
-      }else {
+      } else if let Some(_) = constructor {
+        return InterpretResult::RuntimeError("Se esperaba llamar un constructor".into());
+      } else {
         self.push(this);
       }
 

@@ -11,11 +11,12 @@ clase Animal {
   est sonar(){
     Consola::pintar("~~");
   };
-  est __constructor__(){
-    Consola::pintar("creando un animal");
-    ret esto;
+  est __constructor__(@texto){
+    Consola::pintar(texto);
+    esto.gorro = Gorro();
+    esto; # el ultimo valor se retorna en cualquier funcion
   };
 }
 
-const animal = Animal();
+const animal = Animal("le puedes","mandar un","argumento");
 animal::sonar();
