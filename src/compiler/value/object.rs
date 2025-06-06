@@ -1,8 +1,3 @@
-use crate::bytecode::{
-  proto,
-  value::{class::Instance, Function},
-  vm::Thread,
-};
 use std::{
   cell::RefCell,
   collections::HashMap,
@@ -10,7 +5,7 @@ use std::{
   rc::Rc,
 };
 
-use super::{class::Class, Value};
+use super::{Class, Value, Function, Instance};
 
 #[derive(Debug, Clone)]
 pub struct MultiRefHash<T>(Rc<RefCell<T>>);
@@ -151,7 +146,7 @@ impl Object {
       _ => None,
     }
   }
-  pub fn get_instance_property(&self, key: &str, thread: &Thread) -> Option<Value> {
+  pub fn get_instance_property(&self, key: &str, thread: &crate::interpreter::Thread) -> Option<Value> {
     match (self, key) {
       (Self::Map(_, instance), key) => instance.on_ok(|t| t.get_instance_property(key, thread)),
       (Self::Class(class), key) => class.borrow().get_instance_property(key),
@@ -167,7 +162,7 @@ impl Object {
           .cache
           .proto
           .clone();
-        proto::proto(value.get_type().to_string(), proto_cache.clone())?
+        crate::interpreter::proto::proto(value.get_type().to_string(), proto_cache.clone())?
           .get_instance_property(key, thread)
       }
     }

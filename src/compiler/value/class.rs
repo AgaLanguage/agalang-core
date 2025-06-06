@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::{bytecode::vm::Thread, functions_names::{CONSTRUCTOR, SUPER}};
+use crate::functions_names::{CONSTRUCTOR, SUPER};
 
 use super::{MultiRefHash, Value};
 
@@ -29,7 +29,7 @@ impl Instance {
   pub fn get_type(&self) -> &str {
     &self.name
   }
-  pub fn get_instance_property(&self, key: &str, thread: &Thread) -> Option<Value> {
+  pub fn get_instance_property(&self, key: &str, thread: &crate::interpreter::Thread) -> Option<Value> {
     if !self.poperties.borrow().contains_key(key) {
       return self
         .extend

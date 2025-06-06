@@ -1,5 +1,3 @@
-use crate::bytecode::value::{Value, ValueArray};
-
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum OpCode {
   // Const
@@ -119,7 +117,7 @@ impl From<u8> for OpCode {
 struct Chunk {
   pub code: Vec<u8>,
   pub lines: Vec<usize>,
-  pub constants: ValueArray,
+  pub constants: super::ValueArray,
 }
 
 impl Chunk {
@@ -127,7 +125,7 @@ impl Chunk {
     Self {
       code: Vec::new(),
       lines: Vec::new(),
-      constants: ValueArray::new(),
+      constants: super::ValueArray::new(),
     }
   }
   pub fn read(&self, index: usize) -> u8 {
@@ -145,7 +143,7 @@ impl Chunk {
       self.write(byte, line);
     }
   }
-  fn add_constant(&mut self, value: Value) -> u8 {
+  fn add_constant(&mut self, value: super::Value) -> u8 {
     if self.constants.has_value(&value) {
       return self.constants.get_index(&value).unwrap_or(0);
     }
@@ -290,7 +288,7 @@ impl ChunkGroup {
     }
   }
 
-  pub fn read_constant(&self, index: u8) -> &Value {
+  pub fn read_constant(&self, index: u8) -> &super::Value {
     self.current_chunk().constants.get(index)
   }
   pub fn read_var(&mut self, name: String, line: usize) -> u8 {
@@ -301,7 +299,7 @@ impl ChunkGroup {
     }
     let index = self
       .current_chunk_mut()
-      .add_constant(Value::String(name.as_str().into()));
+      .add_constant(super::Value::String(name.as_str().into()));
     self.write_buffer(vec![OpCode::OpGetVar as u8, index], line);
     index
   }
@@ -313,11 +311,11 @@ impl ChunkGroup {
     }
     let index = self
       .current_chunk_mut()
-      .add_constant(Value::String(name.as_str().into()));
+      .add_constant(super::Value::String(name.as_str().into()));
     self.write_buffer(vec![OpCode::OpArgDecl as u8, index], line);
     index
   }
-  pub fn add_value(&mut self, value: Value) -> u8 {
+  pub fn add_value(&mut self, value: super::Value) -> u8 {
     if self.current_chunk_mut().constants.has_value(&value) {
       self.current_chunk_mut().constants.get_index(&value).unwrap_or_default()
     }else{
@@ -329,7 +327,7 @@ impl ChunkGroup {
       self.current_chunk_mut().add_constant(value)
     }
   }
-  pub fn write_constant(&mut self, value: Value, line: usize) -> u8 {
+  pub fn write_constant(&mut self, value: super::Value, line: usize) -> u8 {
     let index = self.add_value(value);
     self.write_buffer(vec![OpCode::OpConstant as u8, index], line);
     index
@@ -377,7 +375,7 @@ impl ChunkGroup {
 impl Default for ChunkGroup {
   fn default() -> Self {
     let mut group = Self::new();
-    group.write_constant(Value::Never, 0);
+    group.write_constant(super::Value::Never, 0);
     group.write(OpCode::OpReturn as u8, 0);
     group
   }

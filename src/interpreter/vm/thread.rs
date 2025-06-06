@@ -3,14 +3,11 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::rc::Rc;
 
-use crate::bytecode::compiler::{ChunkGroup, OpCode};
-use crate::bytecode::libs::libs;
-use crate::bytecode::stack::{CallFrame, InterpretResult, VarsManager};
-use crate::bytecode::value::{
-  Function, Instance, MultiRefHash, Object, Promise, PromiseData, Value, REF_TYPE,
-};
-use crate::bytecode::vm::VM;
+use super::VM;
+use crate::compiler::{Function, Number, Object, OpCode, Promise, PromiseData, Value};
 use crate::functions_names::CONSTRUCTOR;
+use crate::interpreter::stack::{CallFrame, InterpretResult};
+use crate::interpreter::VarsManager;
 
 #[derive(Clone, Debug)]
 pub struct ModuleThread {
@@ -29,7 +26,7 @@ impl ModuleThread {
       async_thread: async_thread.clone(),
       value: Value::Object(Object::Map(
         HashMap::new().into(),
-        Instance::new(format!("<{path}>")).into(),
+        crate::compiler::Instance::new(format!("<{path}>")).into(),
       )),
       status: InterpretResult::Continue,
       vm: None,
@@ -71,7 +68,7 @@ impl ModuleThread {
         }
         .replace("\\\\?\\", "");
         let proto = self.get_vm().borrow().cache.libs.clone();
-        let value = libs(lib_name, proto, |path| {
+        let value = crate::interpreter::libs::libs(lib_name, proto, |path| {
           let module = VM::resolve(self.get_vm(), path, thread.borrow_mut().globals());
           *self.async_thread.borrow().await_thread.borrow_mut() =
             BlockingThread::Module(module.clone());
@@ -289,7 +286,7 @@ impl Thread {
   fn current_frame(&mut self) -> &mut CallFrame {
     self.call_stack.last_mut().unwrap()
   }
-  fn current_chunk(&mut self) -> RefMut<ChunkGroup> {
+  fn current_chunk(&mut self) -> RefMut<crate::compiler::ChunkGroup> {
     self.current_frame().current_chunk()
   }
   fn globals(&mut self) -> Rc<RefCell<VarsManager>> {
@@ -360,7 +357,7 @@ impl Thread {
   fn call_function(
     &mut self,
     this: Value,
-    fun: MultiRefHash<Function>,
+    fun: crate::compiler::MultiRefHash<Function>,
     args: Vec<Value>,
   ) -> InterpretResult {
     let fun_clone = fun.clone();
@@ -510,13 +507,13 @@ impl Thread {
       OpCode::OpUnPromise => {
         let value = self.pop();
         match value.as_promise().get_data() {
-          crate::bytecode::value::PromiseData::Err(e) => return InterpretResult::RuntimeError(e),
-          crate::bytecode::value::PromiseData::Pending => {
+          PromiseData::Err(e) => return InterpretResult::RuntimeError(e),
+          PromiseData::Pending => {
             return InterpretResult::RuntimeError(format!(
               "El programa encontro un error de compilación en tiempo de ejecución (promesa no resuelta)"
             ))
           }
-          crate::bytecode::value::PromiseData::Ok(v) => v.cloned(),
+          PromiseData::Ok(v) => v.cloned(),
         }
       }
       OpCode::OpExtendClass => {
@@ -604,15 +601,13 @@ impl Thread {
           }
           let key = key.as_number();
           let index = match key {
-            crate::bytecode::value::Number::Basic(n) => n,
-            crate::bytecode::value::Number::Complex(_, _) => {
+            Number::Basic(n) => n,
+            Number::Complex(_, _) => {
               return InterpretResult::RuntimeError(format!(
                 "El indice no puede ser un valor complejo (asignar propiedad)"
               ));
             }
-            crate::bytecode::value::Number::Infinity
-            | crate::bytecode::value::Number::NaN
-            | crate::bytecode::value::Number::NegativeInfinity => {
+            Number::Infinity | Number::NaN | Number::NegativeInfinity => {
               return InterpretResult::RuntimeError(format!(
                 "El indice no puede ser NaN o infinito (asignar propiedad)"
               ));
@@ -637,7 +632,7 @@ impl Thread {
           Some(value) => value,
           None => {
             let type_name = object.get_type();
-            return InterpretResult::RuntimeError(if type_name == REF_TYPE {
+            return InterpretResult::RuntimeError(if type_name == crate::compiler::REF_TYPE {
               format!("Una referencia no puede ser modificada (asignar propiedad '{key}')",)
             } else {
               format!("No se pudo asignar la propiedad '{key}' a '{type_name}'",)
@@ -675,15 +670,13 @@ impl Thread {
           }
           let key = key.as_number();
           let index = match key {
-            crate::bytecode::value::Number::Basic(n) => n,
-            crate::bytecode::value::Number::Complex(_, _) => {
+            Number::Basic(n) => n,
+            Number::Complex(_, _) => {
               return InterpretResult::RuntimeError(format!(
                 "El indice no puede ser un valor complejo (obtener propiedad)"
               ));
             }
-            crate::bytecode::value::Number::Infinity
-            | crate::bytecode::value::Number::NaN
-            | crate::bytecode::value::Number::NegativeInfinity => {
+            Number::Infinity | Number::NaN | Number::NegativeInfinity => {
               return InterpretResult::RuntimeError(format!(
                 "El indice no puede ser NaN o infinito (obtener propiedad)"
               ));

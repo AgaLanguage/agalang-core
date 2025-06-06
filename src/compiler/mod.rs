@@ -1,14 +1,12 @@
 use std::collections::HashMap;
 
 mod chunk;
+mod value;
+pub use value::*;
 
-use crate::{
-  bytecode::value::{Class, Object},
-  parser::{Node, NodeFunction},
-};
 pub use chunk::{ChunkGroup, OpCode};
 
-use super::value::{Function, Number, Value, NEVER_NAME};
+use crate::parser::{Node, NodeFunction};
 
 const OBJECT_MEMBER: u8 = 0;
 const INSTANCE_MEMBER: u8 = 1;
@@ -586,7 +584,7 @@ impl Compiler {
           } else {
             let obj = Object::Map(HashMap::new().into(), instance.clone());
             if is_public {
-              instance.on_some(|v|v.set_public_property(&prop.name, true));
+              instance.on_some(|v| v.set_public_property(&prop.name, true));
             }
             obj
           };
@@ -617,7 +615,10 @@ impl Compiler {
             node_identifier.name.clone(),
             node_identifier.location.start.line,
           );
-          self.write(OpCode::OpExtendClass as u8, node_identifier.location.end.line);
+          self.write(
+            OpCode::OpExtendClass as u8,
+            node_identifier.location.end.line,
+          );
         }
         let name = self.set_value(Value::String(node_class.name.as_str().into()));
         self.write_buffer(

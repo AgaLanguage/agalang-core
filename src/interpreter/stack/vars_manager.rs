@@ -1,17 +1,16 @@
-use std::{cell::RefCell, collections::{HashMap, HashSet}, rc::Rc};
+use std::{cell::RefCell, rc::Rc};
+use std::collections::{HashMap, HashSet};
 
-use crate::bytecode::value::{Value, FALSE_NAME, NEVER_NAME, NULL_NAME, TRUE_NAME};
+use crate::compiler::{Value, FALSE_NAME, NEVER_NAME, NULL_NAME, TRUE_NAME};
 
 const THIS_NAME: &str = "esto";
-const SUPER_NAME: &str = "super";
 
-const KEYWORDS: [&str; 6] = [
+const KEYWORDS: [&str; 5] = [
   FALSE_NAME,
   NULL_NAME,
   TRUE_NAME,
   NEVER_NAME,
   THIS_NAME,
-  SUPER_NAME,
 ];
 
 #[derive(Debug)]

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use super::value::{MultiRefHash, Value};
+use crate::compiler::{MultiRefHash, Value};
 
 #[derive(Debug, Clone, Default)]
 pub struct DataManager<K: Eq + std::hash::Hash, V: Clone>

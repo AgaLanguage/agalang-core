@@ -2,15 +2,14 @@ use std::cell::RefCell;
 use std::fmt::Debug;
 use std::rc::Rc;
 
-pub use thread::Thread;
-use thread::{AsyncThread, ModuleThread};
-
 use super::cache::Cache;
-use super::compiler::Compiler;
-use super::stack::{call_stack_to_string, CallFrame, InterpretResult, VarsManager};
-use super::value::Value;
+use super::stack::{call_stack_to_string, CallFrame, InterpretResult};
+use super::VarsManager;
+use crate::compiler::{Compiler, Value};
 
 mod thread;
+pub use thread::Thread;
+use thread::{AsyncThread, ModuleThread};
 #[derive(Clone, Debug)]
 pub struct VM {
   globals: Rc<RefCell<VarsManager>>,

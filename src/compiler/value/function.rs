@@ -1,15 +1,9 @@
 use std::{cell::RefCell, rc::Rc};
 
-use crate::{
-  bytecode::{
-    stack::VarsManager,
-    value::{Class, MultiRefHash, Value},
-    vm::Thread,
-    ChunkGroup,
-  },
-  parser::NodeFunction,
-  util::{Color, SetColor},
-};
+use super::{Class, MultiRefHash, Value};
+use crate::interpreter::VarsManager;
+use crate::util::{Color, SetColor as _};
+use crate::{compiler::ChunkGroup, parser::NodeFunction};
 
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub enum Function {
@@ -32,7 +26,7 @@ pub enum Function {
     name: String,
     path: String,
     chunk: ChunkGroup,
-    func: fn(Value, Vec<Value>, &mut Thread) -> Result<Value, String>,
+    func: fn(Value, Vec<Value>, &mut crate::interpreter::Thread) -> Result<Value, String>,
   },
 }
 impl Function {

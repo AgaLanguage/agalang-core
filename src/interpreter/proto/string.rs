@@ -1,8 +1,6 @@
 use std::collections::HashMap;
 
-use crate::bytecode::{
-  value::{Function, Instance, Object, Value},
-  ChunkGroup,
+use crate::compiler::{ChunkGroup, Function, Object, Value
 };
 
 const REPLACE: &str = "remplaza";
@@ -10,7 +8,7 @@ const SPLIT: &str = "separa";
 const BYTES: &str = "bytes";
 
 pub fn string_proto() -> Value {
-  let hashmap = Instance::new(format!("<cadena>"));
+  let hashmap = crate::compiler::Instance::new(format!("<cadena>"));
 
   hashmap.set_instance_property(
     REPLACE.into(),

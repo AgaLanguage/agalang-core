@@ -1,8 +1,7 @@
 use std::cell::{RefCell, RefMut};
 use std::rc::Rc;
 
-use super::compiler::{ChunkGroup, Compiler};
-use super::value::{Function, MultiRefHash};
+use crate::compiler::{Function, MultiRefHash};
 
 mod vars_manager;
 pub use vars_manager::VarsManager;
@@ -23,7 +22,7 @@ pub struct CallFrame {
   locals: Vec<Rc<RefCell<VarsManager>>>,
 }
 impl CallFrame {
-  pub fn new_compiler(compiler: Compiler, vars: Rc<RefCell<VarsManager>>) -> Self {
+  pub fn new_compiler(compiler: crate::compiler::Compiler, vars: Rc<RefCell<VarsManager>>) -> Self {
     Self::new(
       compiler.function.into(),
       vec![Rc::new(RefCell::new(VarsManager::crate_child(vars)))],
@@ -36,7 +35,7 @@ impl CallFrame {
       locals,
     }
   }
-  pub fn current_chunk(&mut self) -> RefMut<ChunkGroup> {
+  pub fn current_chunk(&mut self) -> RefMut<crate::compiler::ChunkGroup> {
     RefMut::map(self.function.borrow_mut(), |func| func.chunk())
   }
   pub fn current_line(&mut self) -> usize {
@@ -108,7 +107,7 @@ impl CallFrame {
   pub fn pop_vars(&mut self) -> Rc<RefCell<VarsManager>> {
     self.locals.pop().unwrap()
   }
-  pub fn in_class(&self) -> Option<MultiRefHash<super::value::Class>> {
+  pub fn in_class(&self) -> Option<MultiRefHash<crate::compiler::Class>> {
     self.function.borrow().get_in_class()
   }
 }

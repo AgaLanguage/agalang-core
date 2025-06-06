@@ -1,9 +1,7 @@
 use std::collections::HashMap;
 
-use crate::{
-  bytecode::value::{Function, Instance, Object, Value},
-  util::Color,
-};
+use crate::compiler::{Object, Value};
+use crate::util::Color;
 
 pub const CONSOLE_LIB: &str = ":consola";
 const DRAW: &str = "pintar";
@@ -46,15 +44,15 @@ fn inspect(value: &Value) -> String {
 }
 
 pub fn console_lib() -> Value {
-  let hashmap = Instance::new(format!("<{CONSOLE_LIB}>"));
+  let hashmap = crate::compiler::Instance::new(format!("<{CONSOLE_LIB}>"));
 
   hashmap.set_instance_property(
     DRAW.into(),
     Value::Object(
-      Function::Native {
+      crate::compiler::Function::Native {
         name: format!("<{CONSOLE_LIB}>::{DRAW}"),
         path: format!("<{CONSOLE_LIB}>"),
-        chunk: crate::bytecode::ChunkGroup::default(),
+        chunk: crate::compiler::ChunkGroup::default(),
         func: |_, args, _| {
           for value in args.iter() {
             print!("{}", inspect(value));

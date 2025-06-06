@@ -1,6 +1,5 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
-use crate::bytecode::vm::Thread;
 mod class;
 mod function;
 mod number;
@@ -12,7 +11,7 @@ pub use number::Number;
 pub use object::{MultiRefHash, Object};
 pub use promise::{Promise, PromiseData, PROMISE_TYPE};
 
-use super::{stack::VarsManager, ChunkGroup};
+use crate::{compiler::ChunkGroup, interpreter::{Thread, VarsManager}};
 
 pub const NULL_NAME: &str = "nulo";
 pub const NEVER_NAME: &str = "nada";
@@ -314,7 +313,7 @@ impl Value {
           .collect::<Vec<Self>>()
           .into(),
       )),
-      (value, key) => super::proto::proto(value.get_type().to_string(), proto_cache.clone())?
+      (value, key) => crate::interpreter::proto::proto(value.get_type().to_string(), proto_cache.clone())?
         .get_instance_property(key, thread),
     }
   }
