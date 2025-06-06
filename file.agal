@@ -28,7 +28,13 @@ clase Gato extiende Animal {
     esto::sonar();
     esto::mover();
   };
+  est __constructor__(){
+    Consola::pintar(@esto::super::__constructor__);
+    esto::super::__constructor__("Hola"); # super::__constructor__ es una REFERENCIA DE LA CLASE PADRE
+    esto; # el ultimo valor se retorna en cualquier funcion
+  };
 }
 
 const animal = Gato();
 animal::miau();
+Consola::pintar(animal.gorro);

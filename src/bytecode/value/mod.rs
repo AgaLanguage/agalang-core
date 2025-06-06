@@ -27,7 +27,7 @@ pub const REF_TYPE: &str = "referencia";
 pub const CHAR_TYPE: &str = "caracter";
 pub const BYTE_TYPE: &str = "byte";
 
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash, Default)]
 pub struct RefValue(MultiRefHash<Value>);
 impl RefValue {
   pub fn borrow(&self) -> std::cell::Ref<Value> {
@@ -166,7 +166,7 @@ impl Value {
   pub fn is_class(&self) -> bool {
     match self {
       Self::Object(Object::Class { .. }) => true,
-      Self::Ref(RefValue(r)) | Self::Iterator(r) => r.borrow().is_function(),
+      Self::Ref(RefValue(r)) | Self::Iterator(r) => r.borrow().is_class(),
       _ => false,
     }
   }
@@ -206,7 +206,7 @@ impl Value {
       .into(),
     }
   }
-  pub fn _as_map(
+  pub fn as_map(
     &self,
   ) -> (
     MultiRefHash<HashMap<String, Value>>,
@@ -214,7 +214,7 @@ impl Value {
   ) {
     match self {
       Self::Object(Object::Map(prop, instance)) => (prop.clone(), instance.clone()),
-      Self::Ref(RefValue(r)) | Self::Iterator(r) => r.borrow()._as_map(),
+      Self::Ref(RefValue(r)) | Self::Iterator(r) => r.borrow().as_map(),
       _ => (HashMap::new().into(), None.into()),
     }
   }
@@ -314,7 +314,7 @@ impl Value {
           .collect::<Vec<Self>>()
           .into(),
       )),
-      (value, key) => super::proto::proto(value.get_type().to_string(), proto_cache.clone())
+      (value, key) => super::proto::proto(value.get_type().to_string(), proto_cache.clone())?
         .get_instance_property(key, thread),
     }
   }

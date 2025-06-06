@@ -167,7 +167,7 @@ impl Object {
           .cache
           .proto
           .clone();
-        proto::proto(value.get_type().to_string(), proto_cache.clone())
+        proto::proto(value.get_type().to_string(), proto_cache.clone())?
           .get_instance_property(key, thread)
       }
     }

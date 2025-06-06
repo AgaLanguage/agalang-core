@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::{bytecode::vm::Thread, functions_names::CONSTRUCTOR, util::OnSome};
+use crate::{bytecode::vm::Thread, functions_names::{CONSTRUCTOR, SUPER}};
 
 use super::{MultiRefHash, Value};
 
@@ -14,19 +14,26 @@ pub struct Instance {
 
 impl Instance {
   pub fn new(name: String) -> Self {
-    Self {
+    let this = Self {
       name,
       extend: None.into(),
       poperties: HashMap::new().into(),
       public_properties: HashSet::new().into(),
-    }
+    };
+    this.set_public_property(SUPER, true);
+    this.set_public_property(CONSTRUCTOR, true);
+    this.set_instance_property(SUPER, Default::default());
+    this.set_instance_property(CONSTRUCTOR, Value::Ref(Default::default()));
+    this
   }
   pub fn get_type(&self) -> &str {
     &self.name
   }
   pub fn get_instance_property(&self, key: &str, thread: &Thread) -> Option<Value> {
     if !self.poperties.borrow().contains_key(key) {
-      return self.extend.on_ok(|extend|extend.get_instance_property(key, thread));
+      return self
+        .extend
+        .on_ok(|extend| extend.get_instance_property(key, thread));
     }
     let access = if self.public_properties.borrow().contains(key) {
       true
@@ -67,7 +74,7 @@ impl Instance {
     }
   }
   pub fn _is_instance_of(&self, value: &Value) -> bool {
-    let (_, instance) = value._as_map();
+    let (_, instance) = value.as_map();
     match instance.cloned() {
       Some(t) => self.is_instance(t),
       None => false,
@@ -86,6 +93,12 @@ impl Instance {
         None => return false,
       }
     }
+  }
+  pub fn ovwerwrite_instance_property(&self, key: &str, value: Value) {
+    self
+      .poperties
+      .borrow_mut()
+      .insert(key.to_string(), value.clone());
   }
 }
 
@@ -107,11 +120,11 @@ impl Class {
       poperties: HashMap::new().into(),
     }
     .into();
-    instance.borrow().as_ref().on_some(|t| {
-      t.set_instance_property(
+    instance.on_some(|this| {
+      this.ovwerwrite_instance_property(
         CONSTRUCTOR,
         Value::Ref(Value::Object(super::Object::Class(class.clone())).into()),
-      )
+      );
     });
     (class, instance)
   }
@@ -144,9 +157,25 @@ impl Class {
     self.poperties.borrow().get(key).cloned()
   }
   pub fn get_instance(&self) -> Value {
-    Value::Object(super::Object::Map(
-      HashMap::new().into(),
-      self.instance.clone(),
-    ))
+    self
+      .extend
+      .on_some(|parent| {
+        let parent_instance = parent.get_instance();
+        let (obj, instance) = parent_instance.as_map();
+        let parent_instance = Value::Object(super::Object::Map(obj.clone(), instance));
+        self
+          .instance
+          .on_some(|instance| instance.ovwerwrite_instance_property(SUPER, parent_instance));
+        Value::Object(super::Object::Map(obj, self.instance.clone()))
+      })
+      .unwrap_or_else(|| {
+        Value::Object(super::Object::Map(
+          HashMap::new().into(),
+          self.instance.clone(),
+        ))
+      })
+  }
+  pub fn is_instance(&self, instance: &Instance) -> bool {
+    self.instance.on_some(|i| i == instance).unwrap_or_default()
   }
 }

@@ -469,7 +469,17 @@ impl Thread {
     }
     if callee.is_class() {
       let class = callee.as_class();
-      let this = class.borrow().get_instance();
+      let this = this
+        .as_map()
+        .1
+        .on_ok(|instance| {
+          if class.borrow().is_instance(instance) {
+            Some(this)
+          } else {
+            None
+          }
+        })
+        .unwrap_or_else(|| class.borrow().get_instance());
       let constructor = class.borrow().get_instance_property(CONSTRUCTOR);
       if let Some(Value::Object(Object::Function(fun))) = constructor {
         self.call_function(this.clone(), fun, args);
@@ -481,10 +491,10 @@ impl Thread {
 
       return InterpretResult::Continue;
     }
-    if !callee.is_function() {
-      return InterpretResult::RuntimeError("Se esperaba llamar una funcion".into());
+    if callee.is_function() {
+      return self.call_function(this, callee.as_function(), args);
     }
-    self.call_function(this, callee.as_function(), args)
+    return InterpretResult::RuntimeError("Se esperaba llamar una funcion".into());
   }
   fn run_instruction(&mut self) -> InterpretResult {
     let byte_instruction = self.read();

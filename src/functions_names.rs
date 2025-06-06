@@ -6,3 +6,4 @@ pub const _TO_AGAL_NUMBER: &str = "__num__";
 pub const _TO_AGAL_BOOLEAN: &str = "__bul__";
 
 pub const CONSTRUCTOR: &str = "__constructor__";
+pub const SUPER: &str = "super";
