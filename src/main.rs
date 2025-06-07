@@ -21,6 +21,8 @@ fn main() -> ExitCode {
   }
 
   let file_name = if args.file.is_empty() {
+    let blue_usage = "\x1b[94m\x1b[1mUsage\x1b[39m:\x1b[0m";
+    println!("{} {} <filename>", blue_usage, args.binary);
     return ExitCode::FAILURE;
   } else {
     args.file
@@ -44,14 +46,27 @@ fn main() -> ExitCode {
 
   let compile_code = Compiler::from(&ast);
 
+  if args.action == Action::Compile {
+    let code = compiler::binary::Encode::compile(&compile_code);
+    match code {
+      Ok(code) => {
+        let _ = std::fs::write(format!("{file_name}c"), &code);
+        return ExitCode::SUCCESS
+      }
+      Err(e) => {
+        eprintln!("{e}");
+        return ExitCode::FAILURE;
+      }
+    };
+  }
   if args.action == Action::Run {
     return match interpret(compile_code) {
       Err(_) => ExitCode::FAILURE,
       _ => ExitCode::SUCCESS,
     };
   }
-  println!("caracteristica no implementada");
-  return ExitCode::SUCCESS;
+  eprintln!("caracteristica no implementada");
+  return ExitCode::FAILURE;
 }
 
 fn code(path: &str) -> Option<String> {
@@ -83,7 +98,7 @@ impl Action {
   pub fn is_unknown(&self) -> bool {
     match self {
       Self::Unknown(_) => true,
-      _ => false
+      _ => false,
     }
   }
 }
@@ -99,10 +114,10 @@ impl From<String> for Action {
 }
 struct Arguments {
   binary: String,
-  flags: HashMap<String, FlagValue>,
+  _flags: HashMap<String, FlagValue>,
   action: Action,
   file: String,
-  args: Vec<String>,
+  _args: Vec<String>,
 }
 
 impl Arguments {
@@ -142,21 +157,11 @@ impl Arguments {
       }
     }
     Self {
-      flags,
+      _flags: flags,
       binary,
       action,
       file,
-      args,
+      _args: args,
     }
   }
-}
-
-fn file() -> Option<String> {
-  let args: Vec<String> = std::env::args().collect();
-  if args.len() < 2 {
-    let blue_usage = "\x1b[94m\x1b[1mUsage\x1b[39m:\x1b[0m";
-    println!("{} {} <filename>", blue_usage, args[0]);
-    return None;
-  }
-  Some(args[1].to_string())
 }

@@ -2,9 +2,9 @@ use std::collections::HashMap;
 
 mod chunk;
 mod value;
-pub use value::*;
-
+pub mod binary;
 pub use chunk::{ChunkGroup, OpCode};
+pub use value::*;
 
 use crate::parser::{Node, NodeFunction};
 

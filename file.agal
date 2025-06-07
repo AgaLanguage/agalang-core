@@ -16,8 +16,7 @@ clase Animal {
   est sonar(){
     Consola::pintar("~~");
   };
-  est __constructor__(@texto){
-    Consola::pintar(texto);
+  est __constructor__(){
     esto.gorro = Gorro();
     esto; # el ultimo valor se retorna en cualquier funcion
   };
@@ -29,7 +28,6 @@ clase Gato extiende Animal {
     esto::mover();
   };
   est __constructor__(){
-    Consola::pintar(@esto::super::__constructor__);
     esto::super::__constructor__("Hola"); # super::__constructor__ es una REFERENCIA DE LA CLASE PADRE
     esto; # el ultimo valor se retorna en cualquier funcion
   };

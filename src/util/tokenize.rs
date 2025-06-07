@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 use std::cmp::Ordering;
 
 #[derive(Clone, Copy, PartialEq, Eq, Ord, Debug, Hash)]

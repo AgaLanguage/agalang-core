@@ -11,7 +11,10 @@ pub use number::Number;
 pub use object::{MultiRefHash, Object};
 pub use promise::{Promise, PromiseData, PROMISE_TYPE};
 
-use crate::{compiler::ChunkGroup, interpreter::{Thread, VarsManager}};
+use crate::{
+  compiler::ChunkGroup,
+  interpreter::{Thread, VarsManager},
+};
 
 pub const NULL_NAME: &str = "nulo";
 pub const NEVER_NAME: &str = "nada";
@@ -235,7 +238,9 @@ impl Value {
             self.get_type()
           ));
         }
-        let value = instance.unwrap().get_instance_property(crate::functions_names::TO_AGAL_ARRAY, thread);
+        let value = instance
+          .unwrap()
+          .get_instance_property(crate::functions_names::TO_AGAL_ARRAY, thread);
         if matches!(value, None) {
           return Err(format!(
             "No se puede convertir a lista: {}",
@@ -313,8 +318,10 @@ impl Value {
           .collect::<Vec<Self>>()
           .into(),
       )),
-      (value, key) => crate::interpreter::proto::proto(value.get_type().to_string(), proto_cache.clone())?
-        .get_instance_property(key, thread),
+      (value, key) => {
+        crate::interpreter::proto::proto(value.get_type().to_string(), proto_cache.clone())?
+          .get_instance_property(key, thread)
+      }
     }
   }
 }
@@ -380,7 +387,7 @@ impl ValueArray {
   pub fn get_index(&self, value: &Value) -> Option<u8> {
     self.values.iter().position(|v| v == value).map(|i| i as u8)
   }
-  pub fn _enumerate(&self) -> impl Iterator<Item = (u8, &Value)> {
+  pub fn enumerate(&self) -> impl Iterator<Item = (u8, &Value)> {
     self.values.iter().enumerate().map(|(i, v)| (i as u8, v))
   }
 }

@@ -114,7 +114,7 @@ impl From<u8> for OpCode {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-struct Chunk {
+pub struct Chunk {
   pub code: Vec<u8>,
   pub lines: Vec<usize>,
   pub constants: super::ValueArray,
@@ -179,7 +179,7 @@ impl Chunk {
     
     println!("-- {name} consts -");
     println!("Index | Value",);
-    for (i, value) in self.constants._enumerate() {
+    for (i, value) in self.constants.enumerate() {
       println!("   {i:02x} | {value:?}");
     }
     println!("-- {name} consts -");
@@ -236,6 +236,9 @@ pub struct ChunkGroup {
   current: usize,
 }
 impl ChunkGroup {
+  pub fn get_chunks(&self) -> &Vec<Chunk> {
+    &self.chunks
+  }
   pub fn new() -> Self {
     Self {
       chunks: vec![Chunk::new()],
