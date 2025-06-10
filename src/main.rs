@@ -1,6 +1,9 @@
 use std::collections::VecDeque;
+use std::io::{Read as _, Write as _};
 use std::path::Path;
 use std::{collections::HashMap, process::ExitCode};
+
+use flate2::{read::GzDecoder, write::GzEncoder, Compression};
 
 use crate::util::{OnError, OnSome};
 use crate::{compiler::Compiler, interpreter::interpret};
@@ -37,7 +40,10 @@ fn main() -> ExitCode {
   };
   let path = Path::new(&file_name);
   let (compiler, extension) = match compile(path) {
-    Err(_) => return ExitCode::FAILURE,
+    Err(e) => {
+      eprintln!("{e}");
+      return ExitCode::FAILURE;
+    }
     Ok(v) => v,
   };
 
@@ -57,11 +63,16 @@ fn main() -> ExitCode {
       })
       .unwrap_or(default_name);
     match code {
-      Ok(code) => {
-        let _ = std::fs::write(format!("{name}.{EXTENSION_COMPILE}"), &code);
-      }
+      Ok(code) => match compress_bytes(&code) {
+        Err(e) => {
+          eprintln!("{e}");
+          return ExitCode::FAILURE;
+        }
+        Ok(bin) => std::fs::write(format!("{name}.{EXTENSION_COMPILE}"), &bin),
+      },
       Err(e) => {
         eprintln!("{e}");
+        return ExitCode::FAILURE;
       }
     };
   }
@@ -76,6 +87,21 @@ fn main() -> ExitCode {
     };
   }
   return ExitCode::SUCCESS;
+}
+
+fn compress_bytes(data: &[u8]) -> std::io::Result<Vec<u8>> {
+  let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+  encoder.write_all(data)?; // Escribe los bytes al encoder
+  let compressed_data = encoder.finish()?; // Termina la compresión y obtiene el Vec<u8>
+  Ok(compressed_data)
+}
+
+// Descomprime bytes gzip y devuelve un Vec<u8>
+fn decompress_bytes(data: &[u8]) -> std::io::Result<Vec<u8>> {
+  let mut decoder = GzDecoder::new(data);
+  let mut decompressed = Vec::new();
+  decoder.read_to_end(&mut decompressed)?; // Lee todo el contenido descomprimido
+  Ok(decompressed)
 }
 
 fn read_code(path: &Path) -> Option<String> {
@@ -119,8 +145,13 @@ fn compile(path: &Path) -> Result<(Compiler, &str), &str> {
     }
     Some(EXTENSION_COMPILE) => {
       let bin = read_bin(path).on_error(|_| "")?;
-      let compiler = Compiler::decode(&mut VecDeque::from(bin)).on_error(|_| "")?;
-      Ok((compiler, EXTENSION_COMPILE))
+      match decompress_bytes(&bin) {
+        Err(e) => Err("Error de descompresion"),
+        Ok(uncompress) => Ok((
+          Compiler::decode(&mut VecDeque::from(uncompress)).on_error(|_| "")?,
+          EXTENSION_COMPILE,
+        )),
+      }
     }
     _ => Err("Se esperaba un archivo con extension valida"),
   }
