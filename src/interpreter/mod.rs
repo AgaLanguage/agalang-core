@@ -1,13 +1,13 @@
 mod cache;
 mod libs;
+pub mod proto;
 mod stack;
 mod vm;
-pub mod proto;
-pub use vm::Thread;
 pub use stack::VarsManager;
+pub use vm::Thread;
 
-pub fn interpret(compiler: crate::compiler::Compiler) -> Result<crate::compiler::Value, ()>{
-    let binding = vm::VM::new(compiler);
+pub fn interpret(compiler: crate::compiler::Compiler) -> Result<crate::compiler::Value, ()> {
+  let binding = vm::VM::new(compiler);
   let mut vm = binding.borrow().clone();
   match vm.interpret() {
     stack::InterpretResult::Ok => {}

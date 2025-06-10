@@ -1,12 +1,16 @@
 use std::collections::HashMap;
 
+pub mod binary;
 mod chunk;
 mod value;
-pub mod binary;
 pub use chunk::{ChunkGroup, OpCode};
 pub use value::*;
 
-use crate::parser::{Node, NodeFunction};
+use crate::{
+  parser::{Node, NodeFunction},
+  util::{OnError as _, OnSome as _},
+  Decode, StructTag,
+};
 
 const OBJECT_MEMBER: u8 = 0;
 const INSTANCE_MEMBER: u8 = 1;
@@ -571,45 +575,40 @@ impl Compiler {
       }
       Node::Lazy(_node_expression) => todo!(),
       Node::Class(node_class) => {
-        let (class, instance) = Class::new(node_class.name.clone());
+        let class = Object::Class(Class::new(node_class.name.clone()));
 
         for prop in &node_class.body {
-          let is_static = prop.meta & 0b01 == 0b01;
-          let is_public = prop.meta & 0b10 == 0b10;
+          let is_static = prop.meta & 0b01 != 0;
+          let is_public = prop.meta & 0b10;
 
-          let class = Object::Class(class.clone());
-
-          let object = if is_static {
-            class.clone()
-          } else {
-            let obj = Object::Map(HashMap::new().into(), instance.clone());
-            if is_public {
-              instance.on_some(|v| v.set_public_property(&prop.name, true));
-            }
-            obj
+          self.set_constant(
+            Value::Object(class.clone()),
+            prop.value.get_location().start.line,
+          );
+          if !is_static {
+            self.write(OpCode::OpGetInstance as u8, node_class.location.start.line);
           };
 
-          self.set_constant(Value::Object(object), prop.value.get_location().start.line);
           self.set_constant(
             Value::String(prop.name),
             prop.value.get_location().start.line,
           );
           self.node_value_to_bytes(&prop.value)?;
-          self.set_constant(Value::Object(class), prop.value.get_location().start.line);
+          self.set_constant(
+            Value::Object(class.clone()),
+            prop.value.get_location().start.line,
+          );
           self.write_buffer(
             vec![
               OpCode::OpInClass as u8,
               OpCode::OpSetMember as u8,
-              INSTANCE_MEMBER,
+              INSTANCE_MEMBER | is_public,
               OpCode::OpPop as u8,
             ],
             prop.value.get_location().start.line,
           );
         }
-        self.set_constant(
-          Value::Object(Object::Class(class)),
-          node_class.location.start.line,
-        );
+        self.set_constant(Value::Object(class), node_class.location.start.line);
         if let Some(node_identifier) = &node_class.extend_of {
           self.read_var(
             node_identifier.name.clone(),
@@ -648,5 +647,34 @@ impl From<&Node> for Compiler {
       _ => {}
     }
     compiler
+  }
+}
+impl crate::Encode for Compiler {
+  fn encode(&self) -> Result<Vec<u8>, String> {
+    let mut encode = vec![];
+
+    encode.push(crate::StructTag::Compile as u8);
+    encode.extend(self.path.encode()?);
+    encode.extend(self.function.encode()?);
+
+    Ok(encode)
+  }
+}
+impl Decode for Compiler {
+  fn decode(vec: &mut std::collections::VecDeque<u8>) -> Result<Self, String> {
+    vec
+      .pop_front()
+      .on_some_option(|byte| {
+        if byte != StructTag::Compile as u8 {
+          None
+        } else {
+          Some(byte)
+        }
+      })
+      .on_error(|_| "Se esperaba un compilador".to_string())?;
+    Ok(Self {
+      path: String::decode(vec)?,
+      function: Function::decode(vec)?,
+    })
   }
 }

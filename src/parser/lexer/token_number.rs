@@ -25,7 +25,7 @@ fn number_literal(
     }
     let c = c.unwrap();
     if c == '_' {
-      i+=1;
+      i += 1;
       continue;
     }
     if !is_number(c, use_dot) {

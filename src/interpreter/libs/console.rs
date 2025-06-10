@@ -64,7 +64,7 @@ pub fn console_lib() -> Value {
       }
       .into(),
     ),
+    true,
   );
-  hashmap.set_public_property(DRAW, true);
   Value::Object(Object::Map(HashMap::new().into(), hashmap.into()))
 }

@@ -1,9 +1,8 @@
 use crate::{compiler::Value, interpreter::cache::DataCache};
 
-
-mod time;
-mod math;
 mod console;
+mod math;
+mod time;
 
 pub fn libs(lib_name: String, mut cache: DataCache, resolver: impl FnOnce(&str) -> Value) -> Value {
   if cache.has(&lib_name) {

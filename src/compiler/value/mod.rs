@@ -14,6 +14,8 @@ pub use promise::{Promise, PromiseData, PROMISE_TYPE};
 use crate::{
   compiler::ChunkGroup,
   interpreter::{Thread, VarsManager},
+  util::OnError,
+  Decode, StructTag,
 };
 
 pub const NULL_NAME: &str = "nulo";
@@ -224,7 +226,7 @@ impl Value {
     match self {
       Self::Object(Object::Class(c)) => c.clone(),
       Self::Ref(RefValue(r)) | Self::Iterator(r) => r.borrow().as_class(),
-      _ => Class::new("<nulo>".to_string()).0,
+      _ => Class::new("<nulo>".to_string()),
     }
   }
   pub fn as_strict_array(&self, thread: &Thread) -> Result<Vec<Value>, String> {
@@ -289,10 +291,10 @@ impl Value {
       _ => None,
     }
   }
-  pub fn set_instance_property(&self, key: &str, value: Value) -> Option<Value> {
+  pub fn set_instance_property(&self, key: &str, value: Value, is_public: bool) -> Option<Value> {
     match self {
-      Self::Iterator(r) => r.borrow().set_instance_property(key, value),
-      Self::Object(o) => o.set_instance_property(key, value),
+      Self::Iterator(r) => r.borrow().set_instance_property(key, value, is_public),
+      Self::Object(o) => o.set_instance_property(key, value, is_public),
       _ => None,
     }
   }
@@ -352,6 +354,73 @@ impl From<bool> for Value {
 impl std::fmt::Debug for Value {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     write!(f, "{}", self.as_string())
+  }
+}
+impl crate::Encode for Value {
+  fn encode(&self) -> Result<Vec<u8>, String> {
+    match self {
+      Self::Byte(byte) => Ok(vec![StructTag::Byte as u8, *byte]),
+      Self::False => false.encode(),
+      Self::True => true.encode(),
+      Self::Number(number) => number.encode(),
+      Self::String(string) => string.encode(),
+      Self::Object(object) => object.encode(),
+      Self::Iterator(_) => Err("No se pueden compilar iteradores".to_string()),
+      Self::Promise(_) => Err("No se pueden compilar promesas".to_string()),
+      Self::Ref(_) => Err("No se pueden compilar referencias".to_string()),
+      Self::Char(char) => char.encode(),
+      Self::Null => Ok(vec![StructTag::Null as u8]),
+      Self::Never => Ok(vec![StructTag::Never as u8]),
+    }
+  }
+}
+impl Decode for Value {
+  fn decode(vec: &mut std::collections::VecDeque<u8>) -> Result<Self, String> {
+    let tag_byte = (*vec.get(0).on_error(|_| "Se esperaba un valor")?).into();
+    match tag_byte {
+      StructTag::Byte => {
+        vec.pop_front();
+        Ok(Self::Byte(
+          vec.pop_front().on_error(|_| "Binario corrupto")?,
+        ))
+      }
+      StructTag::Bool => {
+        vec.pop_front();
+        Ok(if vec.pop_front().on_error(|_| "Binario corrupto")? == 0 {
+          Self::False
+        } else {
+          Self::True
+        })
+      }
+      StructTag::Number => Ok(Self::Number(Number::decode(vec)?)),
+      StructTag::String => Ok(Self::String(String::decode(vec)?)),
+      StructTag::Map => {
+        vec.pop_front();
+        Ok(Self::Object(Object::Map(
+          Default::default(),
+          Default::default(),
+        )))
+      }
+      StructTag::Class => {
+        vec.pop_front();
+        Ok(Self::Object(Object::Class(Class::new(String::decode(
+          vec,
+        )?))))
+      }
+      StructTag::Function => Ok(Self::Object(Object::Function(
+        Function::decode(vec)?.into(),
+      ))),
+      StructTag::Char => Ok(Self::Char(char::decode(vec)?)),
+      StructTag::Null => {
+        vec.pop_front();
+        Ok(Self::Null)
+      }
+      StructTag::Never => {
+        vec.pop_front();
+        Ok(Self::Never)
+      }
+      _ => Err("Se esperaba un valor".to_string()),
+    }
   }
 }
 

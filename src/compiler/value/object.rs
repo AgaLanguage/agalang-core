@@ -5,7 +5,9 @@ use std::{
   rc::Rc,
 };
 
-use super::{Class, Value, Function, Instance};
+use crate::StructTag;
+
+use super::{Class, Function, Instance, Value};
 
 #[derive(Debug, Clone)]
 pub struct MultiRefHash<T>(Rc<RefCell<T>>);
@@ -139,14 +141,18 @@ impl Object {
     }
   }
 
-  pub fn set_instance_property(&self, key: &str, value: Value) -> Option<Value> {
+  pub fn set_instance_property(&self, key: &str, value: Value, is_public: bool) -> Option<Value> {
     match self {
-      Self::Map(_, instance) => instance.on_ok(|v| v.set_instance_property(key, value)),
+      Self::Map(_, instance) => instance.on_ok(|v| v.set_instance_property(key, value, is_public)),
       Self::Class(class) => class.borrow().set_instance_property(key, value),
       _ => None,
     }
   }
-  pub fn get_instance_property(&self, key: &str, thread: &crate::interpreter::Thread) -> Option<Value> {
+  pub fn get_instance_property(
+    &self,
+    key: &str,
+    thread: &crate::interpreter::Thread,
+  ) -> Option<Value> {
     match (self, key) {
       (Self::Map(_, instance), key) => instance.on_ok(|t| t.get_instance_property(key, thread)),
       (Self::Class(class), key) => class.borrow().get_instance_property(key),
@@ -225,5 +231,19 @@ impl ToString for Object {
 impl std::fmt::Debug for Object {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     write!(f, "{}", self.to_string())
+  }
+}
+impl crate::Encode for Object {
+  fn encode(&self) -> Result<Vec<u8>, String> {
+    match self {
+      Object::Map(_, _) => Ok(vec![StructTag::Map as u8]),
+      Object::Function(function) => function.borrow().encode(),
+      Object::Array(_) => Ok(vec![StructTag::Array as u8]),
+      Object::Class(c) => {
+        let mut encode = vec![StructTag::Class as u8];
+        encode.extend(c.borrow().get_type().to_string().encode()?);
+        Ok(encode)
+      }
+    }
   }
 }

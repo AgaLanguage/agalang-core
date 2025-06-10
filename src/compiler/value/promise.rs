@@ -63,10 +63,10 @@ impl ToString for Promise {
 }
 impl From<Value> for Promise {
   fn from(value: Value) -> Self {
-      Self {
-        err: Default::default(),
-        status: PromiseStatus::Done.into(),
-        value: Some(value.into()).into()
-      }
+    Self {
+      err: Default::default(),
+      status: PromiseStatus::Done.into(),
+      value: Some(value.into()).into(),
+    }
   }
 }

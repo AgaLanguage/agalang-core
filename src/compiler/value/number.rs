@@ -4,6 +4,11 @@ use std::{
   str::FromStr,
 };
 
+use crate::{
+  util::{OnError, OnSome},
+  Encode, StructTag,
+};
+
 const DIVISION_DECIMALS: usize = 100;
 
 #[derive(Clone, Eq, Hash, Debug)]
@@ -1014,7 +1019,10 @@ impl From<u128> for Number {
 }
 impl From<i32> for Number {
   fn from(value: i32) -> Self {
-    Self::Basic(BasicNumber::Int(value.is_negative(), value.abs().to_string().into()))
+    Self::Basic(BasicNumber::Int(
+      value.is_negative(),
+      value.abs().to_string().into(),
+    ))
   }
 }
 impl ToString for Number {
@@ -1244,5 +1252,50 @@ impl Ord for Number {
 impl std::fmt::Debug for Number {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     write!(f, "{}", self.to_string())
+  }
+}
+impl Encode for Number {
+  fn encode(&self) -> Result<Vec<u8>, String> {
+    let mut encode = vec![StructTag::Number as u8, StructTag::SOB as u8];
+
+    encode.extend(
+      self
+        .to_string()
+        .replace('\\', "\\\\") // para poder usar caracteres de control sin problemas
+        .replace('\0', "\\0")
+        .replace('\x01', "\\x01")
+        .as_bytes(),
+    );
+    encode.push(StructTag::EOB as u8);
+
+    Ok(encode)
+  }
+}
+impl crate::Decode for Number {
+  fn decode(vec: &mut std::collections::VecDeque<u8>) -> Result<Self, String> {
+    vec
+      .pop_front()
+      .on_some_option(|byte| {
+        if byte != StructTag::Number as u8 {
+          None
+        } else {
+          Some(byte)
+        }
+      })
+      .on_error(|_| "Se esperaba un numero")?;
+    vec.pop_front(); // SOB
+    let mut bytes = vec![];
+    loop {
+      let byte = vec.pop_front().on_error(|_| "Binario corrupto")?;
+      if byte == StructTag::EOB as u8 {
+        break;
+      }
+      bytes.push(byte);
+    }
+    Ok(
+      String::from_utf8_lossy(&bytes)
+        .to_string()
+        .parse::<Self>()?,
+    )
   }
 }

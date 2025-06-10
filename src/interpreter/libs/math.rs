@@ -38,6 +38,7 @@ pub fn math_lib() -> Value {
       }
       .into(),
     ),
+    true,
   );
   hashmap.set_instance_property(
     IS_INFINITE.into(),
@@ -61,6 +62,7 @@ pub fn math_lib() -> Value {
       }
       .into(),
     ),
+    true,
   );
   hashmap.set_instance_property(
     ROUND.into(),
@@ -84,6 +86,7 @@ pub fn math_lib() -> Value {
       }
       .into(),
     ),
+    true,
   );
   hashmap.set_instance_property(
     CEIL.into(),
@@ -107,6 +110,7 @@ pub fn math_lib() -> Value {
       }
       .into(),
     ),
+    true,
   );
   hashmap.set_instance_property(
     MAX.into(),
@@ -132,6 +136,7 @@ pub fn math_lib() -> Value {
       }
       .into(),
     ),
+    true,
   );
   hashmap.set_instance_property(
     MIN.into(),
@@ -157,19 +162,11 @@ pub fn math_lib() -> Value {
       }
       .into(),
     ),
+    true,
   );
-  hashmap.set_instance_property(PI.into(), Value::Number("3.1415926535897932384626433832795028841971693993751058209749445923078164062862089986280348253421170679".parse::<Number>().unwrap()));
-  hashmap.set_instance_property(TAU.into(), Value::Number("6.2831853071795864769252867665590057683943387987502116419498891846156328125724179972560696506842341359".parse::<Number>().unwrap()));
-  hashmap.set_instance_property(EULER.into(), Value::Number("2.7182818284590452353602874713526624977572470936999595749669676277240766303535475945713821785251664274".parse::<Number>().unwrap()));
-  hashmap.set_public_property(CEIL, true);
-  hashmap.set_public_property(FLOOR, true);
-  hashmap.set_public_property(ROUND, true);
-  hashmap.set_public_property(MAX, true);
-  hashmap.set_public_property(MIN, true);
-  hashmap.set_public_property(PI, true);
-  hashmap.set_public_property(EULER, true);
-  hashmap.set_public_property(TAU, true);
-  hashmap.set_public_property(IS_INFINITE, true);
+  hashmap.set_instance_property(PI.into(), Value::Number("3.1415926535897932384626433832795028841971693993751058209749445923078164062862089986280348253421170679".parse::<Number>().unwrap()),true);
+  hashmap.set_instance_property(TAU.into(), Value::Number("6.2831853071795864769252867665590057683943387987502116419498891846156328125724179972560696506842341359".parse::<Number>().unwrap()),true);
+  hashmap.set_instance_property(EULER.into(), Value::Number("2.7182818284590452353602874713526624977572470936999595749669676277240766303535475945713821785251664274".parse::<Number>().unwrap()),true);
   Value::Object(crate::compiler::Object::Map(
     HashMap::new().into(),
     hashmap.into(),

@@ -16,7 +16,7 @@ const PUNCTUATION: &str = "(){}[],.;:";
 const COLOR: util::Color = util::Color::Cyan;
 
 fn token_error(token: &util::Token<TokenType>, source: &str) -> ErrorTypes {
-    let binding = util::get_content(
+  let binding = util::get_content(
     source,
     util::Position {
       line: token.location.start.line,
@@ -25,13 +25,12 @@ fn token_error(token: &util::Token<TokenType>, source: &str) -> ErrorTypes {
     token.location.end,
   )
   .unwrap();
-    let lines = binding.lines().collect::<Vec<&str>>();
+  let lines = binding.lines().collect::<Vec<&str>>();
   let data_line = *lines.get(0).unwrap_or(&"");
   let token_value = data_line
     .chars()
     .skip(token.location.start.column)
     .collect::<String>();
-
 
   let line = token.location.start.line + 1;
   let column_token = token.location.start.column + 1;

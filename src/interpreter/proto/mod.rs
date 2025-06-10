@@ -1,6 +1,9 @@
 mod string;
 
-pub fn proto(value_type: String, mut cache: super::cache::DataCache) -> Option<crate::compiler::Value> {
+pub fn proto(
+  value_type: String,
+  mut cache: super::cache::DataCache,
+) -> Option<crate::compiler::Value> {
   if cache.has(&value_type) {
     return Some(cache.get(&value_type));
   }

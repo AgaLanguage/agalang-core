@@ -1,17 +1,11 @@
-use std::{cell::RefCell, rc::Rc};
 use std::collections::{HashMap, HashSet};
+use std::{cell::RefCell, rc::Rc};
 
 use crate::compiler::{Value, FALSE_NAME, NEVER_NAME, NULL_NAME, TRUE_NAME};
 
 const THIS_NAME: &str = "esto";
 
-const KEYWORDS: [&str; 5] = [
-  FALSE_NAME,
-  NULL_NAME,
-  TRUE_NAME,
-  NEVER_NAME,
-  THIS_NAME,
-];
+const KEYWORDS: [&str; 5] = [FALSE_NAME, NULL_NAME, TRUE_NAME, NEVER_NAME, THIS_NAME];
 
 #[derive(Debug)]
 pub struct VarsManager {
@@ -63,13 +57,16 @@ impl VarsManager {
     self.variables.get(name)
   }
   pub fn assign(&mut self, name: &str, value: Value) -> Option<Value> {
-    if !self.variables.contains_key(name) || self.constants.contains(name) || KEYWORDS.contains(&name) {
+    if !self.variables.contains_key(name)
+      || self.constants.contains(name)
+      || KEYWORDS.contains(&name)
+    {
       return None;
     };
     self.variables.insert(name.to_string(), value.clone());
     Some(value)
   }
-  pub fn set_this(mut self, this: Value) -> Self{
+  pub fn set_this(mut self, this: Value) -> Self {
     self.declare_keyword(THIS_NAME, this);
     self
   }
@@ -77,7 +74,10 @@ impl VarsManager {
     self.link.clone()
   }
   pub fn remove(&mut self, name: &str) -> Option<Value> {
-    if !self.variables.contains_key(name) || self.constants.contains(name) || KEYWORDS.contains(&name) {
+    if !self.variables.contains_key(name)
+      || self.constants.contains(name)
+      || KEYWORDS.contains(&name)
+    {
       return None;
     }
     self.variables.remove(name)

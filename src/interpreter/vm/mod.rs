@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::fmt::Debug;
+use std::path::Path;
 use std::rc::Rc;
 
 use super::cache::Cache;
@@ -105,7 +106,7 @@ impl VM {
     let result = ModuleThread::new(path);
     result.borrow_mut().set_vm(this);
 
-    let file = match crate::code(path) {
+    let file = match crate::read_code(Path::new(path)) {
       None => {
         result.borrow_mut().set_status(InterpretResult::NativeError);
         return result;

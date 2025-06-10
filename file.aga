@@ -33,6 +33,6 @@ clase Gato extiende Animal {
   };
 }
 
-const animal = Gato();
+const animal = Gato(1);
 animal::miau();
 Consola::pintar(animal.gorro);

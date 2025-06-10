@@ -94,7 +94,7 @@ impl ModuleThread {
         if !self.value.is_object() {
           return InterpretResult::RuntimeError("Se esperaba un objeto como modulo".to_string());
         }
-        match self.value.set_instance_property(&name, value.clone()) {
+        match self.value.set_instance_property(&name, value.clone(), true) {
           Some(value) => {
             thread.borrow_mut().push(value);
             InterpretResult::Continue
@@ -536,6 +536,7 @@ impl Thread {
         value.set_in_class(class);
         value
       }
+      OpCode::OpGetInstance => self.pop().as_class().borrow().get_instance(),
       OpCode::OpPromised => {
         // Debe existir el frame
         let frame = self.call_stack.pop().unwrap();
@@ -574,10 +575,12 @@ impl Thread {
         let value = self.pop();
         let key = self.pop();
         let object = self.pop();
-        let is_instance = self.read() == 1u8;
+        let meta = self.read();
+        let is_instance = (meta & 0b01) != 0;
+        let is_public = (meta & 0b10) != 0;
         if is_instance {
           let key = key.as_string();
-          if let Some(value) = object.set_instance_property(&key, value) {
+          if let Some(value) = object.set_instance_property(&key, value, is_public) {
             self.push(value);
             return InterpretResult::Continue;
           }

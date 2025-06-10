@@ -1,5 +1,10 @@
 use std::cmp::Ordering;
 
+use crate::{
+  util::{OnError, OnSome},
+  Decode, Encode, StructTag,
+};
+
 #[derive(Clone, Copy, PartialEq, Eq, Ord, Debug, Hash)]
 pub struct Position {
   pub line: usize,
@@ -18,6 +23,32 @@ impl PartialOrd for Position {
     } else {
       return Some(Ordering::Equal);
     }
+  }
+}
+impl Encode for Position {
+  fn encode(&self) -> Result<Vec<u8>, String> {
+    let mut encode = vec![StructTag::Position as u8];
+    encode.extend(self.line.encode()?);
+    encode.extend(self.column.encode()?);
+    Ok(encode)
+  }
+}
+impl Decode for Position {
+  fn decode(vec: &mut std::collections::VecDeque<u8>) -> Result<Self, String> {
+    vec
+      .pop_front()
+      .on_some_option(|byte| {
+        if byte != StructTag::Position as u8 {
+          None
+        } else {
+          Some(byte)
+        }
+      })
+      .on_error(|_| "Se esperaba una posicion".to_string())?;
+    return Ok(Self {
+      line: usize::decode(vec)?,
+      column: usize::decode(vec)?,
+    });
   }
 }
 
@@ -44,6 +75,37 @@ impl PartialOrd for Location {
     }
   }
 }
+impl Encode for Location {
+  fn encode(&self) -> Result<Vec<u8>, String> {
+    let mut encode = vec![StructTag::Location as u8];
+    encode.extend(self.file_name.encode()?);
+    encode.extend(self.start.encode()?);
+    encode.extend(self.end.encode()?);
+    encode.extend(self.length.encode()?);
+    Ok(encode)
+  }
+}
+impl Decode for Location {
+  fn decode(vec: &mut std::collections::VecDeque<u8>) -> Result<Self, String> {
+    vec
+      .pop_front()
+      .on_some_option(|byte| {
+        if byte != StructTag::Location as u8 {
+          None
+        } else {
+          Some(byte)
+        }
+      })
+      .on_error(|_| "Se esperaba una locacion".to_string())?;
+    return Ok(Self {
+      file_name: String::decode(vec)?,
+      start: Position::decode(vec)?,
+      end: Position::decode(vec)?,
+      length: usize::decode(vec)?,
+    });
+  }
+}
+
 #[derive(Clone, Debug)]
 pub struct Token<TokenKind> {
   pub token_type: TokenKind,

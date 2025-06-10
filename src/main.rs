@@ -1,5 +1,8 @@
+use std::collections::VecDeque;
+use std::path::Path;
 use std::{collections::HashMap, process::ExitCode};
 
+use crate::util::{OnError, OnSome};
 use crate::{compiler::Compiler, interpreter::interpret};
 
 mod compiler;
@@ -7,6 +10,11 @@ mod functions_names;
 mod interpreter;
 mod parser;
 mod util;
+
+use crate::compiler::binary::{Decode, Encode, StructTag};
+
+const EXTENSION_COMPILE: &str = "agac";
+const EXTENSION: &str = "aga";
 
 fn main() -> ExitCode {
   let args = Arguments::init();
@@ -27,49 +35,50 @@ fn main() -> ExitCode {
   } else {
     args.file
   };
-
-  let file = match code(&file_name) {
-    None => return ExitCode::FAILURE,
-    Some(value) => value,
+  let path = Path::new(&file_name);
+  let (compiler, extension) = match compile(path) {
+    Err(_) => return ExitCode::FAILURE,
+    Ok(v) => v,
   };
 
-  let ast = match parser::Parser::new(&file, &file_name).produce_ast() {
-    Err(a) => {
-      parser::print_error(parser::error_to_string(
-        &parser::ErrorNames::SyntaxError,
-        parser::node_error(&a, &file),
-      ));
-      return ExitCode::FAILURE;
-    }
-    Ok(value) => value,
-  };
-
-  let compile_code = Compiler::from(&ast);
-
-  if args.action == Action::Compile {
-    let code = compiler::binary::Encode::compile(&compile_code);
+  if args.action == Action::Compile && extension == EXTENSION {
+    let code = compiler.encode();
+    let default_name = path.file_stem().on_some_option(|v| v.to_str()).unwrap();
+    let name = args
+      .flags
+      .get("nombre")
+      .or_else(|| args.flags.get("name"))
+      .on_some_option(|v| {
+        if let FlagValue::String(s) = v {
+          Some(s.as_str())
+        } else {
+          None
+        }
+      })
+      .unwrap_or(default_name);
     match code {
       Ok(code) => {
-        let _ = std::fs::write(format!("{file_name}c"), &code);
-        return ExitCode::SUCCESS
+        let _ = std::fs::write(format!("{name}.{EXTENSION_COMPILE}"), &code);
       }
       Err(e) => {
         eprintln!("{e}");
-        return ExitCode::FAILURE;
       }
     };
   }
-  if args.action == Action::Run {
-    return match interpret(compile_code) {
+  let run_flag = args.flags.contains_key("r")
+    || args.flags.contains_key("run")
+    || args.flags.contains_key("e")
+    || args.flags.contains_key("ejecutar");
+  if args.action == Action::Run || run_flag {
+    return match interpret(compiler) {
       Err(_) => ExitCode::FAILURE,
       _ => ExitCode::SUCCESS,
     };
   }
-  eprintln!("caracteristica no implementada");
-  return ExitCode::FAILURE;
+  return ExitCode::SUCCESS;
 }
 
-fn code(path: &str) -> Option<String> {
+fn read_code(path: &Path) -> Option<String> {
   let contents = std::fs::read_to_string(path);
   match contents {
     Ok(contents) => Some(contents),
@@ -79,6 +88,41 @@ fn code(path: &str) -> Option<String> {
       parser::show_error(type_err, err);
       None
     }
+  }
+}
+fn read_bin(path: &Path) -> Option<Vec<u8>> {
+  let contents = std::fs::read(path);
+  match contents {
+    Ok(contents) => Some(contents),
+    Err(err) => {
+      let ref type_err = parser::ErrorNames::PathError;
+      let err = parser::ErrorTypes::IoError(err);
+      parser::show_error(type_err, err);
+      None
+    }
+  }
+}
+fn compile(path: &Path) -> Result<(Compiler, &str), &str> {
+  match path.extension().on_some_option(|v| v.to_str()) {
+    Some(EXTENSION) => {
+      let file = read_code(path).on_error(|_| "No se pudo leer el archivo")?;
+      let ast = parser::Parser::new(&file, path.file_name().unwrap().to_str().unwrap())
+        .produce_ast()
+        .on_error(|e| {
+          parser::print_error(parser::error_to_string(
+            &parser::ErrorNames::SyntaxError,
+            parser::node_error(&e, &file),
+          ));
+          ""
+        })?;
+      Ok((Compiler::from(&ast), EXTENSION))
+    }
+    Some(EXTENSION_COMPILE) => {
+      let bin = read_bin(path).on_error(|_| "")?;
+      let compiler = Compiler::decode(&mut VecDeque::from(bin)).on_error(|_| "")?;
+      Ok((compiler, EXTENSION_COMPILE))
+    }
+    _ => Err("Se esperaba un archivo con extension valida"),
   }
 }
 
@@ -114,7 +158,7 @@ impl From<String> for Action {
 }
 struct Arguments {
   binary: String,
-  _flags: HashMap<String, FlagValue>,
+  flags: HashMap<String, FlagValue>,
   action: Action,
   file: String,
   _args: Vec<String>,
@@ -122,7 +166,7 @@ struct Arguments {
 
 impl Arguments {
   fn init() -> Self {
-    let mut cmd_args = std::env::args().skip(1); // skip the binary name
+    let mut cmd_args = std::env::args().skip(1).peekable(); // skip the binary name
     let binary = std::env::args().next().unwrap_or_default();
 
     let mut flags = HashMap::new();
@@ -137,7 +181,7 @@ impl Arguments {
       }
       if arg.starts_with("--") {
         let key = arg.trim_start_matches("--").to_string();
-        let next = cmd_args.next(); // peek
+        let next = cmd_args.peek(); // peek
         if let Some(v) = next {
           if !v.starts_with('-') {
             flags.insert(key, FlagValue::String(cmd_args.next().unwrap()));
@@ -157,7 +201,7 @@ impl Arguments {
       }
     }
     Self {
-      _flags: flags,
+      flags,
       binary,
       action,
       file,

@@ -313,7 +313,7 @@ impl std::fmt::Display for Node {
         data_format(node.update.to_string()),
         data_format(node.body.join("\n"))
       ),
-      Node::UnaryFront(node)  => format!(
+      Node::UnaryFront(node) => format!(
         "NodeUnary: \"{:?}\" para {{\n{}\n}}",
         node.operator,
         data_format(node.operand.to_string())

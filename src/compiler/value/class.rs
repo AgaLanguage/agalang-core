@@ -20,16 +20,18 @@ impl Instance {
       poperties: HashMap::new().into(),
       public_properties: HashSet::new().into(),
     };
-    this.set_public_property(SUPER, true);
-    this.set_public_property(CONSTRUCTOR, true);
-    this.set_instance_property(SUPER, Default::default());
-    this.set_instance_property(CONSTRUCTOR, Value::Ref(Default::default()));
+    this.set_instance_property(SUPER, Default::default(), true);
+    this.set_instance_property(CONSTRUCTOR, Value::Ref(Default::default()), true);
     this
   }
   pub fn get_type(&self) -> &str {
     &self.name
   }
-  pub fn get_instance_property(&self, key: &str, thread: &crate::interpreter::Thread) -> Option<Value> {
+  pub fn get_instance_property(
+    &self,
+    key: &str,
+    thread: &crate::interpreter::Thread,
+  ) -> Option<Value> {
     if !self.poperties.borrow().contains_key(key) {
       return self
         .extend
@@ -50,7 +52,8 @@ impl Instance {
       None
     }
   }
-  pub fn set_instance_property(&self, key: &str, value: Value) -> Option<Value> {
+  pub fn set_instance_property(&self, key: &str, value: Value, is_public: bool) -> Option<Value> {
+    self.set_public_property(key, is_public);
     if self.poperties.borrow().contains_key(key) {
       return None;
     }
@@ -62,7 +65,7 @@ impl Instance {
         .unwrap_or_default(),
     )
   }
-  pub fn set_public_property(&self, key: &str, is_public: bool) {
+  fn set_public_property(&self, key: &str, is_public: bool) {
     let current_is_public = self.public_properties.borrow().contains(key);
     if current_is_public == is_public {
       return;
@@ -111,7 +114,7 @@ pub struct Class {
 }
 
 impl Class {
-  pub fn new(name: String) -> (MultiRefHash<Self>, MultiRefHash<Option<Instance>>) {
+  pub fn new(name: String) -> MultiRefHash<Self> {
     let instance: MultiRefHash<Option<Instance>> = Some(Instance::new(name.clone())).into();
     let class: MultiRefHash<Self> = Self {
       name,
@@ -126,7 +129,7 @@ impl Class {
         Value::Ref(Value::Object(super::Object::Class(class.clone())).into()),
       );
     });
-    (class, instance)
+    class
   }
   pub fn get_type(&self) -> &str {
     &self.name

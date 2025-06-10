@@ -28,8 +28,8 @@ pub fn time_lib() -> Value {
       }
       .into(),
     ),
+    true,
   );
-  hashmap.set_public_property(NOW, true);
   hashmap.set_instance_property(
     ZONE.into(),
     Value::Object(
@@ -64,8 +64,8 @@ pub fn time_lib() -> Value {
       }
       .into(),
     ),
+    true,
   );
-  hashmap.set_public_property(ZONE, true);
   Value::Object(crate::compiler::Object::Map(
     HashMap::new().into(),
     hashmap.into(),

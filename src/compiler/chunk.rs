@@ -1,3 +1,9 @@
+use crate::{
+  compiler::ValueArray,
+  util::{OnError as _, OnSome as _},
+  Decode, Encode, StructTag,
+};
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum OpCode {
   // Const
@@ -41,7 +47,7 @@ pub enum OpCode {
   OpPop,
   OpAwait,
   OpUnPromise, // obtiene el valor de una promesa
-  OpPromised, // mueve el frame a los asincronos
+  OpPromised,  // mueve el frame a los asincronos
   OpNewLocals,
   OpRemoveLocals,
   OpJumpIfFalse,
@@ -49,9 +55,10 @@ pub enum OpCode {
   OpReturn,
   OpBreak,
   OpContinue,
-  OpCopy, // Para duplicar el ultimo valor en el stack (obtener el padre de un objeto)
-  OpSetScope, // Agrega el scope actual a el ultimo valor de la pila (para funciones)
-  OpInClass, // Determina que el scope actual es una clase (metodos de clase)
+  OpCopy,        // Para duplicar el ultimo valor en el stack (obtener el padre de un objeto)
+  OpSetScope,    // Agrega el scope actual a el ultimo valor de la pila (para funciones)
+  OpInClass,     // Determina que el scope actual es una clase (metodos de clase)
+  OpGetInstance, // Para agregar las propiedades de inctancia al declarar la clase
   // Invalid
   OpNull,
 }
@@ -105,6 +112,7 @@ impl From<u8> for OpCode {
       x if x == Self::OpModulo as u8 => Self::OpModulo,
       x if x == Self::OpInClass as u8 => Self::OpInClass,
       x if x == Self::OpExtendClass as u8 => Self::OpExtendClass,
+      x if x == Self::OpGetInstance as u8 => Self::OpGetInstance,
 
       x if x == Self::OpAt as u8 => Self::OpAt,
       x if x == Self::OpAsRef as u8 => Self::OpAsRef,
@@ -166,7 +174,7 @@ impl Chunk {
     self.code.len() - 2
   }
   pub fn patch_jump(&mut self, offset: usize) -> Result<(), String> {
-    let jump = self.code.len() - offset - (2 /* Data bytes */);
+    let jump = self.code.len() - offset - (2/* Data bytes */);
     if jump > u16::MAX.into() {
       return Err(format!("Longitud muy alta"));
     }
@@ -176,7 +184,7 @@ impl Chunk {
   }
   fn _print(&self, name: String) {
     println!("===== {name} =====");
-    
+
     println!("-- {name} consts -");
     println!("Index | Value",);
     for (i, value) in self.constants.enumerate() {
@@ -194,9 +202,18 @@ impl Chunk {
           let a = self.read(offset) as u16;
           let b = self.read(offset + 1) as u16;
           offset += 2;
-          (format!("{:04x}", (a << 8) | b), "--".into(), "-------------------------".into())
+          (
+            format!("{:04x}", (a << 8) | b),
+            "--".into(),
+            "-------------------------".into(),
+          )
         }
-        OpCode::OpConstant | OpCode::OpGetVar | OpCode::OpConstDecl | OpCode::OpVarDecl | OpCode::OpArgDecl | OpCode::OpExport => {
+        OpCode::OpConstant
+        | OpCode::OpGetVar
+        | OpCode::OpConstDecl
+        | OpCode::OpVarDecl
+        | OpCode::OpArgDecl
+        | OpCode::OpExport => {
           let index = self.read(offset);
           offset += 1;
           (
@@ -209,7 +226,11 @@ impl Chunk {
           let a = self.read(offset) as u16;
           let b = self.read(offset + 1) as u16;
           offset += 2;
-          (format!("{:04x}", offset as u16 - ((a << 8) | b)), "--".into(), "-------------------------".into())
+          (
+            format!("{:04x}", offset as u16 - ((a << 8) | b)),
+            "--".into(),
+            "-------------------------".into(),
+          )
         }
         OpCode::OpCall | OpCode::OpSetMember | OpCode::OpGetMember => {
           offset += 1;
@@ -219,13 +240,148 @@ impl Chunk {
             "-------------------------".into(),
           )
         }
-        _ => {
-          ("----".into(), "--".into(), "-------------------------".into())
-        }
+        _ => (
+          "----".into(),
+          "--".into(),
+          "-------------------------".into(),
+        ),
       };
-      println!("{i:04x} | {:>16} |   {jump_to} |    {index} | {value:>25}", format!("{:?}", op));
+      println!(
+        "{i:04x} | {:>16} |   {jump_to} |    {index} | {value:>25}",
+        format!("{:?}", op)
+      );
     }
     println!("===== {name} =====");
+  }
+}
+
+impl Encode for Chunk {
+  fn encode(&self) -> Result<Vec<u8>, String> {
+    let mut encode = vec![StructTag::Chunk as u8];
+    {
+      encode.push(StructTag::Values as u8);
+      for (_, value) in self.constants.enumerate() {
+        encode.extend(value.encode()?);
+      }
+      encode.push(StructTag::EOB as u8);
+    };
+    {
+      encode.push(StructTag::Code as u8);
+      for byte in &self.code {
+        let use_byte = match *byte {
+          x if x == StructTag::SOB as u8 => true,
+          x if x == StructTag::EOB as u8 => true,
+          x if x == StructTag::Byte as u8 => true,
+          _ => false,
+        };
+        if use_byte {
+          encode.push(StructTag::Byte as u8);
+        }
+        encode.push(*byte);
+      }
+      encode.push(StructTag::EOB as u8);
+    };
+    {
+      encode.push(StructTag::Lines as u8);
+      for line in &self.lines {
+        encode.extend(line.encode()?);
+      }
+      encode.push(StructTag::EOB as u8);
+    };
+    Ok(encode)
+  }
+}
+impl Decode for Chunk {
+  fn decode(vec: &mut std::collections::VecDeque<u8>) -> Result<Self, String> {
+    vec
+      .pop_front()
+      .on_some_option(|byte| {
+        if byte != StructTag::Chunk as u8 {
+          None
+        } else {
+          Some(byte)
+        }
+      })
+      .on_error(|_| "Se esperaba un fragmento".to_string())?;
+    let constants = {
+      vec
+        .pop_front()
+        .on_some_option(|byte| {
+          if byte != StructTag::Values as u8 {
+            None
+          } else {
+            Some(byte)
+          }
+        })
+        .on_error(|_| "Se esperaban valores de un fragmento".to_string())?;
+      let mut constants = ValueArray::new();
+      loop {
+        let byte = vec.get(0).on_error(|_| "Binario corrupto".to_string())?;
+        if *byte == StructTag::EOB as u8 {
+          vec.pop_front(); // EOB
+          break;
+        }
+        constants.write(super::Value::decode(vec)?);
+      }
+      constants
+    };
+    let code = {
+      vec
+        .pop_front()
+        .on_some_option(|byte| {
+          if byte != StructTag::Code as u8 {
+            None
+          } else {
+            Some(byte)
+          }
+        })
+        .on_error(|_| "Se esperaba codigo de un fragmento".to_string())?;
+      let mut code = vec![];
+      loop {
+        let byte = vec
+          .pop_front()
+          .on_error(|_| "Binario corrupto".to_string())?;
+        if byte == StructTag::EOB as u8 {
+          break;
+        }
+        let byte = if byte == StructTag::Byte as u8 {
+          vec
+            .pop_front()
+            .on_error(|_| "Binario corrupto".to_string())?
+        } else {
+          byte
+        };
+        code.push(byte);
+      }
+      code
+    };
+    let lines = {
+      vec
+        .pop_front()
+        .on_some_option(|byte| {
+          if byte != StructTag::Lines as u8 {
+            None
+          } else {
+            Some(byte)
+          }
+        })
+        .on_error(|_| "Se esperaban lineas de un fragmento".to_string())?;
+      let mut lines = vec![];
+      loop {
+        let byte = vec.get(0).on_error(|_| "Binario corrupto".to_string())?;
+        if *byte == StructTag::EOB as u8 {
+          vec.pop_front(); // EOB
+          break;
+        }
+        lines.push(usize::decode(vec)?);
+      }
+      lines
+    };
+    Ok(Self {
+      code,
+      lines,
+      constants,
+    })
   }
 }
 
@@ -236,9 +392,6 @@ pub struct ChunkGroup {
   current: usize,
 }
 impl ChunkGroup {
-  pub fn get_chunks(&self) -> &Vec<Chunk> {
-    &self.chunks
-  }
   pub fn new() -> Self {
     Self {
       chunks: vec![Chunk::new()],
@@ -320,8 +473,12 @@ impl ChunkGroup {
   }
   pub fn add_value(&mut self, value: super::Value) -> u8 {
     if self.current_chunk_mut().constants.has_value(&value) {
-      self.current_chunk_mut().constants.get_index(&value).unwrap_or_default()
-    }else{
+      self
+        .current_chunk_mut()
+        .constants
+        .get_index(&value)
+        .unwrap_or_default()
+    } else {
       if self.current_chunk_mut().constants.len() >= u8::MAX {
         self.current += 1;
         self.chunks.push(Chunk::new());
@@ -381,5 +538,46 @@ impl Default for ChunkGroup {
     group.write_constant(super::Value::Never, 0);
     group.write(OpCode::OpReturn as u8, 0);
     group
+  }
+}
+impl Encode for ChunkGroup {
+  fn encode(&self) -> Result<Vec<u8>, String> {
+    let mut encode = vec![StructTag::ChunkGroup as u8];
+
+    for chunk in &self.chunks {
+      encode.extend(chunk.encode()?)
+    }
+
+    encode.push(StructTag::EOB as u8);
+    Ok(encode)
+  }
+}
+impl Decode for ChunkGroup {
+  fn decode(vec: &mut std::collections::VecDeque<u8>) -> Result<Self, String> {
+    vec
+      .pop_front()
+      .on_some_option(|byte| {
+        if byte != StructTag::ChunkGroup as u8 {
+          None
+        } else {
+          Some(byte)
+        }
+      })
+      .on_error(|_| "Se esperaba un grupo de fragmentos".to_string())?;
+    let mut chunk_group = Self {
+      chunks: vec![],
+      aggregate_len: vec![0],
+      current: 0,
+    };
+    loop {
+      let byte = vec.get(0).on_error(|_| "Binario corrupto".to_string())?;
+      if *byte == StructTag::EOB as u8 {
+        vec.pop_front(); // EOB
+        break;
+      }
+      chunk_group.chunks.push(Chunk::decode(vec)?);
+      chunk_group.update_aggregate_len();
+    }
+    Ok(chunk_group)
   }
 }

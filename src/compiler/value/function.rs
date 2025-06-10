@@ -2,8 +2,9 @@ use std::{cell::RefCell, rc::Rc};
 
 use super::{Class, MultiRefHash, Value};
 use crate::interpreter::VarsManager;
-use crate::util::{Color, SetColor as _};
+use crate::util::{Color, Location, OnError as _, OnSome as _, SetColor as _};
 use crate::{compiler::ChunkGroup, parser::NodeFunction};
+use crate::{Decode, StructTag};
 
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub enum Function {
@@ -149,5 +150,72 @@ impl From<&NodeFunction> for Function {
 impl std::fmt::Debug for Function {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     write!(f, "{}", self.to_string())
+  }
+}
+impl crate::Encode for Function {
+  fn encode(&self) -> Result<Vec<u8>, String> {
+    let mut encode = vec![StructTag::Function as u8];
+    match self {
+      Function::Function {
+        arity,
+        chunk,
+        name,
+        is_async,
+        location,
+        has_rest,
+        ..
+      } => {
+        encode.push(0);
+        encode.extend(arity.encode()?);
+        encode.extend(chunk.encode()?);
+        encode.extend(name.encode()?);
+        encode.extend(is_async.encode()?);
+        encode.extend(location.encode()?);
+        encode.extend(has_rest.encode()?);
+      }
+      Function::Script { chunk, path, .. } => {
+        encode.push(1);
+        encode.extend(path.encode()?);
+        encode.extend(chunk.encode()?);
+      }
+      Function::Native { .. } => return Err("No se puede compilar una funcion nativa".to_string()),
+    };
+
+    Ok(encode)
+  }
+}
+impl Decode for Function {
+  fn decode(vec: &mut std::collections::VecDeque<u8>) -> Result<Self, String> {
+    vec
+      .pop_front()
+      .on_some_option(|byte| {
+        if byte != StructTag::Function as u8 {
+          None
+        } else {
+          Some(byte)
+        }
+      })
+      .on_error(|_| "Se esperaba una funcion".to_string())?;
+    let type_byte = vec
+      .pop_front()
+      .on_error(|_| "Se esperaba un tipo de funcion".to_string())?;
+    return match type_byte {
+      0 => Ok(Self::Function {
+        in_class: Default::default(),
+        scope: Default::default(),
+        arity: usize::decode(vec)?,
+        chunk: ChunkGroup::decode(vec)?,
+        name: String::decode(vec)?,
+        is_async: bool::decode(vec)?,
+        location: Location::decode(vec)?,
+        has_rest: bool::decode(vec)?,
+      }),
+      1 => Ok(Self::Script {
+        scope: Default::default(),
+        path: String::decode(vec)?,
+        chunk: ChunkGroup::decode(vec)?,
+      }),
+      _ => Err("Se esperaba una funcion".to_string()),
+    };
   }
 }

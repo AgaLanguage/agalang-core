@@ -30,7 +30,7 @@ pub enum OperatorType {
   /// ?
   QuestionMark,
   /// @
-  At
+  At,
 }
 impl OperatorType {
   pub fn from(c: char) -> Self {
