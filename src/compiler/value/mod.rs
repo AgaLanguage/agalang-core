@@ -14,7 +14,7 @@ pub use promise::{Promise, PromiseData, PROMISE_TYPE};
 use crate::{
   compiler::ChunkGroup,
   interpreter::{Thread, VarsManager},
-  util::OnError,
+  util::{OnError, OnSome},
   Decode, StructTag,
 };
 
@@ -30,6 +30,7 @@ pub const ITERATOR_TYPE: &str = "iterador";
 pub const REF_TYPE: &str = "referencia";
 pub const CHAR_TYPE: &str = "caracter";
 pub const BYTE_TYPE: &str = "byte";
+pub const LAZY_TYPE: &str = "vago";
 
 #[derive(Clone, PartialEq, Eq, Hash, Default)]
 pub struct RefValue(MultiRefHash<Value>);
@@ -43,12 +44,54 @@ impl From<Value> for RefValue {
     Self(MultiRefHash::from(value))
   }
 }
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+pub struct LazyValue {
+  value: MultiRefHash<Option<Value>>,
+  once: MultiRefHash<Function>,
+}
+impl LazyValue {
+  pub fn get(&self) -> Option<std::cell::Ref<Value>> {
+    self.value.as_ref()
+  }
+  pub fn set(&self, value: Value) {
+    *self.value.borrow_mut() = Some(value)
+  }
+  pub fn get_once(&self) -> MultiRefHash<Function> {
+    self.once.clone()
+  }
+}
+impl From<Function> for LazyValue {
+  fn from(value: Function) -> Self {
+    Self {
+      value: Default::default(),
+      once: value.into(),
+    }
+  }
+}
+
+impl crate::Encode for LazyValue {
+  fn encode(&self) -> Result<Vec<u8>, String> {
+    let mut vec = vec![StructTag::Lazy as u8];
+    vec.extend(self.once.cloned().encode()?);
+    Ok(vec)
+  }
+}
+impl Decode for LazyValue {
+  fn decode(vec: &mut std::collections::VecDeque<u8>) -> Result<Self, String> {
+    vec.pop_front();
+    Ok(Self {
+      once: Function::decode(vec)?.into(),
+      value: Default::default(),
+    })
+  }
+}
 
 #[derive(Clone, PartialEq, Eq, Default, Hash)]
 pub enum Value {
   Number(Number),
   String(String),
   Object(Object),
+  Lazy(LazyValue),
   Iterator(MultiRefHash<Value>),
   Promise(Promise),
   Ref(RefValue),
@@ -73,12 +116,14 @@ impl Value {
       Self::Iterator(_) => ITERATOR_TYPE,
       Self::Ref(_) => REF_TYPE,
       Self::Promise(_) => PROMISE_TYPE,
+      Self::Lazy { .. } => LAZY_TYPE,
       Self::Object(o) => o.get_type(),
     }
   }
   pub fn set_scope(&self, vars: Rc<RefCell<VarsManager>>) {
     match self {
       Self::Object(Object::Function(f)) => f.borrow().set_scope(vars),
+      Self::Lazy(LazyValue { once, .. }) => once.borrow().set_scope(vars),
       _ => panic!(
         "Error: no se puede establecer una variable local en un valor de tipo {}",
         self.get_type()
@@ -130,6 +175,7 @@ impl Value {
     match self {
       Self::Promise(promise) => promise.clone(),
       Self::Ref(RefValue(r)) => r.borrow().as_promise(),
+      Self::Lazy(lazy) => lazy.get().on_some(|l|l.clone()).unwrap_or_default().as_promise(),
       v => v.clone().into(),
     }
   }
@@ -145,6 +191,7 @@ impl Value {
       Self::Object(_) => 1.into(),
       Self::Byte(b) => b.to_string().parse::<Number>().unwrap_or(0.into()),
       Self::Char(c) => c.into(),
+      Self::Lazy(l) => l.get().on_some(|v| v.clone()).unwrap_or_default().as_number(),
     }
   }
   pub fn as_boolean(&self) -> bool {
@@ -157,6 +204,7 @@ impl Value {
       Self::Object(_) | Self::True => true,
       Self::Byte(b) => *b != 0,
       Self::Null | Self::Never | Self::False => false,
+      Self::Lazy(l) => l.get().on_some(|v| v.clone()).unwrap_or_default().as_boolean(),
     }
   }
 
@@ -196,6 +244,7 @@ impl Value {
       Self::Number(x) => x.to_string(),
       Self::Char(c) => c.to_string(),
       Self::Object(x) => x.to_string(),
+      Self::Lazy(l) => l.get().on_some(|v| v.clone()).unwrap_or_default().as_string(),
     }
   }
   pub fn as_function(&self) -> MultiRefHash<Function> {
@@ -371,6 +420,7 @@ impl crate::Encode for Value {
       Self::Char(char) => char.encode(),
       Self::Null => Ok(vec![StructTag::Null as u8]),
       Self::Never => Ok(vec![StructTag::Never as u8]),
+      Self::Lazy(l) => l.encode(),
     }
   }
 }
@@ -419,6 +469,7 @@ impl Decode for Value {
         vec.pop_front();
         Ok(Self::Never)
       }
+      StructTag::Lazy => Ok(Self::Lazy(LazyValue::decode(vec)?)),
       _ => Err("Se esperaba un valor".to_string()),
     }
   }

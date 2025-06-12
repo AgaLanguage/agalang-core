@@ -36,3 +36,11 @@ clase Gato extiende Animal {
 const animal = Gato(1);
 animal::miau();
 Consola::pintar(animal.gorro);
+
+const val = vago "Hola";
+
+intenta {
+  animal::fiu;
+} captura (e) {
+  Consola::pintar("Error atrapado:", e, val);
+}

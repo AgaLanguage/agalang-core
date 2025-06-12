@@ -18,6 +18,7 @@ pub(crate) enum StructTag {
   Map,
   Array,
   Class,
+  Lazy,
 
   ChunkGroup,
   Chunk,

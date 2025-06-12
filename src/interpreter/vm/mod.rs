@@ -47,7 +47,7 @@ impl VM {
   fn run_instruction(&self) -> InterpretResult {
     let mut sub_threads = vec![];
     for async_thread in &mut self.sub_threads.borrow().iter() {
-      let data = async_thread.borrow().run_instruction(true);
+      let data = async_thread.borrow().simple_run_instruction(true);
       if matches!(data, InterpretResult::Continue) {
         sub_threads.push(async_thread.clone());
       }
@@ -106,28 +106,19 @@ impl VM {
     let result = ModuleThread::new(path);
     result.borrow_mut().set_vm(this);
 
-    let file = match crate::read_code(Path::new(path)) {
-      None => {
-        result.borrow_mut().set_status(InterpretResult::NativeError);
+    let compiler = match crate::compile(Path::new(path)) {
+      Ok((compiler, _)) => compiler,
+      Err(e) => {
+        result
+          .borrow_mut()
+          .set_status(InterpretResult::CompileError(e));
         return result;
       }
-      Some(value) => value,
     };
 
-    let ref ast = match crate::parser::Parser::new(&file, &path).produce_ast() {
-      Err(a) => {
-        crate::parser::print_error(crate::parser::error_to_string(
-          &crate::parser::ErrorNames::SyntaxError,
-          crate::parser::node_error(&a, &file),
-        ));
-        result.borrow_mut().set_status(InterpretResult::NativeError);
-        return result;
-      }
-      Ok(value) => value,
-    };
     result
       .borrow()
-      .push_call(CallFrame::new_compiler(ast.into(), vars));
+      .push_call(CallFrame::new_compiler(compiler, vars));
     result
   }
   pub fn clear_stack(&self) {

@@ -59,12 +59,12 @@ impl<T, E, V> OnError<T, E, V> for Result<T, V> {
 }
 
 pub trait OnSome<T, V> {
-  fn _on_some(self, some: impl FnOnce(T) -> V) -> Option<V>;
+  fn on_some(self, some: impl FnOnce(T) -> V) -> Option<V>;
   fn on_some_option(self, ok: impl FnOnce(T) -> Option<V>) -> Option<V>;
 }
 
 impl<T, V> OnSome<T, V> for Option<T> {
-  fn _on_some(self, some: impl FnOnce(T) -> V) -> Option<V> {
+  fn on_some(self, some: impl FnOnce(T) -> V) -> Option<V> {
     match self {
       Some(t) => Some(some(t)),
       None => None,

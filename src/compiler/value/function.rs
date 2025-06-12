@@ -2,6 +2,7 @@ use std::{cell::RefCell, rc::Rc};
 
 use super::{Class, MultiRefHash, Value};
 use crate::interpreter::VarsManager;
+use crate::parser::NodeBlock;
 use crate::util::{Color, Location, OnError as _, OnSome as _, SetColor as _};
 use crate::{compiler::ChunkGroup, parser::NodeFunction};
 use crate::{Decode, StructTag};
@@ -144,6 +145,15 @@ impl From<&NodeFunction> for Function {
       scope: None.into(),
       has_rest: false,
       in_class: None.into(),
+    }
+  }
+}
+impl From<&NodeBlock> for Function {
+  fn from(value: &NodeBlock) -> Self {
+    Self::Script {
+      chunk: ChunkGroup::new(),
+      path: value.location.file_name.clone(),
+      scope: None.into(),
     }
   }
 }

@@ -43,6 +43,8 @@ pub enum OpCode {
   OpImport,
   OpExport,
   OpExtendClass,
+  OpThrow,
+  OpTry,
   // Control
   OpPop,
   OpAwait,
@@ -113,6 +115,8 @@ impl From<u8> for OpCode {
       x if x == Self::OpInClass as u8 => Self::OpInClass,
       x if x == Self::OpExtendClass as u8 => Self::OpExtendClass,
       x if x == Self::OpGetInstance as u8 => Self::OpGetInstance,
+      x if x == Self::OpThrow as u8 => Self::OpThrow,
+      x if x == Self::OpTry as u8 => Self::OpTry,
 
       x if x == Self::OpAt as u8 => Self::OpAt,
       x if x == Self::OpAsRef as u8 => Self::OpAsRef,

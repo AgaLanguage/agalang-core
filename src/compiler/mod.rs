@@ -6,11 +6,9 @@ mod value;
 pub use chunk::{ChunkGroup, OpCode};
 pub use value::*;
 
-use crate::{
-  parser::{Node, NodeFunction},
-  util::{OnError as _, OnSome as _},
-  Decode, StructTag,
-};
+use crate::parser::{Node, NodeFunction};
+use crate::util::{OnError as _, OnSome as _};
+use crate::{Decode, StructTag};
 
 const OBJECT_MEMBER: u8 = 0;
 const INSTANCE_MEMBER: u8 = 1;
@@ -573,7 +571,6 @@ impl Compiler {
           node_expression.location.start.line,
         );
       }
-      Node::Lazy(_node_expression) => todo!(),
       Node::Class(node_class) => {
         let class = Object::Class(Class::new(node_class.name.clone()));
 
@@ -625,9 +622,72 @@ impl Compiler {
           node_class.location.start.line,
         );
       }
-      Node::Throw(_node_value) => todo!(),
-      Node::Try(_node_try) => todo!(),
-      Node::None => todo!(),
+      Node::Throw(node_value) => {
+        self.node_value_to_bytes(node)?;
+        self.write(OpCode::OpThrow as u8, node_value.location.start.line);
+      }
+      Node::Try(node_try) => {
+        let mut try_block = Self {
+          function: (&node_try.body).into(),
+          path: node_try.location.file_name.clone(),
+        };
+        if node_try.body.len() > 0 {
+          try_block.node_to_bytes(&node_try.body.clone().to_node())?;
+        } else {
+          try_block.set_constant(Value::Never, node_try.location.end.line);
+        }
+        try_block.write(OpCode::OpReturn as u8, node_try.location.end.line);
+        self.set_constant(
+          Value::Object(try_block.function.into()),
+          node_try.location.start.line,
+        );
+        let mut catch_block = Self {
+          function: (&node_try.body).into(),
+          path: node_try.location.file_name.clone(),
+        };
+        match &node_try.catch {
+          Some((error, block)) => {
+            catch_block
+              .function
+              .chunk()
+              .make_arg(error.clone(), block.location.start.line);
+            if block.len() > 0 {
+              catch_block.node_to_bytes(&block.clone().to_node())?;
+            } else {
+              catch_block.set_constant(Value::Never, block.location.end.line);
+            }
+          }
+          None => {
+            catch_block.set_constant(Value::Never, node_try.location.end.line);
+          }
+        };
+        catch_block.write(OpCode::OpReturn as u8, node_try.location.end.line);
+        let catch_block = catch_block.function;
+        self.set_constant(
+          Value::Object(catch_block.into()),
+          node_try.location.start.line,
+        );
+        self.write(OpCode::OpTry as u8, node_try.location.start.line);
+        self.set_constant(Value::Never, node_try.location.end.line);
+      }
+      Node::Lazy(node_expression) => {
+        let mut lazy_block = Self {
+          function: Function::Script {
+            chunk: ChunkGroup::new(),
+            path: node.get_file(),
+            scope: None.into(),
+          },
+          path: node_expression.location.file_name.clone(),
+        };
+        lazy_block.node_to_bytes(&node_expression.expression)?;
+        lazy_block.write(OpCode::OpReturn as u8, node_expression.location.end.line);
+        self.set_constant(
+          Value::Lazy(lazy_block.function.into()),
+          node_expression.location.start.line,
+        );
+        self.write(OpCode::OpSetScope as u8, node_expression.location.end.line);
+      }
+      Node::None => return Err("Se encontro un error de nodos".to_string()),
     };
     Ok(())
   }

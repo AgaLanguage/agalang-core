@@ -12,7 +12,6 @@ pub enum InterpretResult {
   Continue,
   CompileError(String),
   RuntimeError(String),
-  NativeError,
 }
 
 #[derive(Clone)]

@@ -1988,7 +1988,8 @@ impl Parser {
         | super::KeywordsType::Try
         | super::KeywordsType::Async
         | super::KeywordsType::Console
-        | super::KeywordsType::Await,
+        | super::KeywordsType::Await
+        | super::KeywordsType::Lazy,
       ) => self.parse_keyword_value(false, false, false, true),
       _ => Err(NodeError {
         message: if message != "" {

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::compiler::{Object, Value};
-use crate::util::Color;
+use crate::util::{Color, OnSome};
 
 pub const CONSOLE_LIB: &str = ":consola";
 const DRAW: &str = "pintar";
@@ -17,6 +17,7 @@ fn inspect_value(value: &Value) -> String {
     Value::Iterator(_) => Color::BrightCyan,
     Value::Ref(_) => Color::BrightBlue,
     Value::Promise(_) => Color::Red,
+    Value::Lazy(l) => return inspect_value(&l.get().on_some(|l|l.clone()).unwrap_or_default()),
   }
   .apply(&value.as_string())
 }
