@@ -7,7 +7,6 @@ pub use chunk::{ChunkGroup, OpCode};
 pub use value::*;
 
 use crate::parser::{Node, NodeFunction};
-use crate::util::{OnError as _, OnSome as _};
 use crate::{Decode, StructTag};
 
 const OBJECT_MEMBER: u8 = 0;
@@ -692,8 +691,10 @@ impl Compiler {
     Ok(())
   }
 }
-impl From<&Node> for Compiler {
-  fn from(value: &Node) -> Self {
+impl TryFrom<&Node> for Compiler {
+  type Error = String;
+
+  fn try_from(value: &Node) -> Result<Self, Self::Error> {
     let path = value.get_file();
     let chunk = ChunkGroup::new();
     let function = Function::Script {
@@ -702,11 +703,8 @@ impl From<&Node> for Compiler {
       scope: None.into(),
     };
     let mut compiler = Self { function, path };
-    match compiler.node_to_bytes(value) {
-      Err(e) => panic!("{e}"),
-      _ => {}
-    }
-    compiler
+    compiler.node_to_bytes(value)?;
+    Ok(compiler)
   }
 }
 impl crate::Encode for Compiler {
@@ -722,6 +720,7 @@ impl crate::Encode for Compiler {
 }
 impl Decode for Compiler {
   fn decode(vec: &mut std::collections::VecDeque<u8>) -> Result<Self, String> {
+    use crate::util::{OnError as _, OnSome as _};
     vec
       .pop_front()
       .on_some_option(|byte| {

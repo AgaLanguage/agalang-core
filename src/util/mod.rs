@@ -77,3 +77,27 @@ impl<T, V> OnSome<T, V> for Option<T> {
     }
   }
 }
+
+pub trait Valuable<O = Self> {
+  fn clone_ok<E>(&self) -> Result<O, E>;
+  fn _clone_err<T>(&self) -> Result<T, O>;
+  fn _clone_option(&self) -> Option<O>;
+}
+impl<O, I> Valuable<O> for I
+where
+  I: Clone,
+  O: From<I>,
+{
+  fn clone_ok<E>(&self) -> Result<O, E> {
+    let v: O = From::from(self.clone());
+    Ok(v)
+  }
+  fn _clone_err<E>(&self) -> Result<E, O> {
+    let v: O = From::from(self.clone());
+    Err(v)
+  }
+  fn _clone_option(&self) -> Option<O> {
+    let v: O = From::from(self.clone());
+    Some(v)
+  }
+}

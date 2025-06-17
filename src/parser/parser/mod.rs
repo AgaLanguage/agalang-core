@@ -2,7 +2,7 @@ pub mod ast;
 pub mod string;
 pub use ast::*;
 
-use crate::util::{self, OnError as _};
+use crate::util;
 
 use super::KeywordsType;
 
@@ -1869,6 +1869,7 @@ impl Parser {
     }
   }
   fn parse_literal_expr(&mut self, message: &str) -> Result<ast::Node, NodeError> {
+    use crate::util::OnError as _;
     let token = self.at();
     match token.token_type {
       super::TokenType::Identifier => ast::Node::Identifier(ast::NodeIdentifier {

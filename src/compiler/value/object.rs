@@ -9,6 +9,10 @@ use crate::StructTag;
 
 use super::{Class, Function, Instance, Value};
 
+pub const MAP_TYPE: &str = "objeto";
+pub const LIST_TYPE: &str = "lista";
+pub const CLASS_TYPE: &str = "clase";
+
 #[derive(Debug, Clone)]
 pub struct MultiRefHash<T>(Rc<RefCell<T>>);
 impl<T> PartialEq for MultiRefHash<T> {
@@ -99,9 +103,9 @@ impl Object {
   pub fn get_type(&self) -> &str {
     match self {
       Self::Function(f) => f.borrow().get_type(),
-      Self::Map(_, _) => "objeto",
-      Self::Array(_) => "lista",
-      Self::Class(_) => "clase",
+      Self::Map(_, _) => MAP_TYPE,
+      Self::Array(_) => LIST_TYPE,
+      Self::Class(_) => CLASS_TYPE,
       //Self::Set(_) => "conjunto",
     }
   }

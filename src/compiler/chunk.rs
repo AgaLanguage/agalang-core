@@ -1,8 +1,4 @@
-use crate::{
-  compiler::ValueArray,
-  util::{OnError as _, OnSome as _},
-  Decode, Encode, StructTag,
-};
+use crate::{compiler::ValueArray, Decode, Encode, StructTag};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum OpCode {
@@ -297,6 +293,7 @@ impl Encode for Chunk {
 }
 impl Decode for Chunk {
   fn decode(vec: &mut std::collections::VecDeque<u8>) -> Result<Self, String> {
+    use crate::util::{OnError as _, OnSome as _};
     vec
       .pop_front()
       .on_some_option(|byte| {
@@ -558,6 +555,7 @@ impl Encode for ChunkGroup {
 }
 impl Decode for ChunkGroup {
   fn decode(vec: &mut std::collections::VecDeque<u8>) -> Result<Self, String> {
+    use crate::util::{OnError as _, OnSome as _};
     vec
       .pop_front()
       .on_some_option(|byte| {

@@ -922,7 +922,7 @@ impl Number {
   pub const fn is_infinite(&self) -> bool {
     matches!(self, Self::Infinity | Self::NegativeInfinity)
   }
-  pub fn is_zero(&self) -> bool {
+  pub fn _is_zero(&self) -> bool {
     match self {
       Self::NaN | Self::Infinity | Self::NegativeInfinity => false,
       Self::Basic(x) => x.is_zero(),

@@ -2,19 +2,19 @@ importa ':consola' como Consola;
 
 clase Gorro {
   poner(){
-    Consola::pintar("Poniendo...");
+    Consola::pinta("Poniendo...");
   };
 }
 
 clase Animal {
   pub sonar(){
-    Consola::pintar("Hu");
+    Consola::pinta("Hu");
   };
   mover(){
-    Consola::pintar("Moviendo...");
+    Consola::pinta("Moviendo...");
   };
   est sonar(){
-    Consola::pintar("~~");
+    Consola::pinta("~~");
   };
   est __constructor__(){
     esto.gorro = Gorro();
@@ -35,12 +35,12 @@ clase Gato extiende Animal {
 
 const animal = Gato(1);
 animal::miau();
-Consola::pintar(animal.gorro);
+Consola::pinta(animal.gorro);
 
 const val = vago "Hola";
 
 intenta {
-  animal::fiu;
+  Consola::pinta(animal);
 } captura (e) {
-  Consola::pintar("Error atrapado:", e, val);
+  Consola::pinta("Error atrapado:", e, val);
 }

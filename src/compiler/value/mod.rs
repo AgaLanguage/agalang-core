@@ -6,17 +6,14 @@ mod number;
 mod object;
 mod promise;
 pub use class::{Class, Instance};
-pub use function::Function;
+pub use function::*;
 pub use number::Number;
-pub use object::{MultiRefHash, Object};
+pub use object::*;
 pub use promise::{Promise, PromiseData, PROMISE_TYPE};
 
-use crate::{
-  compiler::ChunkGroup,
-  interpreter::{Thread, VarsManager},
-  util::{OnError, OnSome},
-  Decode, StructTag,
-};
+use crate::interpreter::{Thread, VarsManager};
+use crate::util::{OnError, OnSome, Valuable};
+use crate::{compiler::ChunkGroup, Decode, StructTag};
 
 pub const NULL_NAME: &str = "nulo";
 pub const NEVER_NAME: &str = "nada";
@@ -175,36 +172,37 @@ impl Value {
     match self {
       Self::Promise(promise) => promise.clone(),
       Self::Ref(RefValue(r)) => r.borrow().as_promise(),
-      Self::Lazy(lazy) => lazy.get().on_some(|l|l.clone()).unwrap_or_default().as_promise(),
+      Self::Lazy(lazy) => lazy
+        .get()
+        .on_some(|l| l.clone())
+        .unwrap_or_default()
+        .as_promise(),
       v => v.clone().into(),
     }
   }
 
-  pub fn as_number(&self) -> Number {
+  pub fn as_number(&self) -> Result<Number, String> {
     match self {
-      Self::Promise(_) => 0.into(),
-      Self::Number(x) => x.clone(),
-      Self::True => 1.into(),
-      Self::Null | Self::Never | Self::False => 0.into(),
-      Self::String(s) => s.parse::<Number>().unwrap_or(0.into()),
-      Self::Iterator(v) | Self::Ref(RefValue(v)) => v.borrow().as_number(),
-      Self::Object(_) => 1.into(),
-      Self::Byte(b) => b.to_string().parse::<Number>().unwrap_or(0.into()),
-      Self::Char(c) => c.into(),
-      Self::Lazy(l) => l.get().on_some(|v| v.clone()).unwrap_or_default().as_number(),
+      Self::Number(x) => x.clone_ok(),
+      val => Err(format!(
+        "Se esperaba un '{NUMBER_TYPE}' pero se recibio un {}",
+        val.get_type()
+      )),
     }
   }
-  pub fn as_boolean(&self) -> bool {
+  pub fn as_boolean(&self) -> Result<bool, String> {
     match self {
-      Self::Char(c) => *c != '\0',
-      Self::Promise(x) => !matches!(x.get_data(), PromiseData::Pending),
-      Self::Number(x) => !x.is_zero(),
-      Self::String(s) => !s.is_empty(),
-      Self::Iterator(v) | Self::Ref(RefValue(v)) => v.borrow().as_boolean(),
-      Self::Object(_) | Self::True => true,
-      Self::Byte(b) => *b != 0,
-      Self::Null | Self::Never | Self::False => false,
-      Self::Lazy(l) => l.get().on_some(|v| v.clone()).unwrap_or_default().as_boolean(),
+      Self::True => Ok(true),
+      Self::Null | Self::Never | Self::False => Ok(false),
+      Self::Lazy(l) => l
+        .get()
+        .on_some(|v| v.clone())
+        .unwrap_or_default()
+        .as_boolean(),
+      val => Err(format!(
+        "Se esperaba un '{BOOLEAN_TYPE}' pero se recibio un {}",
+        val.get_type()
+      )),
     }
   }
 
@@ -244,7 +242,11 @@ impl Value {
       Self::Number(x) => x.to_string(),
       Self::Char(c) => c.to_string(),
       Self::Object(x) => x.to_string(),
-      Self::Lazy(l) => l.get().on_some(|v| v.clone()).unwrap_or_default().as_string(),
+      Self::Lazy(l) => l
+        .get()
+        .on_some(|v| v.clone())
+        .unwrap_or_default()
+        .as_string(),
     }
   }
   pub fn as_function(&self) -> MultiRefHash<Function> {
@@ -291,7 +293,7 @@ impl Value {
         }
         let value = instance
           .unwrap()
-          .get_instance_property(crate::functions_names::TO_AGAL_ARRAY, thread);
+          .get_instance_property(crate::functions_names::ARRAY, thread);
         if matches!(value, None) {
           return Err(format!(
             "No se puede convertir a lista: {}",
@@ -299,7 +301,7 @@ impl Value {
           ));
         }
         if let Value::Object(Object::Array(array)) = value.unwrap() {
-          return Ok(array.borrow().clone());
+          return array.borrow().clone_ok();
         }
 
         Err(format!(

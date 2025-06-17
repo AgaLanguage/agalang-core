@@ -70,8 +70,8 @@ impl Color {
 pub trait SetColor {
   fn set_color(&self, color: Color) -> String;
 }
-impl SetColor for String {
+impl<T> SetColor for T where T: ToString {
   fn set_color(&self, color: Color) -> String {
-    color.apply(self)
+    color.apply(&self.to_string())
   }
 }

@@ -29,7 +29,7 @@ pub fn math_lib() -> Value {
             .ok_or_else(|| format!("{FLOOR}: se esperaba 1 argumento y se recibieron 0"))?;
 
           if number.is_number() {
-            let number = number.as_number();
+            let number = number.as_number()?;
             Ok(Value::Number(number.floor()))
           } else {
             Err(format!("{FLOOR}: se esperaba un número"))
@@ -53,7 +53,7 @@ pub fn math_lib() -> Value {
             .ok_or_else(|| format!("{IS_INFINITE}: se esperaba 1 argumento y se recibieron 0"))?;
 
           if number.is_number() {
-            let number = number.as_number();
+            let number = number.as_number()?;
             Ok(Value::from(number.is_infinite()))
           } else {
             Err(format!("{IS_INFINITE}: se esperaba un número"))
@@ -77,7 +77,7 @@ pub fn math_lib() -> Value {
             .ok_or_else(|| format!("{ROUND}: se esperaba 1 argumento y se recibieron 0"))?;
 
           if number.is_number() {
-            let number = number.as_number();
+            let number = number.as_number()?;
             Ok(Value::Number(number.round()))
           } else {
             Err(format!("{ROUND}: se esperaba un número"))
@@ -101,7 +101,7 @@ pub fn math_lib() -> Value {
             .ok_or_else(|| format!("{CEIL}: se esperaba 1 argumento y se recibieron 0"))?;
 
           if number.is_number() {
-            let number = number.as_number();
+            let number = number.as_number()?;
             Ok(Value::Number(number.ceil()))
           } else {
             Err(format!("{CEIL}: se esperaba un número"))
@@ -123,7 +123,7 @@ pub fn math_lib() -> Value {
           let mut max = Number::NegativeInfinity;
           for arg in args {
             if arg.is_number() {
-              let number = arg.as_number();
+              let number = arg.as_number()?;
               if number > max {
                 max = number;
               }
@@ -149,7 +149,7 @@ pub fn math_lib() -> Value {
           let mut min = Number::Infinity;
           for arg in args {
             if arg.is_number() {
-              let number = arg.as_number();
+              let number = arg.as_number()?;
               if number < min {
                 min = number;
               }

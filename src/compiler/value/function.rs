@@ -3,9 +3,13 @@ use std::{cell::RefCell, rc::Rc};
 use super::{Class, MultiRefHash, Value};
 use crate::interpreter::VarsManager;
 use crate::parser::NodeBlock;
-use crate::util::{Color, Location, OnError as _, OnSome as _, SetColor as _};
+use crate::util::{Color, Location};
 use crate::{compiler::ChunkGroup, parser::NodeFunction};
 use crate::{Decode, StructTag};
+
+pub const FUNCTION_TYPE: &str = "funcion";
+pub const SCRIPT_TYPE: &str = "script";
+pub const NATIVE_FUNCTION_TYPE: &str = "funcion nativa";
 
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub enum Function {
@@ -40,9 +44,9 @@ impl Function {
   }
   pub fn get_type(&self) -> &'static str {
     match self {
-      Self::Function { .. } => "funcion",
-      Self::Script { .. } => "script",
-      Self::Native { .. } => "nativo",
+      Self::Function { .. } => FUNCTION_TYPE,
+      Self::Script { .. } => SCRIPT_TYPE,
+      Self::Native { .. } => NATIVE_FUNCTION_TYPE,
     }
   }
   pub fn set_in_class(&self, class: MultiRefHash<Class>) {
@@ -79,6 +83,7 @@ impl Function {
     }
   }
   pub fn location(&self) -> String {
+  use crate::util::{SetColor as _};
     match self {
       Self::Function {
         name,
@@ -196,6 +201,7 @@ impl crate::Encode for Function {
 }
 impl Decode for Function {
   fn decode(vec: &mut std::collections::VecDeque<u8>) -> Result<Self, String> {
+  use crate::util::{OnError as _, OnSome as _};
     vec
       .pop_front()
       .on_some_option(|byte| {

@@ -1,5 +1,4 @@
 use std::collections::VecDeque;
-use std::io::{Read as _, Write as _};
 use std::path::Path;
 use std::{collections::HashMap, process::ExitCode};
 
@@ -86,6 +85,7 @@ fn main() -> ExitCode {
 }
 
 fn compress_bytes(data: &[u8]) -> std::io::Result<Vec<u8>> {
+  use std::io::Write as _;
   let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
   encoder.write_all(data)?; // Escribe los bytes al encoder
   let compressed_data = encoder.finish()?; // Termina la compresión y obtiene el Vec<u8>
@@ -94,6 +94,7 @@ fn compress_bytes(data: &[u8]) -> std::io::Result<Vec<u8>> {
 
 // Descomprime bytes gzip y devuelve un Vec<u8>
 fn decompress_bytes(data: &[u8]) -> std::io::Result<Vec<u8>> {
+  use std::io::Read as _;
   let mut decoder = GzDecoder::new(data);
   let mut decompressed = Vec::new();
   decoder.read_to_end(&mut decompressed)?; // Lee todo el contenido descomprimido
@@ -140,7 +141,7 @@ fn compile(path: &Path) -> Result<(Compiler, &str), String> {
           ));
           ""
         })?;
-      Ok((Compiler::from(&ast), EXTENSION))
+      Ok(((&ast).try_into()?, EXTENSION))
     }
     Some(EXTENSION_COMPRESS) => {
       let bin = read_bin(path).on_error(|_| "")?;

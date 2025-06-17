@@ -1,10 +1,13 @@
 use std::collections::HashMap;
 
 use crate::compiler::{Object, Value};
-use crate::util::{Color, OnSome};
+use crate::functions_names::CONSOLE;
+use crate::interpreter::Thread;
+use crate::util::{Color, OnError, OnSome};
 
 pub const CONSOLE_LIB: &str = ":consola";
-const DRAW: &str = "pintar";
+const DRAW: &str = "pinta";
+const INSPECT: &str = "inspecciona";
 
 fn inspect_value(value: &Value) -> String {
   match value {
@@ -17,12 +20,17 @@ fn inspect_value(value: &Value) -> String {
     Value::Iterator(_) => Color::BrightCyan,
     Value::Ref(_) => Color::BrightBlue,
     Value::Promise(_) => Color::Red,
-    Value::Lazy(l) => return inspect_value(&l.get().on_some(|l|l.clone()).unwrap_or_default()),
+    Value::Lazy(l) => return inspect_value(&l.get().on_some(|l| l.clone()).unwrap_or_default()),
   }
   .apply(&value.as_string())
 }
-fn inspect(value: &Value) -> String {
+fn inspect(value: &Value, thread: &Thread) -> String {
   match value {
+    Value::Object(Object::Map(_, i)) => i
+      .as_ref()
+      .on_some_option(|i| i.get_instance_property(CONSOLE, thread))
+      .on_some(|p| p.as_string())
+      .unwrap_or_else(|| inspect_value(value)),
     Value::Object(Object::Array(arr)) => {
       let mut result = String::new();
       result.push_str("[");
@@ -38,8 +46,8 @@ fn inspect(value: &Value) -> String {
       result.push_str("]");
       result
     }
-    Value::Iterator(iter) => format!("@{}", inspect(&iter.borrow())),
-    Value::Ref(item) => format!("&{}", inspect(&item.borrow())),
+    Value::Iterator(iter) => format!("@{}", inspect(&iter.borrow(), thread)),
+    Value::Ref(item) => format!("&{}", inspect(&item.borrow(), thread)),
     item => inspect_value(item),
   }
 }
@@ -54,14 +62,34 @@ pub fn console_lib() -> Value {
         name: format!("<{CONSOLE_LIB}>::{DRAW}"),
         path: format!("<{CONSOLE_LIB}>"),
         chunk: crate::compiler::ChunkGroup::default(),
-        func: |_, args, _| {
+        func: |_, args, thread| {
           for value in args.iter() {
-            print!("{}", inspect(value));
+            print!("{}", inspect(value, thread));
             print!(" ");
           }
           println!("");
           Ok(Value::Never)
         },
+      }
+      .into(),
+    ),
+    true,
+  );
+  hashmap.set_instance_property(
+    INSPECT.into(),
+    Value::Object(
+      crate::compiler::Function::Native {
+        name: format!("<{CONSOLE_LIB}>::{INSPECT}"),
+        path: format!("<{CONSOLE_LIB}>"),
+        chunk: crate::compiler::ChunkGroup::default(),
+        func: |_, args, thread| {
+          args
+          .first()
+          .on_some_option(|i|
+            i.get_instance_property(CONSOLE, thread)
+          ).on_some(|v|Value::String(v.as_string()))
+          .on_error(|_|format!("{INSPECT}: se esperaba un número"))
+        }
       }
       .into(),
     ),

@@ -446,7 +446,7 @@ impl Thread {
     this: Value,
     fun: crate::compiler::MultiRefHash<Function>,
     args: Vec<Value>,
-  ) -> InterpretResult {
+  ) -> Result<InterpretResult, String> {
     let fun_clone = fun.clone();
     let function = fun_clone.borrow();
 
@@ -463,13 +463,9 @@ impl Thread {
       ),
       Function::Script { .. } => (0, false, false),
       Function::Native { func, .. } => {
-        let value = func(this, args, self);
-        return if let Err(error) = value {
-          InterpretResult::RuntimeError(error)
-        } else {
-          self.push(value.unwrap());
-          InterpretResult::Continue
-        };
+        let value = func(this, args, self)?;
+          self.push(value);
+          return Ok(InterpretResult::Continue)
       }
     };
     // En el caso de que la funcion no tenga un scope definido, se usa el scope actual (esto deberia de pasar)
@@ -482,11 +478,11 @@ impl Thread {
 
     if arity > args.len() {
       if arity == 1 && args.len() == 0 {
-        return InterpretResult::RuntimeError(
+        return Err(
           "Se esperaba llamar una funcion con un argumento".into(),
         );
       }
-      return InterpretResult::RuntimeError(format!(
+      return Err(format!(
         "Se esperaban {} argumentos, pero se recibieron {}",
         arity,
         args.len()
@@ -508,9 +504,9 @@ impl Thread {
     for arg in arguments {
       self.push(arg);
     }
-    InterpretResult::Continue
+    Ok(InterpretResult::Continue)
   }
-  fn call_value(&mut self, this: Value, callee: Value, arity: usize) -> InterpretResult {
+  fn call_value(&mut self, this: Value, callee: Value, arity: usize) -> Result<InterpretResult, String> {
     let mut args = vec![];
     for _ in 0..arity {
       let value = self.pop();
@@ -518,12 +514,7 @@ impl Thread {
         args.push(value);
         continue;
       }
-      let mut list = match value.as_strict_array(self) {
-        Ok(list) => list,
-        Err(error) => {
-          return InterpretResult::RuntimeError(error);
-        }
-      };
+      let mut list = value.as_strict_array(self)?;
       loop {
         match list.pop() {
           Some(value) => args.push(value),
@@ -535,21 +526,21 @@ impl Thread {
 
     if callee.is_number() {
       if arity != 1 || args.len() != 1 {
-        return InterpretResult::RuntimeError(
+        return Err(
           "Solo se puede multiplicar un numero (llamada)".into(),
         );
       }
       let arg = args.get(0).unwrap();
       if !arg.is_number() {
-        return InterpretResult::RuntimeError(
+        return Err(
           "Solo se pueden multiplicar numeros (llamada)".into(),
         );
       }
-      let num = callee.as_number();
-      let arg = arg.as_number();
+      let num = callee.as_number()?;
+      let arg = arg.as_number()?;
       let value = Value::Number(num * arg);
       self.push(value);
-      return InterpretResult::Continue;
+      return Ok(InterpretResult::Continue);
     }
     if callee.is_class() {
       let class = callee.as_class();
@@ -566,26 +557,26 @@ impl Thread {
         .unwrap_or_else(|| class.borrow().get_instance());
       let constructor = class.borrow().get_instance_property(CONSTRUCTOR);
       if let Some(Value::Object(Object::Function(fun))) = constructor {
-        self.call_function(this.clone(), fun, args);
+        self.call_function(this.clone(), fun, args)?;
       } else if let Some(_) = constructor {
-        return InterpretResult::RuntimeError("Se esperaba llamar un constructor".into());
+        return Err("Se esperaba llamar un constructor".into());
       } else {
         self.push(this);
       }
+      return Ok(InterpretResult::Continue);
 
-      return InterpretResult::Continue;
     }
     if callee.is_function() {
       return self.call_function(this, callee.as_function(), args);
     }
-    return InterpretResult::RuntimeError("Se esperaba llamar una funcion".into());
+    return Err("Se esperaba llamar una funcion".into());
   }
-  fn run_instruction(&mut self) -> InterpretResult {
+  fn simple_run_instruction(&mut self) -> Result<InterpretResult, String> {
     let byte_instruction = self.read();
     let instruction: OpCode = byte_instruction.into();
 
     let value: Value = match instruction {
-      OpCode::OpThrow => return InterpretResult::RuntimeError(self.pop().as_string()),
+      OpCode::OpThrow => return Err(self.pop().as_string()),
       OpCode::OpTry => {
         let catch_block = self.pop().as_function();
         let try_block = self.pop().as_function();
@@ -614,20 +605,20 @@ impl Thread {
           catch_thread,
           state: Default::default(),
         };
-        return InterpretResult::Continue;
+        return Ok(InterpretResult::Continue);
       }
       OpCode::OpImport | OpCode::OpExport => {
-        return InterpretResult::CompileError(format!("Solo un modulo puede exportar o importar"))
+        return Err(format!("Solo un modulo puede exportar o importar"))
       }
       OpCode::OpAwait => {
-        return InterpretResult::CompileError(format!("Solo un hilo asincrono puede esperar"))
+        return Err(format!("Solo un hilo asincrono puede esperar"))
       }
       OpCode::OpUnPromise => {
         let value = self.pop();
         match value.as_promise().get_data() {
-          PromiseData::Err(e) => return InterpretResult::RuntimeError(e),
+          PromiseData::Err(e) => return Err(e),
           PromiseData::Pending => {
-            return InterpretResult::RuntimeError(format!(
+            return Err(format!(
               "El programa encontro un error de compilación en tiempo de ejecución (promesa no resuelta)"
             ))
           }
@@ -638,7 +629,7 @@ impl Thread {
         let parent_class = match self.pop() {
           Value::Object(Object::Class(class)) => class.cloned(),
           value => {
-            return InterpretResult::RuntimeError(format!(
+            return Err(format!(
               "No se puede usar '{}' para extender una clase",
               value.get_type()
             ))
@@ -682,12 +673,12 @@ impl Thread {
       OpCode::OpApproximate => {
         let value = self.pop();
         if !value.is_number() {
-          return InterpretResult::RuntimeError(format!(
+          return Err(format!(
             "No se pudo operar '~{}'",
             value.get_type()
           ));
         }
-        Value::Number(value.as_number().trunc())
+        Value::Number(value.as_number()?.trunc())
       }
       OpCode::OpSetMember => {
         let value = self.pop();
@@ -700,49 +691,49 @@ impl Thread {
           let key = key.as_string();
           if let Some(value) = object.set_instance_property(&key, value, is_public) {
             self.push(value);
-            return InterpretResult::Continue;
+            return Ok(InterpretResult::Continue);
           }
           let type_name = object.get_type();
-          return InterpretResult::RuntimeError(format!(
+          return Err(format!(
             "No se pudo asignar la propiedad de instancia '{key}' de '{type_name}'"
           ));
         }
         if !object.is_object() {
-          return InterpretResult::RuntimeError(format!(
+          return Err(format!(
             "Se esperaba un objeto para asignar la propiedad '{}' [3]",
             key.as_string()
           ));
         }
         let key = if object.is_array() {
           if !key.is_number() {
-            return InterpretResult::RuntimeError(format!(
+            return Err(format!(
               "Se esperaba un indice de propiedad, pero se obtuvo '{}'",
               key.get_type()
             ));
           }
-          let key = key.as_number();
+          let key = key.as_number()?;
           let index = match key {
             Number::Basic(n) => n,
             Number::Complex(_, _) => {
-              return InterpretResult::RuntimeError(format!(
+              return Err(format!(
                 "El indice no puede ser un valor complejo (asignar propiedad)"
               ));
             }
             Number::Infinity | Number::NaN | Number::NegativeInfinity => {
-              return InterpretResult::RuntimeError(format!(
+              return Err(format!(
                 "El indice no puede ser NaN o infinito (asignar propiedad)"
               ));
             }
           };
           if index.is_negative() {
-            return InterpretResult::RuntimeError(format!(
+            return Err(format!(
               "El indice debe ser un numero entero positivo (asignar propiedad)"
             ));
           }
           if index.is_int() {
             index.to_string()
           } else {
-            return InterpretResult::RuntimeError(format!(
+            return Err(format!(
               "El indice debe ser entero (asignar propiedad)"
             ));
           }
@@ -753,7 +744,7 @@ impl Thread {
           Some(value) => value,
           None => {
             let type_name = object.get_type();
-            return InterpretResult::RuntimeError(if type_name == crate::compiler::REF_TYPE {
+            return Err(if type_name == crate::compiler::REF_TYPE {
               format!("Una referencia no puede ser modificada (asignar propiedad '{key}')",)
             } else {
               format!("No se pudo asignar la propiedad '{key}' a '{type_name}'",)
@@ -770,49 +761,49 @@ impl Thread {
           if let Some(value) = object.get_instance_property(&key, self) {
             self.init(&value);
             self.push(value);
-            return InterpretResult::Continue;
+            return Ok(InterpretResult::Continue);
           }
           let type_name = object.get_type();
-          return InterpretResult::RuntimeError(format!(
+          return Err(format!(
             "No se pudo obtener la propiedad de instancia '{key}' de '{type_name}'"
           ));
         }
         if !object.is_object() {
-          return InterpretResult::RuntimeError(format!(
+          return Err(format!(
             "Se esperaba un objeto para obtener la propiedad '{}' [3]",
             key.as_string()
           ));
         }
         let key = if object.is_array() {
           if !key.is_number() {
-            return InterpretResult::RuntimeError(format!(
+            return Err(format!(
               "Se esperaba un indice de propiedad, pero se obtuvo '{}'",
               key.get_type()
             ));
           }
-          let key = key.as_number();
+          let key = key.as_number()?;
           let index = match key {
             Number::Basic(n) => n,
             Number::Complex(_, _) => {
-              return InterpretResult::RuntimeError(format!(
+              return Err(format!(
                 "El indice no puede ser un valor complejo (obtener propiedad)"
               ));
             }
             Number::Infinity | Number::NaN | Number::NegativeInfinity => {
-              return InterpretResult::RuntimeError(format!(
+              return Err(format!(
                 "El indice no puede ser NaN o infinito (obtener propiedad)"
               ));
             }
           };
           if index.is_negative() {
-            return InterpretResult::RuntimeError(format!(
+            return Err(format!(
               "El indice debe ser un numero entero positivo (obtener propiedad)"
             ));
           }
           if index.is_int() {
             index.to_string()
           } else {
-            return InterpretResult::RuntimeError(format!(
+            return Err(format!(
               "El indice debe ser entero (obtener propiedad)"
             ));
           }
@@ -826,7 +817,7 @@ impl Thread {
           }
           None => {
             let type_name = object.get_type();
-            return InterpretResult::RuntimeError(format!(
+            return Err(format!(
               "No se pudo obtener la propiedad '{}' de '{}'",
               key, type_name
             ));
@@ -836,38 +827,39 @@ impl Thread {
       OpCode::OpConstant => self.read_constant(),
       OpCode::OpJumpIfFalse => {
         let jump = self.read_short() as usize;
-        if self.pop().as_boolean() == false {
+        let value = self.pop().as_boolean()?;
+        if value == false {
           self.current_frame().advance(jump);
         }
-        return InterpretResult::Continue;
+        return Ok(InterpretResult::Continue);
       }
       OpCode::OpArgDecl => {
         let name = self.read_string();
         let value = self.pop();
         return match self.declare(&name, value.clone(), true) {
           None => {
-            InterpretResult::RuntimeError(format!("No se pudo declarar la variable '{name}'"))
+            Err(format!("No se pudo declarar la variable '{name}'"))
           }
-          _ => InterpretResult::Continue,
+          _ => Ok(InterpretResult::Continue),
         };
       }
       OpCode::OpJump => {
         let jump = self.read_short() as usize;
         self.current_frame().advance(jump);
-        return InterpretResult::Continue;
+        return Ok(InterpretResult::Continue);
       }
       OpCode::OpLoop => {
         let offset = self.read_short() as usize;
         self.current_frame().back(offset);
-        return InterpretResult::Continue;
+        return Ok(InterpretResult::Continue);
       }
       OpCode::OpRemoveLocals => {
         self.current_frame().pop_vars();
-        return InterpretResult::Continue;
+        return Ok(InterpretResult::Continue);
       }
       OpCode::OpNewLocals => {
         self.current_frame().add_vars();
-        return InterpretResult::Continue;
+        return Ok(InterpretResult::Continue);
       }
       OpCode::OpCall => {
         let arity = self.read() as usize;
@@ -880,7 +872,7 @@ impl Thread {
         let value = self.pop();
         match self.declare(&name, value.clone(), false) {
           None => {
-            return InterpretResult::RuntimeError(format!(
+            return Err(format!(
               "No se pudo declarar la variable '{name}'"
             ))
           }
@@ -892,7 +884,7 @@ impl Thread {
         let value = self.pop();
         match self.declare(&name, value.clone(), true) {
           None => {
-            return InterpretResult::RuntimeError(format!(
+            return Err(format!(
               "No se pudo declarar la constante '{name}'"
             ))
           }
@@ -903,14 +895,14 @@ impl Thread {
         let name = self.read_string();
         let vars = self.resolve(&name);
         if !vars.borrow().has(&name) {
-          return InterpretResult::RuntimeError(format!(
+          return Err(format!(
             "No se pudo eliminar la variable '{name}'"
           ));
         }
         let value = vars.borrow_mut().remove(&name);
         match value {
           None => {
-            return InterpretResult::RuntimeError(format!(
+            return Err(format!(
               "No se pudo eliminar la variable '{name}'"
             ))
           }
@@ -923,7 +915,7 @@ impl Thread {
           let v = self.get(&name);
           match v {
             None => {
-              return InterpretResult::RuntimeError(format!(
+              return Err(format!(
                 "No se pudo obtener la variable '{name}'"
               ))
             }
@@ -938,7 +930,7 @@ impl Thread {
         let value = self.pop();
         match self.assign(&name, value.clone()) {
           None => {
-            return InterpretResult::RuntimeError(format!(
+            return Err(format!(
               "No se pudo re-asignar la variable '{name}'"
             ))
           }
@@ -947,24 +939,24 @@ impl Thread {
       }
       OpCode::OpPop => {
         self.pop();
-        return InterpretResult::Continue;
+        return Ok(InterpretResult::Continue);
       }
       OpCode::OpAdd => {
         let b = self.pop();
         let a = self.pop();
         if a.is_number() && b.is_number() {
-          let a = a.as_number();
-          let b = b.as_number();
+          let a = a.as_number()?;
+          let b = b.as_number()?;
           self.push(Value::Number(a + b));
-          return InterpretResult::Continue;
+          return Ok(InterpretResult::Continue);
         }
         if a.is_string() || b.is_string() {
           let a = a.as_string();
           let b = b.as_string();
           self.push(Value::String(format!("{a}{b}")));
-          return InterpretResult::Continue;
+          return Ok(InterpretResult::Continue);
         }
-        return InterpretResult::RuntimeError(format!(
+        return Err(format!(
           "No se pudo operar '{} + {}'",
           a.get_type(),
           b.get_type()
@@ -974,62 +966,62 @@ impl Thread {
         let b = self.pop();
         let a = self.pop();
         if !a.is_number() || !b.is_number() {
-          return InterpretResult::RuntimeError(format!(
+          return Err(format!(
             "No se pudo operar '{} - {}'",
             a.get_type(),
             b.get_type()
           ));
         }
-        let a = a.as_number();
-        let b = b.as_number();
+        let a = a.as_number()?;
+        let b = b.as_number()?;
         Value::Number(a - b)
       }
       OpCode::OpMultiply => {
         let b = self.pop();
         let a = self.pop();
         if !a.is_number() || !b.is_number() {
-          return InterpretResult::RuntimeError(format!(
+          return Err(format!(
             "No se pudo operar '{} * {}'",
             a.get_type(),
             b.get_type()
           ));
         }
-        let a = a.as_number();
-        let b = b.as_number();
+        let a = a.as_number()?;
+        let b = b.as_number()?;
         Value::Number(a * b)
       }
       OpCode::OpDivide => {
         let b = self.pop();
         let a = self.pop();
         if !a.is_number() || !b.is_number() {
-          return InterpretResult::RuntimeError(format!(
+          return Err(format!(
             "No se pudo operar '{} / {}'",
             a.get_type(),
             b.get_type()
           ));
         }
-        let a = a.as_number();
-        let b = b.as_number();
+        let a = a.as_number()?;
+        let b = b.as_number()?;
         Value::Number(a / b)
       }
       OpCode::OpModulo => {
         let b = self.pop();
         let a = self.pop();
         if !a.is_number() || !b.is_number() {
-          return InterpretResult::RuntimeError(format!(
+          return Err(format!(
             "No se pudo operar '{} % {}'",
             a.get_type(),
             b.get_type()
           ));
         }
-        let a = a.as_number();
-        let b = b.as_number();
+        let a = a.as_number()?;
+        let b = b.as_number()?;
         Value::Number(a % b)
       }
       OpCode::OpOr => {
         let b = self.pop();
         let a = self.pop();
-        if a.as_boolean() {
+        if a.as_boolean()? {
           a
         } else {
           b
@@ -1038,7 +1030,7 @@ impl Thread {
       OpCode::OpAnd => {
         let b = self.pop();
         let a = self.pop();
-        if !a.as_boolean() {
+        if !a.as_boolean()? {
           a
         } else {
           b
@@ -1047,20 +1039,20 @@ impl Thread {
       OpCode::OpNegate => {
         let value = self.pop();
         if !value.is_number() {
-          return InterpretResult::RuntimeError(format!(
+          return Err(format!(
             "No se pudo operar '-{}'",
             value.get_type()
           ));
         }
-        Value::Number(-value.as_number())
+        Value::Number(-value.as_number()?)
       }
       OpCode::OpNot => {
-        let value = self.pop().as_boolean();
+        let value = self.pop().as_boolean()?;
         let value = if value { Value::False } else { Value::True };
         value
       }
       OpCode::OpAsBoolean => {
-        let value = self.pop().as_boolean();
+        let value = self.pop().as_boolean()?;
         let value = if value { Value::True } else { Value::False };
         value
       }
@@ -1079,7 +1071,7 @@ impl Thread {
       OpCode::OpReturn => {
         self.call_stack.pop();
         if self.call_stack.len() == 0 {
-          return InterpretResult::Ok;
+          return Ok(InterpretResult::Ok);
         }
         self.pop()
       }
@@ -1087,8 +1079,8 @@ impl Thread {
         let b = self.pop();
         let a = self.pop();
         if a.is_number() && b.is_number() {
-          let a = a.as_number();
-          let b = b.as_number();
+          let a = a.as_number()?;
+          let b = b.as_number()?;
           if a.is_nan() || b.is_nan() {
             Value::False
           } else if a == b {
@@ -1106,7 +1098,7 @@ impl Thread {
         let b = self.pop();
         let a = self.pop();
         if !a.is_number() || !b.is_number() {
-          return InterpretResult::RuntimeError(format!(
+          return Err(format!(
             "No se pudo operar '{} > {}'",
             a.get_type(),
             b.get_type()
@@ -1124,7 +1116,7 @@ impl Thread {
         let b = self.pop();
         let a = self.pop();
         if !a.is_number() || !b.is_number() {
-          return InterpretResult::RuntimeError(format!(
+          return Err(format!(
             "No se pudo operar '{} < {}'",
             a.get_type(),
             b.get_type()
@@ -1137,10 +1129,16 @@ impl Thread {
       }
       OpCode::OpBreak | OpCode::OpContinue => Value::Null,
       OpCode::OpNull => {
-        return InterpretResult::CompileError(format!("Byte invalido {}", byte_instruction))
+        return Err(format!("Byte invalido {}", byte_instruction))
       }
     };
     self.push(value);
-    return InterpretResult::Continue;
+    return Ok(InterpretResult::Continue);
+  }
+  fn run_instruction(&mut self) -> InterpretResult {
+    match self.simple_run_instruction() {
+      Ok(result) => result,
+      Err(error) => InterpretResult::RuntimeError(error)
+    }
   }
 }
