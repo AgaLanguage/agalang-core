@@ -94,7 +94,7 @@ impl ModuleThread {
         if !self.value.is_object() {
           return InterpretResult::RuntimeError("Se esperaba un objeto como modulo".to_string());
         }
-        match self.value.set_instance_property(&name, value.clone(), true) {
+        match self.value.set_instance_property(&name, value.clone(), true, false, &*self.get_async().borrow().get_thread().borrow()) {
           Some(value) => {
             thread.borrow_mut().push(value);
             InterpretResult::Continue
@@ -553,7 +553,7 @@ impl Thread {
             None
           }
         })
-        .unwrap_or_else(|| class.borrow().get_instance());
+        .unwrap_or_else(|| class.borrow().make_instance());
       let constructor = class.borrow().get_instance_property(CONSTRUCTOR);
       if let Some(Value::Object(Object::Function(fun))) = constructor {
         self.call_function(this.clone(), fun, args)?;
@@ -641,7 +641,7 @@ impl Thread {
         value.set_in_class(class);
         value
       }
-      OpCode::OpGetInstance => self.pop().as_class().borrow().get_instance(),
+      OpCode::OpGetInstance => self.pop().as_class().borrow().make_instance(),
       OpCode::OpPromised => {
         // Debe existir el frame
         let frame = self.call_stack.pop().unwrap();
@@ -680,22 +680,17 @@ impl Thread {
         let meta = self.read();
         let is_instance = (meta & 0b001) != 0;
         let is_public = (meta & 0b010) != 0;
-        let is_class_decl =
-          (meta & 0b100) != 0 || self.get_calls().last().unwrap().in_class().is_some();
+        let is_class_decl = (meta & 0b100) != 0;
         if is_instance {
           let key = key.as_string();
-          if !is_class_decl {
-            return Err(format!(
-              "Las asignaciones de instancia solo estan permitidas dentro de clases: {key}"
-            ));
-          }
           use crate::util::OnError;
-          let value = object.set_instance_property(&key, value.clone(), is_public).on_error(|_| {
-            format!(
-              "No se pudo asignar la propiedad de instancia '{key}' de '{}'",
-              object.get_type()
-            )
-          })?;
+          let value = object
+            .set_instance_property(&key, value.clone(), is_public, is_class_decl, self)
+            .on_error(|_| {
+              format!(
+              "Las asignaciones de instancia solo estan permitidas dentro de clases: {key}"
+              )
+            })?;
           self.push(value);
           return Ok(InterpretResult::Continue);
         }

@@ -151,11 +151,11 @@ impl Class {
   pub fn get_instance_property(&self, key: &str) -> Option<Value> {
     self.poperties.borrow().get(key).cloned()
   }
-  pub fn get_instance(&self) -> Value {
+  pub fn make_instance(&self) -> Value {
     self
       .extend
       .on_some(|parent| {
-        let parent_instance = parent.get_instance();
+        let parent_instance = parent.make_instance();
         let (obj, instance) = parent_instance.as_map();
         let parent_instance = Value::Object(super::Object::Map(obj.clone(), instance));
         self
@@ -169,6 +169,9 @@ impl Class {
           self.instance.clone(),
         ))
       })
+  }
+  pub fn get_instance(&self) -> MultiRefHash<Option<Instance>> {
+    self.instance.clone()
   }
   pub fn is_instance(&self, instance: &Instance) -> bool {
     self.instance.on_some(|i| i == instance).unwrap_or_default()

@@ -342,11 +342,39 @@ impl Value {
       _ => None,
     }
   }
-  pub fn set_instance_property(&self, key: &str, value: Value, is_public: bool) -> Option<Value> {
+  pub fn set_instance_property(
+    &self,
+    key: &str,
+    value: Value,
+    is_public: bool,
+    is_class_decl: bool,
+    thread: &Thread,
+  ) -> Option<Value> {
     match self {
-      Self::Iterator(r) => r.borrow().set_instance_property(key, value, is_public),
-      Self::Object(Object::Map(_, instance)) => instance.on_some(|v|v.set_instance_property(key, value, is_public)),
-      Self::Object(Object::Class(class)) => Some(class.borrow().set_instance_property(key, value)),
+      Self::Iterator(r) => r
+        .borrow()
+        .set_instance_property(key, value, is_public, is_class_decl, thread),
+      Self::Object(Object::Map(_, instance)) => {
+        let instance = instance.as_ref()?;
+        let class = thread.get_calls().last().unwrap().in_class();
+        let assign = if let Some(class) = class {
+          instance.is_instance(class.borrow().get_instance().as_ref().unwrap().clone())
+        } else {
+          true
+        };
+        if assign {
+          Some(instance.set_instance_property(key, value, is_public))
+        } else {
+          None
+        }
+      }
+      Self::Object(Object::Class(class)) => {
+        if is_class_decl {
+          Some(class.borrow().set_instance_property(key, value))
+        } else {
+          None
+        }
+      }
       _ => None,
     }
   }

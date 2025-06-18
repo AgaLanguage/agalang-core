@@ -23,12 +23,14 @@ clase Animal {
 }
 
 clase Gato extiende Animal {
+  pub __csl__ = nulo;
   pub miau(){
     esto::sonar();
     esto::mover();
   };
   est __constructor__(){
     esto::super::__constructor__("Hola"); # super::__constructor__ es una REFERENCIA DE LA CLASE PADRE
+    esto::__csl__ = "<(0-0)>";
     esto; # el ultimo valor se retorna en cualquier funcion
   };
 }
