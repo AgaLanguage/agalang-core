@@ -9,8 +9,9 @@ pub use value::*;
 use crate::parser::{Node, NodeFunction};
 use crate::{Decode, StructTag};
 
-const OBJECT_MEMBER: u8 = 0;
-const INSTANCE_MEMBER: u8 = 1;
+const OBJECT_MEMBER: u8 = 0b0;
+const INSTANCE_MEMBER: u8 = 0b1;
+const CLASS_DECLARATION: u8 = 0b100;
 
 pub struct Compiler {
   pub function: Function,
@@ -249,11 +250,15 @@ impl Compiler {
               self.set_constant(Value::String(name.into()), m.location.start.line);
             };
             self.node_value_to_bytes(&node_assignament.value)?;
-            if m.instance {
-              return Err("No se puede asignar a una propiedad de instancia".to_string());
-            }
             self.write_buffer(
-              vec![OpCode::OpSetMember as u8, OBJECT_MEMBER],
+              vec![
+                OpCode::OpSetMember as u8,
+                if m.instance {
+                  INSTANCE_MEMBER
+                } else {
+                  OBJECT_MEMBER
+                },
+              ],
               m.location.start.line,
             );
           }
@@ -598,7 +603,7 @@ impl Compiler {
             vec![
               OpCode::OpInClass as u8,
               OpCode::OpSetMember as u8,
-              INSTANCE_MEMBER | is_public,
+              INSTANCE_MEMBER | CLASS_DECLARATION | is_public,
               OpCode::OpPop as u8,
             ],
             prop.value.get_location().start.line,

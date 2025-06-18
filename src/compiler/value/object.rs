@@ -145,13 +145,6 @@ impl Object {
     }
   }
 
-  pub fn set_instance_property(&self, key: &str, value: Value, is_public: bool) -> Option<Value> {
-    match self {
-      Self::Map(_, instance) => instance.on_ok(|v| v.set_instance_property(key, value, is_public)),
-      Self::Class(class) => class.borrow().set_instance_property(key, value),
-      _ => None,
-    }
-  }
   pub fn get_instance_property(
     &self,
     key: &str,

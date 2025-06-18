@@ -52,18 +52,15 @@ impl Instance {
       None
     }
   }
-  pub fn set_instance_property(&self, key: &str, value: Value, is_public: bool) -> Option<Value> {
-    self.set_public_property(key, is_public);
-    if self.poperties.borrow().contains_key(key) {
-      return None;
+  pub fn set_instance_property(&self, key: &str, value: Value, is_public: bool) -> Value {
+    if !self.poperties.borrow().contains_key(key) {
+      self.set_public_property(key, is_public);
     }
-    Some(
-      self
-        .poperties
-        .borrow_mut()
-        .insert(key.to_string(), value.clone())
-        .unwrap_or_default(),
-    )
+    self
+      .poperties
+      .borrow_mut()
+      .insert(key.to_string(), value.clone())
+      .unwrap_or_default()
   }
   fn set_public_property(&self, key: &str, is_public: bool) {
     let current_is_public = self.public_properties.borrow().contains(key);
@@ -144,17 +141,12 @@ impl Class {
     *self.instance.as_ref().unwrap().extend.borrow_mut() = parent.instance.cloned();
     *self.extend.borrow_mut() = Some(parent);
   }
-  pub fn set_instance_property(&self, key: &str, value: Value) -> Option<Value> {
-    if self.poperties.borrow().contains_key(key) {
-      return None;
-    }
-    Some(
-      self
-        .poperties
-        .borrow_mut()
-        .insert(key.to_string(), value.clone())
-        .unwrap_or_default(),
-    )
+  pub fn set_instance_property(&self, key: &str, value: Value) -> Value {
+    self
+      .poperties
+      .borrow_mut()
+      .insert(key.to_string(), value.clone())
+      .unwrap_or_default()
   }
   pub fn get_instance_property(&self, key: &str) -> Option<Value> {
     self.poperties.borrow().get(key).cloned()

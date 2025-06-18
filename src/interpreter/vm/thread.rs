@@ -464,8 +464,8 @@ impl Thread {
       Function::Script { .. } => (0, false, false),
       Function::Native { func, .. } => {
         let value = func(this, args, self)?;
-          self.push(value);
-          return Ok(InterpretResult::Continue)
+        self.push(value);
+        return Ok(InterpretResult::Continue);
       }
     };
     // En el caso de que la funcion no tenga un scope definido, se usa el scope actual (esto deberia de pasar)
@@ -478,9 +478,7 @@ impl Thread {
 
     if arity > args.len() {
       if arity == 1 && args.len() == 0 {
-        return Err(
-          "Se esperaba llamar una funcion con un argumento".into(),
-        );
+        return Err("Se esperaba llamar una funcion con un argumento".into());
       }
       return Err(format!(
         "Se esperaban {} argumentos, pero se recibieron {}",
@@ -506,7 +504,12 @@ impl Thread {
     }
     Ok(InterpretResult::Continue)
   }
-  fn call_value(&mut self, this: Value, callee: Value, arity: usize) -> Result<InterpretResult, String> {
+  fn call_value(
+    &mut self,
+    this: Value,
+    callee: Value,
+    arity: usize,
+  ) -> Result<InterpretResult, String> {
     let mut args = vec![];
     for _ in 0..arity {
       let value = self.pop();
@@ -526,15 +529,11 @@ impl Thread {
 
     if callee.is_number() {
       if arity != 1 || args.len() != 1 {
-        return Err(
-          "Solo se puede multiplicar un numero (llamada)".into(),
-        );
+        return Err("Solo se puede multiplicar un numero (llamada)".into());
       }
       let arg = args.get(0).unwrap();
       if !arg.is_number() {
-        return Err(
-          "Solo se pueden multiplicar numeros (llamada)".into(),
-        );
+        return Err("Solo se pueden multiplicar numeros (llamada)".into());
       }
       let num = callee.as_number()?;
       let arg = arg.as_number()?;
@@ -564,7 +563,6 @@ impl Thread {
         self.push(this);
       }
       return Ok(InterpretResult::Continue);
-
     }
     if callee.is_function() {
       return self.call_function(this, callee.as_function(), args);
@@ -610,9 +608,7 @@ impl Thread {
       OpCode::OpImport | OpCode::OpExport => {
         return Err(format!("Solo un modulo puede exportar o importar"))
       }
-      OpCode::OpAwait => {
-        return Err(format!("Solo un hilo asincrono puede esperar"))
-      }
+      OpCode::OpAwait => return Err(format!("Solo un hilo asincrono puede esperar")),
       OpCode::OpUnPromise => {
         let value = self.pop();
         match value.as_promise().get_data() {
@@ -673,10 +669,7 @@ impl Thread {
       OpCode::OpApproximate => {
         let value = self.pop();
         if !value.is_number() {
-          return Err(format!(
-            "No se pudo operar '~{}'",
-            value.get_type()
-          ));
+          return Err(format!("No se pudo operar '~{}'", value.get_type()));
         }
         Value::Number(value.as_number()?.trunc())
       }
@@ -685,18 +678,26 @@ impl Thread {
         let key = self.pop();
         let object = self.pop();
         let meta = self.read();
-        let is_instance = (meta & 0b01) != 0;
-        let is_public = (meta & 0b10) != 0;
+        let is_instance = (meta & 0b001) != 0;
+        let is_public = (meta & 0b010) != 0;
+        let is_class_decl =
+          (meta & 0b100) != 0 || self.get_calls().last().unwrap().in_class().is_some();
         if is_instance {
           let key = key.as_string();
-          if let Some(value) = object.set_instance_property(&key, value, is_public) {
-            self.push(value);
-            return Ok(InterpretResult::Continue);
+          if !is_class_decl {
+            return Err(format!(
+              "Las asignaciones de instancia solo estan permitidas dentro de clases: {key}"
+            ));
           }
-          let type_name = object.get_type();
-          return Err(format!(
-            "No se pudo asignar la propiedad de instancia '{key}' de '{type_name}'"
-          ));
+          use crate::util::OnError;
+          let value = object.set_instance_property(&key, value.clone(), is_public).on_error(|_| {
+            format!(
+              "No se pudo asignar la propiedad de instancia '{key}' de '{}'",
+              object.get_type()
+            )
+          })?;
+          self.push(value);
+          return Ok(InterpretResult::Continue);
         }
         if !object.is_object() {
           return Err(format!(
@@ -733,9 +734,7 @@ impl Thread {
           if index.is_int() {
             index.to_string()
           } else {
-            return Err(format!(
-              "El indice debe ser entero (asignar propiedad)"
-            ));
+            return Err(format!("El indice debe ser entero (asignar propiedad)"));
           }
         } else {
           key.as_string()
@@ -803,9 +802,7 @@ impl Thread {
           if index.is_int() {
             index.to_string()
           } else {
-            return Err(format!(
-              "El indice debe ser entero (obtener propiedad)"
-            ));
+            return Err(format!("El indice debe ser entero (obtener propiedad)"));
           }
         } else {
           key.as_string()
@@ -837,9 +834,7 @@ impl Thread {
         let name = self.read_string();
         let value = self.pop();
         return match self.declare(&name, value.clone(), true) {
-          None => {
-            Err(format!("No se pudo declarar la variable '{name}'"))
-          }
+          None => Err(format!("No se pudo declarar la variable '{name}'")),
           _ => Ok(InterpretResult::Continue),
         };
       }
@@ -871,11 +866,7 @@ impl Thread {
         let name = self.read_string();
         let value = self.pop();
         match self.declare(&name, value.clone(), false) {
-          None => {
-            return Err(format!(
-              "No se pudo declarar la variable '{name}'"
-            ))
-          }
+          None => return Err(format!("No se pudo declarar la variable '{name}'")),
           _ => value,
         }
       }
@@ -883,11 +874,7 @@ impl Thread {
         let name = self.read_string();
         let value = self.pop();
         match self.declare(&name, value.clone(), true) {
-          None => {
-            return Err(format!(
-              "No se pudo declarar la constante '{name}'"
-            ))
-          }
+          None => return Err(format!("No se pudo declarar la constante '{name}'")),
           _ => value,
         }
       }
@@ -895,17 +882,11 @@ impl Thread {
         let name = self.read_string();
         let vars = self.resolve(&name);
         if !vars.borrow().has(&name) {
-          return Err(format!(
-            "No se pudo eliminar la variable '{name}'"
-          ));
+          return Err(format!("No se pudo eliminar la variable '{name}'"));
         }
         let value = vars.borrow_mut().remove(&name);
         match value {
-          None => {
-            return Err(format!(
-              "No se pudo eliminar la variable '{name}'"
-            ))
-          }
+          None => return Err(format!("No se pudo eliminar la variable '{name}'")),
           Some(value) => value,
         }
       }
@@ -914,11 +895,7 @@ impl Thread {
         let value = {
           let v = self.get(&name);
           match v {
-            None => {
-              return Err(format!(
-                "No se pudo obtener la variable '{name}'"
-              ))
-            }
+            None => return Err(format!("No se pudo obtener la variable '{name}'")),
             Some(value) => value,
           }
         };
@@ -929,11 +906,7 @@ impl Thread {
         let name = self.read_string();
         let value = self.pop();
         match self.assign(&name, value.clone()) {
-          None => {
-            return Err(format!(
-              "No se pudo re-asignar la variable '{name}'"
-            ))
-          }
+          None => return Err(format!("No se pudo re-asignar la variable '{name}'")),
           _ => value,
         }
       }
@@ -1039,10 +1012,7 @@ impl Thread {
       OpCode::OpNegate => {
         let value = self.pop();
         if !value.is_number() {
-          return Err(format!(
-            "No se pudo operar '-{}'",
-            value.get_type()
-          ));
+          return Err(format!("No se pudo operar '-{}'", value.get_type()));
         }
         Value::Number(-value.as_number()?)
       }
@@ -1128,9 +1098,7 @@ impl Thread {
         value
       }
       OpCode::OpBreak | OpCode::OpContinue => Value::Null,
-      OpCode::OpNull => {
-        return Err(format!("Byte invalido {}", byte_instruction))
-      }
+      OpCode::OpNull => return Err(format!("Byte invalido {}", byte_instruction)),
     };
     self.push(value);
     return Ok(InterpretResult::Continue);
@@ -1138,7 +1106,7 @@ impl Thread {
   fn run_instruction(&mut self) -> InterpretResult {
     match self.simple_run_instruction() {
       Ok(result) => result,
-      Err(error) => InterpretResult::RuntimeError(error)
+      Err(error) => InterpretResult::RuntimeError(error),
     }
   }
 }

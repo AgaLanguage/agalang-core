@@ -345,7 +345,8 @@ impl Value {
   pub fn set_instance_property(&self, key: &str, value: Value, is_public: bool) -> Option<Value> {
     match self {
       Self::Iterator(r) => r.borrow().set_instance_property(key, value, is_public),
-      Self::Object(o) => o.set_instance_property(key, value, is_public),
+      Self::Object(Object::Map(_, instance)) => instance.on_some(|v|v.set_instance_property(key, value, is_public)),
+      Self::Object(Object::Class(class)) => Some(class.borrow().set_instance_property(key, value)),
       _ => None,
     }
   }
