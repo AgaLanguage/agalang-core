@@ -77,6 +77,9 @@ pub fn complex_string(
   if current.len() > 0 {
     result.push(super::StringData::Str(current));
   }
+  if result.is_empty() {
+    result.push(super::StringData::Str("".to_string()));
+  }
   Ok(super::NodeString {
     value: result,
     location: token_string.location,
