@@ -9,20 +9,19 @@ use super::VarsManager;
 use crate::compiler::{Compiler, Value};
 
 mod thread;
+use thread::ModuleThread;
 pub use thread::Thread;
-use thread::{AsyncThread, ModuleThread};
+
+mod process;
+
 #[derive(Clone, Debug)]
 pub struct VM {
-  globals: Rc<RefCell<VarsManager>>,
   pub cache: Cache,
-  module: Rc<RefCell<ModuleThread>>,
-  sub_threads: Rc<RefCell<Vec<Rc<RefCell<AsyncThread>>>>>,
+  globals: Rc<RefCell<VarsManager>>,
+  process_manager: Rc<RefCell<process::ProcessManager>>,
 }
 
 impl VM {
-  pub fn push_sub_thread(&mut self, thread: Rc<RefCell<AsyncThread>>) {
-    self.sub_threads.borrow_mut().push(thread);
-  }
   pub fn new(compiler: Compiler) -> Rc<RefCell<Self>> {
     //let compiler = {let mut compiler = compiler;compiler.function.chunk().print();compiler};
     let globals = Rc::new(RefCell::new(VarsManager::get_global()));
@@ -30,9 +29,8 @@ impl VM {
     let module = ModuleThread::new(&compiler.path);
     let vm: Rc<RefCell<VM>> = Rc::new(RefCell::new(Self {
       globals: globals.clone(),
-      sub_threads: Default::default(),
       cache: Default::default(),
-      module: module.clone(),
+      process_manager: Rc::new(RefCell::new(process::ProcessManager::new(module.clone()))),
     }));
     module.borrow_mut().set_vm(vm.clone());
     module.borrow().push_call(CallFrame::new_compiler(
@@ -42,40 +40,27 @@ impl VM {
     vm
   }
   pub fn as_value(&self) -> Value {
-    self.module.borrow().clone().as_value()
+    self.process_manager.borrow().as_value()
   }
-  fn run_instruction(&self) -> InterpretResult {
-    let mut sub_threads = vec![];
-    for async_thread in &mut self.sub_threads.borrow().iter() {
-      let data = async_thread.borrow().simple_run_instruction(true);
-      if matches!(data, InterpretResult::Continue) {
-        sub_threads.push(async_thread.clone());
-      }
-    }
-    *self.sub_threads.borrow_mut() = sub_threads;
-
-    self.module.borrow().run_instruction()
+  pub fn get_process_manager(&self) -> Rc<RefCell<process::ProcessManager>> {
+    self.process_manager.clone()
   }
   pub fn run(&mut self) -> InterpretResult {
     loop {
-      let data = self.run_instruction();
-      match data {
-        InterpretResult::Ok => {
-          if self.sub_threads.borrow().is_empty() {
-            return data;
-          }
-        }
-        InterpretResult::Continue => {}
-        error => {
+      let data = self.process_manager.borrow().run_instruction();
+      match &data {
+        InterpretResult::Continue => continue,
+        InterpretResult::Ok => {}
+        _error => {
           self.clear_stack();
-          return error;
         }
       }
+      return data;
     }
   }
   pub fn interpret(&mut self) -> InterpretResult {
     let result = self.run();
-    let thread = self.module.borrow().get_async().borrow().get_thread();
+    let thread = self.process_manager.borrow().get_root_thread();
     match &result {
       InterpretResult::RuntimeError(e) => {
         let calls = thread.borrow().get_calls().clone();
@@ -123,11 +108,9 @@ impl VM {
   }
   pub fn clear_stack(&self) {
     self
-      .module
+      .process_manager
       .borrow()
-      .get_async()
-      .borrow()
-      .get_thread()
+      .get_root_thread()
       .borrow_mut()
       .clear_stack();
   }

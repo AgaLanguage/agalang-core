@@ -1,48 +1,72 @@
-importa ':consola' como Consola;
+  importa ':consola' como Consola;
+  importa ':tmp' como Tmp;
 
-clase Gorro {
-  poner(){
-    Consola::pinta("Poniendo...");
-  };
-}
+  clase Gorro {
+    poner(){
+      Consola::pinta("Poniendo...");
+    };
+  }
 
-clase Animal {
-  pub sonar(){
-    Consola::pinta("Hu");
-  };
-  mover(){
-    Consola::pinta("Moviendo...");
-  };
-  est sonar(){
-    Consola::pinta("~~");
-  };
-  est __constructor__(){
-    esto.gorro = Gorro();
-    esto; # el ultimo valor se retorna en cualquier funcion
-  };
-}
+  clase Animal {
+    pub sonar(){
+      Consola::pinta("Hu");
+    };
+    mover(){
+      Consola::pinta("Moviendo...");
+    };
+    est sonar(){
+      Consola::pinta("~~");
+    };
+    est __constructor__(){
+      esto.gorro = Gorro();
+      esto; # el ultimo valor se retorna en cualquier funcion
+    };
+  }
 
-clase Gato extiende Animal {
-  pub __csl__ = nulo;
-  pub miau(){
-    esto::sonar();
-    esto::mover();
-  };
-  est __constructor__(){
-    esto::super::__constructor__("Hola"); # super::__constructor__ es una REFERENCIA DE LA CLASE PADRE
-    esto::__csl__ = "<(0-0)>";
-    esto; # el ultimo valor se retorna en cualquier funcion
-  };
-}
+  clase Gato extiende Animal {
+    pub __csl__ = nulo;
+    pub miau(){
+      esto::sonar();
+      esto::mover();
+    };
+    est __constructor__(){
+      esto::super::__constructor__("Hola"); # super::__constructor__ es una REFERENCIA DE LA CLASE PADRE
+      esto::__csl__ = "<(0-0)>";
+      esto; # el ultimo valor se retorna en cualquier funcion
+    };
+  }
 
-const animal = Gato(1);
-animal::miau();
-Consola::pinta(animal.gorro);
+  const animal = Gato(1);
+  animal::miau();
+  Consola::pinta(animal.gorro);
 
-const val = vago "Hola";
+  const val = vago "Hola";
 
-intenta {
-  Consola::pinta(animal);
-} captura (e) {
-  Consola::pinta("Error atrapado:", e, val);
-}
+  intenta {
+    Consola::pinta(animal);
+  } captura (e) {
+    Consola::pinta("Error atrapado:", e, val);
+  }
+
+  asinc fn esperar(nanos){
+    def end = Tmp::ahora() + (nanos * 1_000_000_000);
+    mien Tmp::ahora() < end {}
+  }
+
+  asinc fn main(){
+    Consola::pinta("Iniciando...");
+    def cargando = "Cargando";
+    para(def i = 1; i <= 10; i+=1) {
+      def mod = i % 4;
+      csl << "\r";
+      csl << " "::repite(11);
+      csl << "\r";
+      csl << cargando;
+      csl << si (mod == 0) { ""; } ent { "."::repite(mod); };
+      espera esperar(1);
+    }
+    csl << "\r";
+    Consola::pinta("Finalizando...");
+  }
+
+  espera main();

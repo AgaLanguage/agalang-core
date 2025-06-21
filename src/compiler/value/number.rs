@@ -1025,6 +1025,14 @@ impl From<i32> for Number {
     ))
   }
 }
+impl From<Number> for Result<usize, String> {
+  fn from(value: Number) -> Self {
+    let string = value.floor().to_string();
+    string
+      .parse::<usize>()
+      .on_error(|_| format!("No se puede convertir el número '{}' a usize", string))
+  }
+}
 impl ToString for Number {
   fn to_string(&self) -> String {
     match self {

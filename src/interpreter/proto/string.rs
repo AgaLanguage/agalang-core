@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use crate::compiler::{ChunkGroup, Function, Object, Value};
 
 const REPLACE: &str = "remplaza";
+const REPEAT: &str = "repite";
 const SPLIT: &str = "separa";
 const BYTES: &str = "bytes";
 
@@ -29,6 +30,31 @@ pub fn string_proto() -> Value {
           let string = this.as_string();
           let string = string.replace(&old, &new);
           Ok(Value::String(string.into()))
+        },
+        chunk: ChunkGroup::default(),
+      }
+      .into(),
+    ),
+    true,
+  );
+  hashmap.set_instance_property(
+    REPEAT.into(),
+    Value::Object(
+      Function::Native {
+        path: "".into(),
+        name: format!("<cadena>::{REPEAT}"),
+        func: |this, args, _| {
+          let count = match args.get(0) {
+            None => 
+            Err("remplaza: se esperaban 2 argumentos y se recibieron 0".into()),
+            Some(count) => count.as_number()?.floor().into(),
+          }?;
+          if count == 0 {
+            return Ok(Value::String("".into()));
+          }
+          let string = this.as_string();
+          let string = string.repeat(count);
+          Ok(Value::String(string))
         },
         chunk: ChunkGroup::default(),
       }

@@ -226,6 +226,18 @@ pub struct AsyncThread {
   module: Option<Rc<RefCell<ModuleThread>>>,
 }
 impl AsyncThread {
+  pub fn is_waiting(&self) -> bool {
+    let bloking_thread = &*self.await_thread.borrow();
+    match bloking_thread {
+      BlockingThread::Await(p) => {
+        match p.get_data() {
+          PromiseData::Pending => true,
+          _ => false,
+        }
+      }
+      _ => false,
+    }
+  }
   fn set_module(&mut self, module: Rc<RefCell<ModuleThread>>) {
     self.module = Some(module);
   }
@@ -649,8 +661,7 @@ impl Thread {
         let current_async = self.async_thread.clone().unwrap();
         let module = current_async.borrow().module.clone().unwrap();
         async_thread.borrow_mut().set_module(module.clone());
-        let vm = module.borrow().get_vm();
-        vm.borrow_mut().push_sub_thread(async_thread);
+        module.borrow().get_vm().borrow().get_process_manager().borrow().push_sub_thread(async_thread);
         Value::Promise(promise)
       }
       OpCode::OpSetScope => {
