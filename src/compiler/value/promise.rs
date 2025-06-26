@@ -1,4 +1,6 @@
-use super::{MultiRefHash, Value};
+use crate::MultiRefHash;
+
+use super::Value;
 
 pub const PROMISE_TYPE: &str = "promesa";
 
@@ -27,30 +29,30 @@ impl Promise {
     Self::default()
   }
   pub fn set_value(&self, value: Value) {
-    *self.status.borrow_mut() = PromiseStatus::Done;
-    *self.value.borrow_mut() = Some(value.into());
+    *self.status.write() = PromiseStatus::Done;
+    *self.value.write() = Some(value.into());
   }
   pub fn set_err(&self, err: String) {
-    *self.status.borrow_mut() = PromiseStatus::Done;
-    *self.err.borrow_mut() = Some(err);
+    *self.status.write() = PromiseStatus::Done;
+    *self.err.write() = Some(err);
   }
   pub fn get_value_str(&self) -> String {
-    if self.value.borrow().is_some() {
-      self.value.borrow().clone().unwrap().borrow().as_string()
-    } else if self.err.borrow().is_some() {
-      self.err.borrow().clone().unwrap()
+    if self.value.read().is_some() {
+      self.value.read().clone().unwrap().read().as_string()
+    } else if self.err.read().is_some() {
+      self.err.read().clone().unwrap()
     } else {
       "Desconocido".to_string()
     }
   }
   pub fn get_data(&self) -> PromiseData {
-    if matches!(self.status.borrow().clone(), PromiseStatus::Pending) {
+    if matches!(self.status.read().clone(), PromiseStatus::Pending) {
       return PromiseData::Pending;
     }
-    if let Some(v) = self.value.borrow().clone() {
+    if let Some(v) = self.value.read().clone() {
       return PromiseData::Ok(v);
     }
-    if let Some(v) = self.err.borrow().clone() {
+    if let Some(v) = self.err.read().clone() {
       return PromiseData::Err(v);
     }
     return PromiseData::Pending;

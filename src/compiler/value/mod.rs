@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::collections::HashMap;
 
 mod class;
 mod function;
@@ -12,7 +12,8 @@ pub use object::*;
 pub use promise::{Promise, PromiseData, PROMISE_TYPE};
 
 use crate::interpreter::{Thread, VarsManager};
-use crate::util::{OnError, OnSome, Valuable};
+use crate::util::{MutClone, OnError, Valuable};
+use crate::MultiRefHash;
 use crate::{compiler::ChunkGroup, Decode, StructTag};
 
 pub const NULL_NAME: &str = "nulo";
@@ -32,8 +33,8 @@ pub const LAZY_TYPE: &str = "vago";
 #[derive(Clone, PartialEq, Eq, Hash, Default)]
 pub struct RefValue(MultiRefHash<Value>);
 impl RefValue {
-  pub fn borrow(&self) -> std::cell::Ref<Value> {
-    self.0.borrow()
+  pub fn borrow(&self) -> std::sync::RwLockReadGuard<Value> {
+    self.0.read()
   }
 }
 impl From<Value> for RefValue {
@@ -47,11 +48,11 @@ pub struct LazyValue {
   once: MultiRefHash<Function>,
 }
 impl LazyValue {
-  pub fn get(&self) -> Option<std::cell::Ref<Value>> {
-    self.value.as_ref()
+  pub fn get(&self) -> std::sync::RwLockReadGuard<Option<Value>> {
+    self.value.read()
   }
   pub fn set(&self, value: Value) {
-    *self.value.borrow_mut() = Some(value)
+    *self.value.write() = Some(value)
   }
   pub fn get_once(&self) -> MultiRefHash<Function> {
     self.once.clone()
@@ -117,10 +118,10 @@ impl Value {
       Self::Object(o) => o.get_type(),
     }
   }
-  pub fn set_scope(&self, vars: Rc<RefCell<VarsManager>>) {
+  pub fn set_scope(&self, vars: MultiRefHash<VarsManager>) {
     match self {
-      Self::Object(Object::Function(f)) => f.borrow().set_scope(vars),
-      Self::Lazy(LazyValue { once, .. }) => once.borrow().set_scope(vars),
+      Self::Object(Object::Function(f)) => f.read().set_scope(vars),
+      Self::Lazy(LazyValue { once, .. }) => once.read().set_scope(vars),
       _ => panic!(
         "Error: no se puede establecer una variable local en un valor de tipo {}",
         self.get_type()
@@ -129,54 +130,50 @@ impl Value {
   }
   pub fn set_in_class(&self, class: MultiRefHash<Class>) {
     match self {
-      Self::Object(Object::Function(f)) => f.borrow_mut().set_in_class(class),
+      Self::Object(Object::Function(f)) => f.write().set_in_class(class),
       _ => {}
     }
   }
   pub fn is_number(&self) -> bool {
     match self {
       Self::Number(_) => true,
-      Self::Ref(RefValue(r)) | Self::Iterator(r) => r.borrow().is_number(),
+      Self::Ref(RefValue(r)) | Self::Iterator(r) => r.read().is_number(),
       _ => false,
     }
   }
   pub fn is_object(&self) -> bool {
     match self {
       Self::Object(_) => true,
-      Self::Ref(RefValue(r)) | Self::Iterator(r) => r.borrow().is_object(),
+      Self::Ref(RefValue(r)) | Self::Iterator(r) => r.read().is_object(),
       _ => false,
     }
   }
   pub fn is_string(&self) -> bool {
     match self {
       Self::String(_) => true,
-      Self::Ref(RefValue(r)) | Self::Iterator(r) => r.borrow().is_string(),
+      Self::Ref(RefValue(r)) | Self::Iterator(r) => r.read().is_string(),
       _ => false,
     }
   }
   pub fn is_iterator(&self) -> bool {
     match self {
       Self::Iterator(_) => true,
-      Self::Ref(RefValue(r)) => r.borrow().is_iterator(),
+      Self::Ref(RefValue(r)) => r.read().is_iterator(),
       _ => false,
     }
   }
   pub fn is_promise(&self) -> bool {
     match self {
       Self::Promise(_) => true,
-      Self::Ref(RefValue(r)) => r.borrow().is_promise(),
+      Self::Ref(RefValue(r)) => r.read().is_promise(),
       _ => false,
     }
   }
   pub fn as_promise(&self) -> Promise {
     match self {
       Self::Promise(promise) => promise.clone(),
-      Self::Ref(RefValue(r)) => r.borrow().as_promise(),
-      Self::Lazy(lazy) => lazy
-        .get()
-        .on_some(|l| l.clone())
-        .unwrap_or_default()
-        .as_promise(),
+      Self::Ref(RefValue(r)) => r.read().as_promise(),
+      Self::Lazy(lazy) => lazy.get().clone().unwrap_or_default().as_promise(),
       v => v.clone().into(),
     }
   }
@@ -194,11 +191,7 @@ impl Value {
     match self {
       Self::True => Ok(true),
       Self::Null | Self::Never | Self::False => Ok(false),
-      Self::Lazy(l) => l
-        .get()
-        .on_some(|v| v.clone())
-        .unwrap_or_default()
-        .as_boolean(),
+      Self::Lazy(l) => l.get().clone().unwrap_or_default().as_boolean(),
       val => Err(format!(
         "Se esperaba un '{BOOLEAN_TYPE}' pero se recibio un {}",
         val.get_type()
@@ -209,21 +202,21 @@ impl Value {
   pub fn is_function(&self) -> bool {
     match self {
       Self::Object(Object::Function { .. }) => true,
-      Self::Ref(RefValue(r)) | Self::Iterator(r) => r.borrow().is_function(),
+      Self::Ref(RefValue(r)) | Self::Iterator(r) => r.read().is_function(),
       _ => false,
     }
   }
   pub fn is_class(&self) -> bool {
     match self {
       Self::Object(Object::Class { .. }) => true,
-      Self::Ref(RefValue(r)) | Self::Iterator(r) => r.borrow().is_class(),
+      Self::Ref(RefValue(r)) | Self::Iterator(r) => r.read().is_class(),
       _ => false,
     }
   }
   pub fn is_array(&self) -> bool {
     match self {
       Self::Object(Object::Array(_)) => true,
-      Self::Ref(RefValue(r)) | Self::Iterator(r) => r.borrow().is_array(),
+      Self::Ref(RefValue(r)) | Self::Iterator(r) => r.read().is_array(),
       _ => false,
     }
   }
@@ -236,25 +229,21 @@ impl Value {
       Self::True => TRUE_NAME.to_string(),
       Self::Null => NULL_NAME.to_string(),
       Self::Never => NEVER_NAME.to_string(),
-      Self::Iterator(v) => format!("@{}", v.borrow().as_string()),
+      Self::Iterator(v) => format!("@{}", v.read().as_string()),
       Self::Ref(v) => format!("&{}", v.borrow().as_string()),
       Self::Byte(b) => format!("0x{b:02X}"),
       Self::Number(x) => x.to_string(),
       Self::Char(c) => c.to_string(),
       Self::Object(x) => x.to_string(),
-      Self::Lazy(l) => l
-        .get()
-        .on_some(|v| v.clone())
-        .unwrap_or_default()
-        .as_string(),
+      Self::Lazy(l) => l.get().clone().unwrap_or_default().as_string(),
     }
   }
   pub fn as_function(&self) -> MultiRefHash<Function> {
     match self {
       Self::Object(Object::Function(f)) => f.clone(),
-      Self::Ref(RefValue(r)) | Self::Iterator(r) => r.borrow().as_function(),
+      Self::Ref(RefValue(r)) | Self::Iterator(r) => r.read().as_function(),
       _ => Function::Script {
-        chunk: ChunkGroup::new(),
+        chunk: ChunkGroup::new().into(),
         scope: None.into(),
         path: "<nulo>".to_string(),
       }
@@ -269,20 +258,20 @@ impl Value {
   ) {
     match self {
       Self::Object(Object::Map(prop, instance)) => (prop.clone(), instance.clone()),
-      Self::Ref(RefValue(r)) | Self::Iterator(r) => r.borrow().as_map(),
+      Self::Ref(RefValue(r)) | Self::Iterator(r) => r.read().as_map(),
       _ => (HashMap::new().into(), None.into()),
     }
   }
   pub fn as_class(&self) -> MultiRefHash<Class> {
     match self {
       Self::Object(Object::Class(c)) => c.clone(),
-      Self::Ref(RefValue(r)) | Self::Iterator(r) => r.borrow().as_class(),
+      Self::Ref(RefValue(r)) | Self::Iterator(r) => r.read().as_class(),
       _ => Class::new("<nulo>".to_string()),
     }
   }
   pub fn as_strict_array(&self, thread: &Thread) -> Result<Vec<Value>, String> {
     match self {
-      Self::Object(Object::Array(array)) => Ok(array.borrow().clone()),
+      Self::Object(Object::Array(array)) => Ok(array.read().clone()),
       Self::Object(Object::Map(_, instance)) => {
         let instance = instance.cloned();
         if matches!(instance, None) {
@@ -301,7 +290,7 @@ impl Value {
           ));
         }
         if let Value::Object(Object::Array(array)) = value.unwrap() {
-          return array.borrow().clone_ok();
+          return array.read().clone_ok();
         }
 
         Err(format!(
@@ -310,7 +299,7 @@ impl Value {
         ))
       }
       Self::Ref(RefValue(l)) | Self::Iterator(l) => {
-        l.borrow().as_strict_array(thread).or_else(|_| {
+        l.read().as_strict_array(thread).or_else(|_| {
           Err(format!(
             "No se puede convertir a lista: {}",
             self.get_type()
@@ -327,18 +316,54 @@ impl Value {
       )),
     }
   }
+  pub fn as_strict_byte(&self) -> Result<u8, String> {
+    match self {
+      Self::Ref(RefValue(l)) => l.read().as_strict_byte().or_else(|_| {
+        Err(format!(
+          "No se puede convertir a lista: {}",
+          self.get_type()
+        ))
+      }),
+      Self::Byte(b) => Ok(*b),
+      _ => Err(format!("No se puede convertir a byte: {}", self.get_type())),
+    }
+  }
+  pub fn as_strict_buffer(&self, thread: &Thread) -> Result<Vec<u8>, String> {
+    match self {
+      Self::Byte(b) => Ok(vec![*b]),
+      Self::String(string) => Ok(string.as_bytes().to_vec()),
+      Self::Ref(RefValue(l)) => l.read().as_strict_buffer(thread).or_else(|_| {
+        Err(format!(
+          "No se puede convertir a buffer: {}",
+          self.get_type()
+        ))
+      }),
+      value => value
+        .as_strict_array(thread)
+        .map_err(|e| {
+          format!(
+            "No se puede convertir a buffer ({}): {}",
+            self.get_type(),
+            e
+          )
+        })?
+        .iter()
+        .map(|v| v.as_strict_byte())
+        .collect(),
+    }
+  }
   pub fn set_object_property(&self, key: &str, value: Value) -> Option<Value> {
     match self {
       Self::Object(o) => o.set_object_property(key, value),
-      Self::Iterator(r) => r.borrow().set_object_property(key, value),
+      Self::Iterator(r) => r.read().set_object_property(key, value),
       _ => None,
     }
   }
   pub fn get_object_property(&self, key: &str) -> Option<Value> {
     match self {
       Self::Object(o) => o.get_object_property(key),
-      Self::Ref(RefValue(r)) => r.borrow().get_object_property(key),
-      Self::Iterator(r) => r.borrow().get_object_property(key),
+      Self::Ref(RefValue(r)) => r.read().get_object_property(key),
+      Self::Iterator(r) => r.read().get_object_property(key),
       _ => None,
     }
   }
@@ -351,14 +376,16 @@ impl Value {
     thread: &Thread,
   ) -> Option<Value> {
     match self {
-      Self::Iterator(r) => r
-        .borrow()
-        .set_instance_property(key, value, is_public, is_class_decl, thread),
+      Self::Iterator(r) => {
+        r.read()
+          .set_instance_property(key, value, is_public, is_class_decl, thread)
+      }
       Self::Object(Object::Map(_, instance)) => {
+        let instance = instance.read();
         let instance = instance.as_ref()?;
         let class = thread.get_calls().last().unwrap().in_class();
         let assign = if let Some(class) = class {
-          instance.is_instance(class.borrow().get_instance().as_ref().unwrap().clone())
+          instance.is_instance(class.read().get_instance().read().clone().unwrap())
         } else {
           true
         };
@@ -370,7 +397,7 @@ impl Value {
       }
       Self::Object(Object::Class(class)) => {
         if is_class_decl {
-          Some(class.borrow().set_instance_property(key, value))
+          Some(class.read().set_instance_property(key, value))
         } else {
           None
         }
@@ -381,16 +408,16 @@ impl Value {
   pub fn get_instance_property(&self, key: &str, thread: &Thread) -> Option<Value> {
     let proto_cache = thread
       .get_async()
-      .borrow()
+      .read()
       .get_module()
-      .borrow()
+      .read()
       .get_vm()
-      .borrow()
+      .read()
       .cache
       .proto
       .clone();
     match (self, key) {
-      (Self::Ref(RefValue(r)), key) => r.borrow().get_instance_property(key, thread),
+      (Self::Ref(RefValue(r)), key) => r.read().get_instance_property(key, thread),
       (Self::Object(o), key) => o.get_instance_property(key, thread),
       (Self::String(s), "longitud") => Some(Self::Number(s.len().into())),
       (Self::String(c), "bytes") => Some(Self::Object(
@@ -433,7 +460,11 @@ impl From<bool> for Value {
 }
 impl std::fmt::Debug for Value {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    write!(f, "{}", self.as_string())
+    if let Self::String(string) = self {
+      write!(f, "'{}'", string.replace("\n", "\\n").replace("\'", "\\\'"))
+    } else {
+      write!(f, "{}", self.as_string())
+    }
   }
 }
 impl crate::Encode for Value {
@@ -505,6 +536,7 @@ impl Decode for Value {
     }
   }
 }
+impl MutClone for Value {}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ValueArray {

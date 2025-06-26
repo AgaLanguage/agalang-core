@@ -44,14 +44,15 @@ pub fn time_lib() -> Value {
       crate::compiler::Function::Native {
         name: format!("<{TIME_LIB}>::{NOW}"),
         path: format!("<{TIME_LIB}>"),
-        chunk: crate::compiler::ChunkGroup::default(),
-        func: |_, _, _| {
+        chunk: crate::compiler::ChunkGroup::default().into(),
+        func: |_, _, _, _| {
           let nanos = match SystemTime::now().duration_since(UNIX_EPOCH) {
             Ok(duration) => duration.as_nanos(),
             Err(e) => return Err(format!("Error: {:?}", e)),
           };
           Ok(Value::Number(nanos.into()))
         },
+        custom_data: ().into(),
       }
       .into(),
     ),
@@ -60,7 +61,7 @@ pub fn time_lib() -> Value {
   hashmap.set_instance_property(
     ZONE.into(),
     Value::Object(
-       {
+      {
         let offset = unsafe { get_utc_in_secs() };
         // Convertir a horas y minutos
         let hours = offset / 3600;

@@ -16,7 +16,7 @@ pub fn string_proto() -> Value {
       Function::Native {
         path: "".into(),
         name: format!("<cadena>::{REPLACE}"),
-        func: |this, args, _| {
+        func: |this, args, _, _| {
           let old = args.get(0);
           if old.is_none() {
             return Err("remplaza: se esperaban 2 argumentos y se recibieron 0".into());
@@ -31,7 +31,8 @@ pub fn string_proto() -> Value {
           let string = string.replace(&old, &new);
           Ok(Value::String(string.into()))
         },
-        chunk: ChunkGroup::default(),
+        chunk: ChunkGroup::default().into(),
+        custom_data: ().into(),
       }
       .into(),
     ),
@@ -43,10 +44,9 @@ pub fn string_proto() -> Value {
       Function::Native {
         path: "".into(),
         name: format!("<cadena>::{REPEAT}"),
-        func: |this, args, _| {
+        func: |this, args, _, _| {
           let count = match args.get(0) {
-            None => 
-            Err("remplaza: se esperaban 2 argumentos y se recibieron 0".into()),
+            None => Err("remplaza: se esperaban 2 argumentos y se recibieron 0".into()),
             Some(count) => count.as_number()?.floor().into(),
           }?;
           if count == 0 {
@@ -56,7 +56,8 @@ pub fn string_proto() -> Value {
           let string = string.repeat(count);
           Ok(Value::String(string))
         },
-        chunk: ChunkGroup::default(),
+        chunk: ChunkGroup::default().into(),
+        custom_data: ().into(),
       }
       .into(),
     ),
@@ -69,7 +70,7 @@ pub fn string_proto() -> Value {
       Function::Native {
         path: "".into(),
         name: format!("<cadena>::{BYTES}"),
-        func: |this, _, _| {
+        func: |this, _, _, _| {
           let string = this.as_string();
           let list = string
             .as_bytes()
@@ -78,7 +79,8 @@ pub fn string_proto() -> Value {
             .collect::<Vec<_>>();
           Ok(Value::Object(list.into()))
         },
-        chunk: ChunkGroup::default(),
+        chunk: ChunkGroup::default().into(),
+        custom_data: ().into(),
       }
       .into(),
     ),
@@ -90,7 +92,7 @@ pub fn string_proto() -> Value {
       Function::Native {
         path: "".into(),
         name: format!("<cadena>::{SPLIT}"),
-        func: |this, args, _| {
+        func: |this, args, _, _| {
           let separator = args.get(0);
           if separator.is_none() {
             return Err("remplaza: se esperaba 1 argumento y se recibieron 0".into());
@@ -103,7 +105,8 @@ pub fn string_proto() -> Value {
             .collect::<Vec<_>>();
           Ok(Value::Object(list.into()))
         },
-        chunk: ChunkGroup::default(),
+        chunk: ChunkGroup::default().into(),
+        custom_data: ().into(),
       }
       .into(),
     ),

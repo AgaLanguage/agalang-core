@@ -1,27 +1,26 @@
-use std::cell::{RefCell, RefMut};
 use std::collections::HashMap;
 use std::path::Path;
-use std::rc::Rc;
 
 use super::VM;
 use crate::compiler::{Function, LazyValue, Number, Object, OpCode, Promise, PromiseData, Value};
 use crate::functions_names::CONSTRUCTOR;
 use crate::interpreter::stack::{CallFrame, InterpretResult};
 use crate::interpreter::VarsManager;
+use crate::MultiRefHash;
 
 #[derive(Clone, Debug)]
 pub struct ModuleThread {
   path: String,
   value: Value,
-  async_thread: Rc<RefCell<AsyncThread>>,
+  async_thread: MultiRefHash<AsyncThread>,
   status: InterpretResult,
-  vm: Option<Rc<RefCell<VM>>>,
+  vm: Option<MultiRefHash<VM>>,
 }
 impl ModuleThread {
-  pub fn new(path: &str) -> Rc<RefCell<Self>> {
+  pub fn new(path: &str) -> MultiRefHash<Self> {
     let (async_thread, _) = AsyncThread::new();
 
-    let module = Rc::new(RefCell::new(Self {
+    let module: MultiRefHash<ModuleThread> = Self {
       path: path.to_string(),
       async_thread: async_thread.clone(),
       value: Value::Object(Object::Map(
@@ -30,8 +29,9 @@ impl ModuleThread {
       )),
       status: InterpretResult::Continue,
       vm: None,
-    }));
-    async_thread.borrow_mut().set_module(module.clone());
+    }
+    .into();
+    async_thread.write().set_module(module.clone());
     module
   }
   pub fn as_value(self) -> Value {
@@ -41,15 +41,15 @@ impl ModuleThread {
     if !matches!(self.status, InterpretResult::Continue | InterpretResult::Ok) {
       return self.status.clone();
     }
-    let code = self.async_thread.borrow().thread.borrow_mut().peek();
+    let code = self.async_thread.read().thread.write().peek();
     match code {
       OpCode::OpImport => {
-        let thread = self.async_thread.borrow().thread.clone();
-        thread.borrow_mut().read();
-        let module = thread.borrow_mut().pop();
+        let thread = self.async_thread.read().thread.clone();
+        thread.write().read();
+        let module = thread.write().pop();
         let path = module.as_string();
-        let meta_byte = thread.borrow_mut().read();
-        let name_byte = thread.borrow_mut().read();
+        let meta_byte = thread.write().read();
+        let name_byte = thread.write().read();
         let _is_lazy = (meta_byte & 0b10) == 0b10;
         let alias = (meta_byte & 0b01) == 0b01;
 
@@ -67,36 +67,42 @@ impl ModuleThread {
             .to_string()
         }
         .replace("\\\\?\\", "");
-        let proto = self.get_vm().borrow().cache.libs.clone();
+        let proto = self.get_vm().read().cache.libs.clone();
         let value = crate::interpreter::libs::libs(lib_name, proto, |path| {
-          let module = VM::resolve(self.get_vm(), path, thread.borrow_mut().globals());
-          *self.async_thread.borrow().await_thread.borrow_mut() =
-            BlockingThread::Module(module.clone());
-          let x = module.borrow().clone().as_value();
+          let module = VM::resolve(self.get_vm(), path, thread.write().globals());
+          *self.async_thread.read().await_thread.write() = BlockingThread::Module(module.clone());
+          let x = module.read().clone().as_value();
           x
         });
         if alias {
           let name = thread
-            .borrow_mut()
+            .read()
             .current_chunk()
+            .read()
             .read_constant(name_byte)
             .as_string();
-          thread.borrow_mut().declare(&name, value, true);
+          thread.write().declare(&name, value, true);
         }
-        thread.borrow_mut().push(module);
+        thread.write().push(module);
         InterpretResult::Continue
       }
       OpCode::OpExport => {
-        let thread = self.async_thread.borrow().thread.clone();
-        thread.borrow_mut().read();
-        let name = thread.borrow_mut().read_string();
-        let value = thread.borrow_mut().pop();
+        let thread = self.async_thread.read().thread.clone();
+        thread.write().read();
+        let name = thread.write().read_string();
+        let value = thread.write().pop();
         if !self.value.is_object() {
           return InterpretResult::RuntimeError("Se esperaba un objeto como modulo".to_string());
         }
-        match self.value.set_instance_property(&name, value.clone(), true, false, &*self.get_async().borrow().get_thread().borrow()) {
+        match self.value.set_instance_property(
+          &name,
+          value.clone(),
+          true,
+          false,
+          &*self.get_async().read().get_thread().read(),
+        ) {
           Some(value) => {
-            thread.borrow_mut().push(value);
+            thread.write().push(value);
             InterpretResult::Continue
           }
           None => {
@@ -104,23 +110,28 @@ impl ModuleThread {
           }
         }
       }
-      _ => self.async_thread.borrow().run_instruction(),
+      _ => self.async_thread.read().run_instruction(),
     }
   }
   pub fn push_call(&self, frame: CallFrame) {
-    self.async_thread.borrow().push_call(frame)
+    self.async_thread.read().push_call(frame)
   }
-  pub fn set_vm(&mut self, vm: Rc<RefCell<VM>>) {
+  pub fn set_vm(&mut self, vm: MultiRefHash<VM>) {
     self.vm = Some(vm);
   }
   pub fn set_status(&mut self, status: InterpretResult) {
     self.status = status;
   }
-  pub fn get_vm(&self) -> Rc<RefCell<VM>> {
+  pub fn get_vm(&self) -> MultiRefHash<VM> {
     self.vm.clone().unwrap()
   }
-  pub fn get_async(&self) -> Rc<RefCell<AsyncThread>> {
+  pub fn get_async(&self) -> MultiRefHash<AsyncThread> {
     self.async_thread.clone()
+  }
+  pub fn get_process_manager(
+    &self,
+  ) -> MultiRefHash<crate::interpreter::vm::process::ProcessManager> {
+    self.get_vm().read().get_process_manager()
   }
 }
 
@@ -137,21 +148,21 @@ enum TryCatchState {
 enum BlockingThread {
   #[default]
   Void,
-  Module(Rc<RefCell<ModuleThread>>),
+  Module(MultiRefHash<ModuleThread>),
   Await(Promise),
   TryCatch {
-    try_thread: Rc<RefCell<AsyncThread>>,
-    catch_thread: Rc<RefCell<AsyncThread>>,
-    state: Rc<RefCell<TryCatchState>>,
+    try_thread: MultiRefHash<AsyncThread>,
+    catch_thread: MultiRefHash<AsyncThread>,
+    state: MultiRefHash<TryCatchState>,
   },
-  Lazy(LazyValue, Rc<RefCell<AsyncThread>>),
+  Lazy(LazyValue, MultiRefHash<AsyncThread>),
 }
 impl BlockingThread {
   fn run_instruction(&self) -> InterpretResult {
     match self {
       // nada que ejecutar
       Self::Void => InterpretResult::Ok,
-      Self::Module(ref_cell) => ref_cell.borrow().run_instruction(),
+      Self::Module(ref_cell) => ref_cell.read().run_instruction(),
       Self::Await(promise) => {
         let data = promise.get_data();
         match data {
@@ -167,32 +178,32 @@ impl BlockingThread {
         catch_thread,
         state,
       } => {
-        let current_state = state.borrow().clone();
+        let current_state = state.read().clone();
         match current_state {
           TryCatchState::Trying => {
-            let result = try_thread.borrow().run_instruction();
+            let result = try_thread.read().run_instruction();
             match result {
               InterpretResult::Ok => {
-                *state.borrow_mut() = TryCatchState::Ending;
+                *state.write() = TryCatchState::Ending;
                 InterpretResult::Continue
               }
               InterpretResult::RuntimeError(message) => {
-                *state.borrow_mut() = TryCatchState::Error(message);
+                *state.write() = TryCatchState::Error(message);
                 InterpretResult::Continue
               }
               result => result,
             }
           }
           TryCatchState::Error(message) => {
-            catch_thread.borrow().push(Value::String(message.clone()));
-            *state.borrow_mut() = TryCatchState::Catching;
+            catch_thread.read().push(Value::String(message.clone()));
+            *state.write() = TryCatchState::Catching;
             InterpretResult::Continue
           }
           TryCatchState::Catching => {
-            let result = catch_thread.borrow().run_instruction();
+            let result = catch_thread.read().run_instruction();
             match result {
               InterpretResult::Ok => {
-                *state.borrow_mut() = TryCatchState::Ending;
+                *state.write() = TryCatchState::Ending;
                 InterpretResult::Continue
               }
               result => result,
@@ -202,16 +213,16 @@ impl BlockingThread {
         }
       }
       Self::Lazy(lazy, thread) => {
-        let byte = thread.borrow().get_thread().borrow_mut().peek();
+        let byte = thread.read().get_thread().write().peek();
         match byte {
           OpCode::OpReturn => {
-            let value = thread.borrow().pop();
-            thread.borrow().push(Value::Never);
-            thread.borrow().run_instruction();
+            let value = thread.read().pop();
+            thread.read().push(Value::Never);
+            thread.read().run_instruction();
             lazy.set(value);
             InterpretResult::Ok
           }
-          _ => thread.borrow().run_instruction(),
+          _ => thread.read().run_instruction(),
         }
       }
     }
@@ -221,75 +232,74 @@ impl BlockingThread {
 #[derive(Clone, Debug)]
 pub struct AsyncThread {
   promise: Promise,
-  thread: Rc<RefCell<Thread>>,
-  await_thread: Rc<RefCell<BlockingThread>>,
-  module: Option<Rc<RefCell<ModuleThread>>>,
+  thread: MultiRefHash<Thread>,
+  await_thread: MultiRefHash<BlockingThread>,
+  module: Option<MultiRefHash<ModuleThread>>,
 }
 impl AsyncThread {
   pub fn is_waiting(&self) -> bool {
-    let bloking_thread = &*self.await_thread.borrow();
+    let bloking_thread = &*self.await_thread.read();
     match bloking_thread {
-      BlockingThread::Await(p) => {
-        match p.get_data() {
-          PromiseData::Pending => true,
-          _ => false,
-        }
-      }
+      BlockingThread::Await(p) => match p.get_data() {
+        PromiseData::Pending => true,
+        _ => false,
+      },
       _ => false,
     }
   }
-  fn set_module(&mut self, module: Rc<RefCell<ModuleThread>>) {
+  pub fn set_module(&mut self, module: MultiRefHash<ModuleThread>) {
     self.module = Some(module);
   }
-  pub fn get_module(&self) -> Rc<RefCell<ModuleThread>> {
+  pub fn get_module(&self) -> MultiRefHash<ModuleThread> {
     self.module.clone().unwrap()
   }
   fn pop(&self) -> Value {
-    self.thread.borrow_mut().pop()
+    self.thread.write().pop()
   }
-  fn push(&self, value: Value) {
-    self.thread.borrow_mut().push(value)
+  pub fn push(&self, value: Value) {
+    self.thread.write().push(value)
   }
-  fn from_frame(frame: CallFrame) -> (Rc<RefCell<Self>>, Promise) {
+  pub fn from_frame(frame: CallFrame) -> (MultiRefHash<Self>, Promise) {
     let (thread, promise) = Self::new();
-    thread.borrow().push_call(frame);
+    thread.read().push_call(frame);
     (thread, promise)
   }
-  fn new() -> (Rc<RefCell<Self>>, Promise) {
+  pub fn new() -> (MultiRefHash<Self>, Promise) {
     let original_promise = Promise::new();
     let promise = original_promise.clone();
     let thread = Thread::new();
-    let async_thread = Rc::new(RefCell::new(Self {
+    let async_thread: MultiRefHash<AsyncThread> = Self {
       promise,
       thread: thread.clone(),
       await_thread: Default::default(),
       module: Default::default(),
-    }));
-    thread.borrow_mut().set_async(async_thread.clone());
+    }
+    .into();
+    thread.write().set_async(async_thread.clone());
     (async_thread, original_promise)
   }
   fn push_call(&self, frame: CallFrame) {
-    let sub_thread = self.await_thread.borrow().clone();
+    let sub_thread = self.await_thread.read().clone();
     if let BlockingThread::Module(sub_module) = sub_thread {
-      return sub_module.borrow_mut().push_call(frame);
+      return sub_module.write().push_call(frame);
     }
-    self.thread.borrow_mut().push_call(frame)
+    self.thread.write().push_call(frame)
   }
   pub fn simple_run_instruction(&self, contain_error: bool) -> InterpretResult {
-    let code = self.thread.borrow_mut().peek();
+    let code = self.thread.write().peek();
     match code {
       OpCode::OpAwait => {
-        self.thread.borrow_mut().read();
+        self.thread.write().read();
         let value = self.pop();
         if value.is_promise() {
           let blocking = BlockingThread::Await(value.as_promise());
-          *self.await_thread.borrow_mut() = blocking;
+          *self.await_thread.write() = blocking;
         }
         self.push(value);
         InterpretResult::Continue
       }
       _ => {
-        let result = self.thread.borrow_mut().run_instruction();
+        let result = self.thread.write().run_instruction();
         match result {
           InterpretResult::RuntimeError(err) => {
             self.promise.set_err(err.clone());
@@ -310,51 +320,52 @@ impl AsyncThread {
     }
   }
   pub fn run_instruction(&self) -> InterpretResult {
-    let sub_module = self.await_thread.borrow().clone();
+    let sub_module = self.await_thread.read().clone();
 
     if matches!(sub_module, BlockingThread::Void) {
       return self.simple_run_instruction(false);
     }
 
-    let data = self.await_thread.borrow().run_instruction();
+    let data = self.await_thread.read().run_instruction();
     if !matches!(data, InterpretResult::Continue) {
-      *self.await_thread.borrow_mut() = BlockingThread::Void;
+      *self.await_thread.write() = BlockingThread::Void;
       return InterpretResult::Continue;
     }
 
     data
   }
-  pub fn get_thread(&self) -> Rc<RefCell<Thread>> {
+  pub fn get_thread(&self) -> MultiRefHash<Thread> {
     self.thread.clone()
   }
 }
 
 #[derive(Clone, Debug)]
 pub struct Thread {
-  stack: Vec<Value>,
-  call_stack: Vec<CallFrame>,
-  async_thread: Option<Rc<RefCell<AsyncThread>>>,
+  stack: MultiRefHash<Vec<Value>>,
+  call_stack: MultiRefHash<Vec<CallFrame>>,
+  async_thread: MultiRefHash<Option<MultiRefHash<AsyncThread>>>,
 }
 
 impl Thread {
-  fn new() -> Rc<RefCell<Self>> {
-    Rc::new(RefCell::new(Self {
-      stack: vec![],
-      call_stack: vec![],
-      async_thread: None,
-    }))
+  fn new() -> MultiRefHash<Self> {
+    Self {
+      stack: vec![].into(),
+      call_stack: vec![].into(),
+      async_thread: None.into(),
+    }
+    .into()
   }
-  fn set_async(&mut self, async_thread: Rc<RefCell<AsyncThread>>) {
-    self.async_thread = Some(async_thread);
+  fn set_async(&self, async_thread: MultiRefHash<AsyncThread>) {
+    *self.async_thread.write() = Some(async_thread);
   }
-  pub fn get_async(&self) -> Rc<RefCell<AsyncThread>> {
-    self.async_thread.clone().unwrap()
+  pub fn get_async(&self) -> MultiRefHash<AsyncThread> {
+    self.async_thread.unwrap()
   }
-  pub fn get_stack(&self) -> &Vec<Value> {
-    &self.stack
+  pub fn get_stack(&self) -> std::sync::RwLockReadGuard<Vec<Value>> {
+    self.stack.read()
   }
-  pub fn get_calls(&self) -> &Vec<CallFrame> {
-    &self.call_stack
+  pub fn get_calls(&self) -> std::sync::RwLockReadGuard<Vec<CallFrame>> {
+    self.call_stack.read()
   }
   pub fn clear_stack(&mut self) {
     self.stack.clear();
@@ -362,88 +373,92 @@ impl Thread {
   pub fn push_call(&mut self, frame: CallFrame) {
     self.call_stack.push(frame);
   }
-  fn current_frame(&mut self) -> &mut CallFrame {
-    self.call_stack.last_mut().unwrap()
+  fn with_current_frame_mut<R>(&self, callback: impl FnOnce(&mut CallFrame) -> R) -> R {
+    callback(self.call_stack.write().last_mut().unwrap())
   }
-  fn current_chunk(&mut self) -> RefMut<crate::compiler::ChunkGroup> {
-    self.current_frame().current_chunk()
+  fn current_chunk(&self) -> MultiRefHash<crate::compiler::ChunkGroup> {
+    self.call_stack.read().last().unwrap().current_chunk()
   }
-  fn globals(&mut self) -> Rc<RefCell<VarsManager>> {
-    self.current_frame().globals()
+  fn globals(&self) -> MultiRefHash<VarsManager> {
+    self.call_stack.read().last().unwrap().globals()
   }
-  pub fn current_vars(&mut self) -> Rc<RefCell<VarsManager>> {
-    self.current_frame().current_vars()
+  pub fn current_vars(&self) -> MultiRefHash<VarsManager> {
+    self.call_stack.read().last().unwrap().current_vars()
   }
-  fn resolve(&mut self, name: &str) -> Rc<RefCell<VarsManager>> {
+  fn resolve(&mut self, name: &str) -> MultiRefHash<VarsManager> {
     let mut vars = self.globals();
-    for call in &mut self.call_stack {
+    for call in self.call_stack.read().iter() {
       let local_vars = call.resolve_vars(name);
-      if local_vars.borrow().has(name) {
+      if local_vars.read().has(name) {
         vars = local_vars;
       }
     }
     vars
   }
-  fn declare(&mut self, name: &str, value: Value, is_constant: bool) -> Option<Value> {
+  fn declare(&self, name: &str, value: Value, is_constant: bool) -> Option<Value> {
     self
       .current_vars()
-      .borrow_mut()
+      .write()
       .declare(name, value, is_constant)
   }
   fn assign(&mut self, name: &str, value: Value) -> Option<Value> {
-    self.resolve(name).borrow_mut().assign(name, value)
+    self.resolve(name).write().assign(name, value)
   }
   fn get(&mut self, name: &str) -> Option<Value> {
-    self.resolve(name).borrow().get(name).cloned()
+    self.resolve(name).read().get(name).cloned()
   }
   pub fn runtime_error(&mut self, message: &str) {
-    let frame = self.call_stack.last_mut();
-    let (line, name) = match frame {
-      Some(frame) => (frame.current_line().to_string(), frame.to_string()),
-      None => ("?".to_string(), "?".to_string()),
-    };
+    let binding = self.call_stack.read();
+    let frame = binding.last().unwrap();
+    let line = frame.current_line().to_string();
+    let name = frame.to_string();
     eprintln!("[linea {line}] en {name}\n{message}");
+
+    drop(binding);
 
     self.reset_stack();
   }
   fn reset_stack(&mut self) {
-    self.stack = vec![];
+    self.stack.clear();
   }
   fn push(&mut self, value: Value) {
     self.stack.push(value);
   }
   fn pop(&mut self) -> Value {
-    self.stack.pop().unwrap()
+    self.stack.pop()
   }
-  fn init(&mut self, value: &Value) {
+  fn init(&self, value: &Value) {
     match value {
       Value::Lazy(lazy) => {
         let (thread, _) = AsyncThread::new();
         let once = lazy.get_once();
         let vars = VarsManager::crate_child(
           once
-            .borrow()
+            .read()
             .get_scope()
             .unwrap_or_else(|| self.current_vars()),
         );
         thread
-          .borrow()
-          .push_call(CallFrame::new(once, vec![Rc::new(RefCell::new(vars))]));
-        *self.get_async().borrow().await_thread.borrow_mut() =
-          BlockingThread::Lazy(lazy.clone(), thread);
+          .read()
+          .push_call(CallFrame::new(once, vec![vars.into()]));
+        *self.get_async().read().await_thread.write() = BlockingThread::Lazy(lazy.clone(), thread);
       }
       _ => {}
     };
   }
   fn read(&mut self) -> u8 {
-    self.current_frame().read()
+    self.with_current_frame_mut(|frame| frame.read())
   }
-  fn peek(&mut self) -> OpCode {
-    self.current_frame().peek().into()
+  pub fn peek(&self) -> OpCode {
+    self.call_stack.read().last().unwrap().peek().into()
   }
   fn read_constant(&mut self) -> Value {
     let constant_index = self.read();
-    self.current_chunk().read_constant(constant_index).clone()
+    self
+      .current_chunk()
+      .read()
+      .read_constant(constant_index)
+      .clone()
   }
   fn read_string(&mut self) -> String {
     self.read_constant().as_string()
@@ -453,14 +468,14 @@ impl Thread {
     let b = self.read() as u16;
     (a << 8) | b
   }
-  fn call_function(
+  pub fn call_function(
     &mut self,
     this: Value,
-    fun: crate::compiler::MultiRefHash<Function>,
+    fun: MultiRefHash<Function>,
     args: Vec<Value>,
   ) -> Result<InterpretResult, String> {
     let fun_clone = fun.clone();
-    let function = fun_clone.borrow();
+    let function = fun_clone.read();
 
     let (arity, has_rest, is_async) = match &*function {
       Function::Function {
@@ -474,17 +489,19 @@ impl Thread {
         *is_async,
       ),
       Function::Script { .. } => (0, false, false),
-      Function::Native { func, .. } => {
-        let value = func(this, args, self)?;
-        self.push(value);
+      Function::Native {
+        func, custom_data, ..
+      } => {
+        let value = func(this, args, self, custom_data.clone());
+        self.push(value?);
         return Ok(InterpretResult::Continue);
       }
     };
     // En el caso de que la funcion no tenga un scope definido, se usa el scope actual (esto deberia de pasar)
     let vars = function.get_scope().unwrap_or_else(|| self.current_vars());
-    let locals = vec![Rc::new(RefCell::new(
-      VarsManager::crate_child(vars.clone()).set_this(this.clone()),
-    ))];
+    let locals = vec![VarsManager::crate_child(vars.clone())
+      .set_this(this.clone())
+      .into()];
     if is_async {}
     self.call_stack.push(CallFrame::new(fun, locals));
 
@@ -559,14 +576,14 @@ impl Thread {
         .as_map()
         .1
         .on_ok(|instance| {
-          if class.borrow().is_instance(instance) {
+          if class.read().is_instance(instance) {
             Some(this)
           } else {
             None
           }
         })
-        .unwrap_or_else(|| class.borrow().make_instance());
-      let constructor = class.borrow().get_instance_property(CONSTRUCTOR);
+        .unwrap_or_else(|| class.read().make_instance());
+      let constructor = class.read().get_instance_property(CONSTRUCTOR);
       if let Some(Value::Object(Object::Function(fun))) = constructor {
         self.call_function(this.clone(), fun, args)?;
       } else if let Some(_) = constructor {
@@ -591,26 +608,22 @@ impl Thread {
         let catch_block = self.pop().as_function();
         let try_block = self.pop().as_function();
 
-        let module = self.get_async().borrow().get_module();
+        let module = self.get_async().read().get_module();
 
         let (try_thread, _) = AsyncThread::new();
-        try_thread.borrow_mut().set_module(module.clone());
-        try_thread.borrow().push_call(CallFrame::new(
+        try_thread.write().set_module(module.clone());
+        try_thread.read().push_call(CallFrame::new(
           try_block,
-          vec![Rc::new(RefCell::new(VarsManager::crate_child(
-            self.current_vars(),
-          )))],
+          vec![VarsManager::crate_child(self.current_vars()).into()],
         ));
 
         let (catch_thread, _) = AsyncThread::new();
-        catch_thread.borrow_mut().set_module(module);
-        catch_thread.borrow().push_call(CallFrame::new(
+        catch_thread.write().set_module(module);
+        catch_thread.read().push_call(CallFrame::new(
           catch_block,
-          vec![Rc::new(RefCell::new(VarsManager::crate_child(
-            self.current_vars(),
-          )))],
+          vec![VarsManager::crate_child(self.current_vars()).into()],
         ));
-        *self.get_async().borrow().await_thread.borrow_mut() = BlockingThread::TryCatch {
+        *self.get_async().read().await_thread.write() = BlockingThread::TryCatch {
           try_thread,
           catch_thread,
           state: Default::default(),
@@ -644,7 +657,7 @@ impl Thread {
           }
         };
         let value = self.pop();
-        value.as_class().borrow().set_parent(parent_class);
+        value.as_class().read().set_parent(parent_class);
         value
       }
       OpCode::OpInClass => {
@@ -653,16 +666,27 @@ impl Thread {
         value.set_in_class(class);
         value
       }
-      OpCode::OpGetInstance => self.pop().as_class().borrow().make_instance(),
+      OpCode::OpGetInstance => self.pop().as_class().read().make_instance(),
       OpCode::OpPromised => {
         // Debe existir el frame
-        let frame = self.call_stack.pop().unwrap();
+        let frame = self.call_stack.pop();
         let (async_thread, promise) = AsyncThread::from_frame(frame);
         let current_async = self.async_thread.clone().unwrap();
-        let module = current_async.borrow().module.clone().unwrap();
-        async_thread.borrow_mut().set_module(module.clone());
-        module.borrow().get_vm().borrow().get_process_manager().borrow().push_sub_thread(async_thread);
-        Value::Promise(promise)
+        let module = current_async.read().module.clone().unwrap();
+        async_thread.write().set_module(module.clone());
+        module
+          .read()
+          .get_vm()
+          .read()
+          .get_process_manager()
+          .read()
+          .push_sub_thread(async_thread);
+        self.push(Value::Promise(promise));
+        return if self.call_stack.len() > 0 {
+          Ok(InterpretResult::Continue)
+        } else {
+          Ok(InterpretResult::Ok)
+        };
       }
       OpCode::OpSetScope => {
         let value = self.pop();
@@ -698,9 +722,7 @@ impl Thread {
           let value = object
             .set_instance_property(&key, value.clone(), is_public, is_class_decl, self)
             .on_error(|_| {
-              format!(
-              "Las asignaciones de instancia solo estan permitidas dentro de clases: {key}"
-              )
+              format!("Las asignaciones de instancia solo estan permitidas dentro de clases: {key}")
             })?;
           self.push(value);
           return Ok(InterpretResult::Continue);
@@ -832,7 +854,7 @@ impl Thread {
         let jump = self.read_short() as usize;
         let value = self.pop().as_boolean()?;
         if value == false {
-          self.current_frame().advance(jump);
+          self.with_current_frame_mut(|frame| frame.advance(jump));
         }
         return Ok(InterpretResult::Continue);
       }
@@ -846,20 +868,22 @@ impl Thread {
       }
       OpCode::OpJump => {
         let jump = self.read_short() as usize;
-        self.current_frame().advance(jump);
+
+        self.with_current_frame_mut(|frame| frame.advance(jump));
         return Ok(InterpretResult::Continue);
       }
       OpCode::OpLoop => {
         let offset = self.read_short() as usize;
-        self.current_frame().back(offset);
+
+        self.with_current_frame_mut(|frame| frame.back(offset));
         return Ok(InterpretResult::Continue);
       }
       OpCode::OpRemoveLocals => {
-        self.current_frame().pop_vars();
+        self.with_current_frame_mut(|frame| frame.pop_vars());
         return Ok(InterpretResult::Continue);
       }
       OpCode::OpNewLocals => {
-        self.current_frame().add_vars();
+        self.with_current_frame_mut(|frame| frame.add_vars());
         return Ok(InterpretResult::Continue);
       }
       OpCode::OpCall => {
@@ -887,10 +911,10 @@ impl Thread {
       OpCode::OpDelVar => {
         let name = self.read_string();
         let vars = self.resolve(&name);
-        if !vars.borrow().has(&name) {
+        if !vars.read().has(&name) {
           return Err(format!("No se pudo eliminar la variable '{name}'"));
         }
-        let value = vars.borrow_mut().remove(&name);
+        let value = vars.write().remove(&name);
         match value {
           None => return Err(format!("No se pudo eliminar la variable '{name}'")),
           Some(value) => value,

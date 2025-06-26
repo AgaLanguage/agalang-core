@@ -1,38 +1,90 @@
-use std::{cell::RefCell, rc::Rc};
-
-use super::{Class, MultiRefHash, Value};
+use super::{Class, Value};
+use crate::compiler::Promise;
 use crate::interpreter::VarsManager;
 use crate::parser::NodeBlock;
-use crate::util::{Color, Location};
-use crate::{compiler::ChunkGroup, parser::NodeFunction};
-use crate::{Decode, StructTag};
+use crate::util::{Color, Location, MutClone};
+use crate::{compiler::ChunkGroup, parser::NodeFunction, Decode, MultiRefHash, StructTag};
 
 pub const FUNCTION_TYPE: &str = "funcion";
 pub const SCRIPT_TYPE: &str = "script";
 pub const NATIVE_FUNCTION_TYPE: &str = "funcion nativa";
 
+pub enum NativeValue {
+  None,
+  TcpStream(std::net::TcpStream),
+  Promise(Promise),
+  ValuePromise(MultiRefHash<NativeValue>, Promise),
+}
+impl NativeValue {
+  pub fn mut_tcp_stream(&mut self) -> Option<&mut std::net::TcpStream> {
+    match self {
+      NativeValue::TcpStream(stream) => Some(stream),
+      _ => None,
+    }
+  }
+  pub fn get_value(&self) -> Option<MultiRefHash<NativeValue>> {
+    match self {
+      Self::ValuePromise(value, _) => Some(value.clone()),
+      _ => None,
+    }
+  }
+  pub fn get_promise(&mut self) -> Option<&mut Promise> {
+    match self {
+      Self::Promise(promise) => Some(promise),
+      Self::ValuePromise(_, promise) => Some(promise),
+      _ => None,
+    }
+  }
+}
+impl From<()> for MultiRefHash<NativeValue> {
+  fn from(_: ()) -> Self {
+    MultiRefHash::new(NativeValue::None)
+  }
+}
+impl From<std::net::TcpStream> for MultiRefHash<NativeValue> {
+  fn from(stream: std::net::TcpStream) -> Self {
+    MultiRefHash::new(NativeValue::TcpStream(stream))
+  }
+}
+impl From<Promise> for MultiRefHash<NativeValue> {
+  fn from(promise: Promise) -> Self {
+    MultiRefHash::new(NativeValue::Promise(promise))
+  }
+}
+impl From<(MultiRefHash<NativeValue>, Promise)> for MultiRefHash<NativeValue> {
+  fn from(values: (MultiRefHash<NativeValue>, Promise)) -> Self {
+    MultiRefHash::new(NativeValue::ValuePromise(values.0, values.1))
+  }
+}
+
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub enum Function {
   Function {
     arity: usize,
-    chunk: ChunkGroup,
+    chunk: MultiRefHash<ChunkGroup>,
     name: String,
     is_async: bool,
     in_class: MultiRefHash<Option<MultiRefHash<Class>>>,
     location: crate::util::Location,
-    scope: MultiRefHash<Option<Rc<RefCell<VarsManager>>>>,
+    scope: MultiRefHash<Option<MultiRefHash<VarsManager>>>,
     has_rest: bool,
   },
   Script {
-    chunk: ChunkGroup,
+    chunk: MultiRefHash<ChunkGroup>,
     path: String,
-    scope: MultiRefHash<Option<Rc<RefCell<VarsManager>>>>,
+    scope: MultiRefHash<Option<MultiRefHash<VarsManager>>>,
   },
   Native {
     name: String,
     path: String,
-    chunk: ChunkGroup,
-    func: fn(Value, Vec<Value>, &mut crate::interpreter::Thread) -> Result<Value, String>,
+    chunk: MultiRefHash<ChunkGroup>,
+    func: for<'a> fn(
+      Value,
+      Vec<Value>,
+      &'a mut crate::interpreter::Thread,
+      MultiRefHash<NativeValue>,
+    ) -> Result<Value, String>,
+    custom_data: MultiRefHash<NativeValue>,
   },
 }
 impl Function {
@@ -51,7 +103,7 @@ impl Function {
   }
   pub fn set_in_class(&self, class: MultiRefHash<Class>) {
     match self {
-      Self::Function { in_class, .. } => *in_class.borrow_mut() = Some(class),
+      Self::Function { in_class, .. } => *in_class.write() = Some(class),
       Self::Script { .. } | Self::Native { .. } => {}
     }
   }
@@ -61,29 +113,29 @@ impl Function {
       Self::Script { .. } | Self::Native { .. } => None,
     }
   }
-  pub fn set_scope(&self, vars: Rc<RefCell<VarsManager>>) {
+  pub fn set_scope(&self, vars: MultiRefHash<VarsManager>) {
     match self {
-      Self::Function { scope: v, .. } => *v.borrow_mut() = Some(vars),
-      Self::Script { scope: v, .. } => *v.borrow_mut() = Some(vars),
+      Self::Function { scope: v, .. } => *v.write() = Some(vars),
+      Self::Script { scope: v, .. } => *v.write() = Some(vars),
       Self::Native { .. } => {}
     }
   }
-  pub fn get_scope(&self) -> Option<Rc<RefCell<VarsManager>>> {
+  pub fn get_scope(&self) -> Option<MultiRefHash<VarsManager>> {
     match self {
-      Self::Function { scope: vars, .. } => vars.borrow().clone(),
-      Self::Script { scope: vars, .. } => vars.borrow().clone(),
+      Self::Function { scope: vars, .. } => vars.cloned(),
+      Self::Script { scope: vars, .. } => vars.cloned(),
       Self::Native { .. } => None,
     }
   }
-  pub fn chunk(&mut self) -> &mut ChunkGroup {
+  pub fn chunk(&self) -> MultiRefHash<ChunkGroup> {
     match self {
-      Self::Function { chunk, .. } => chunk,
-      Self::Script { chunk, .. } => chunk,
-      Self::Native { chunk, .. } => chunk,
+      Self::Function { chunk, .. } => chunk.clone(),
+      Self::Script { chunk, .. } => chunk.clone(),
+      Self::Native { chunk, .. } => chunk.clone(),
     }
   }
   pub fn location(&self) -> String {
-  use crate::util::{SetColor as _};
+    use crate::util::SetColor as _;
     match self {
       Self::Function {
         name,
@@ -143,7 +195,7 @@ impl From<&NodeFunction> for Function {
   fn from(value: &NodeFunction) -> Self {
     Self::Function {
       arity: value.params.len(),
-      chunk: ChunkGroup::new(),
+      chunk: ChunkGroup::new().into(),
       name: value.name.clone(),
       is_async: value.is_async,
       location: value.location.clone(),
@@ -156,7 +208,7 @@ impl From<&NodeFunction> for Function {
 impl From<&NodeBlock> for Function {
   fn from(value: &NodeBlock) -> Self {
     Self::Script {
-      chunk: ChunkGroup::new(),
+      chunk: ChunkGroup::new().into(),
       path: value.location.file_name.clone(),
       scope: None.into(),
     }
@@ -182,7 +234,7 @@ impl crate::Encode for Function {
       } => {
         encode.push(0);
         encode.extend(arity.encode()?);
-        encode.extend(chunk.encode()?);
+        encode.extend(chunk.read().encode()?);
         encode.extend(name.encode()?);
         encode.extend(is_async.encode()?);
         encode.extend(location.encode()?);
@@ -191,7 +243,7 @@ impl crate::Encode for Function {
       Function::Script { chunk, path, .. } => {
         encode.push(1);
         encode.extend(path.encode()?);
-        encode.extend(chunk.encode()?);
+        encode.extend(chunk.read().encode()?);
       }
       Function::Native { .. } => return Err("No se puede compilar una funcion nativa".to_string()),
     };
@@ -201,7 +253,7 @@ impl crate::Encode for Function {
 }
 impl Decode for Function {
   fn decode(vec: &mut std::collections::VecDeque<u8>) -> Result<Self, String> {
-  use crate::util::{OnError as _, OnSome as _};
+    use crate::util::{OnError as _, OnSome as _};
     vec
       .pop_front()
       .on_some_option(|byte| {
@@ -220,7 +272,7 @@ impl Decode for Function {
         in_class: Default::default(),
         scope: Default::default(),
         arity: usize::decode(vec)?,
-        chunk: ChunkGroup::decode(vec)?,
+        chunk: ChunkGroup::decode(vec)?.into(),
         name: String::decode(vec)?,
         is_async: bool::decode(vec)?,
         location: Location::decode(vec)?,
@@ -229,9 +281,10 @@ impl Decode for Function {
       1 => Ok(Self::Script {
         scope: Default::default(),
         path: String::decode(vec)?,
-        chunk: ChunkGroup::decode(vec)?,
+        chunk: ChunkGroup::decode(vec)?.into(),
       }),
       _ => Err("Se esperaba una funcion".to_string()),
     };
   }
 }
+impl MutClone for Function {}

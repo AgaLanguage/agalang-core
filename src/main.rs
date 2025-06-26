@@ -4,7 +4,7 @@ use std::{collections::HashMap, process::ExitCode};
 
 use flate2::{read::GzDecoder, write::GzEncoder, Compression};
 
-use crate::util::{OnError, OnSome};
+pub use crate::util::{MultiRefHash, OnError, OnSome};
 use crate::{compiler::Compiler, interpreter::interpret};
 
 mod compiler;

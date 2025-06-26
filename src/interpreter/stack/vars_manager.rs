@@ -1,17 +1,19 @@
 use std::collections::{HashMap, HashSet};
-use std::{cell::RefCell, rc::Rc};
 
-use crate::compiler::{Value, FALSE_NAME, NEVER_NAME, NULL_NAME, TRUE_NAME};
+use crate::{
+  compiler::{Value, FALSE_NAME, NEVER_NAME, NULL_NAME, TRUE_NAME},
+  MultiRefHash,
+};
 
 const THIS_NAME: &str = "esto";
 
 const KEYWORDS: [&str; 5] = [FALSE_NAME, NULL_NAME, TRUE_NAME, NEVER_NAME, THIS_NAME];
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct VarsManager {
   variables: HashMap<String, Value>,
   constants: HashSet<String>,
-  link: Option<Rc<RefCell<VarsManager>>>,
+  link: Option<MultiRefHash<VarsManager>>,
 }
 impl VarsManager {
   pub fn new() -> Self {
@@ -29,9 +31,9 @@ impl VarsManager {
     this.declare_keyword(TRUE_NAME, Value::True);
     this
   }
-  pub fn crate_child(parent: Rc<RefCell<Self>>) -> Self {
+  pub fn crate_child(parent: MultiRefHash<Self>) -> Self {
     let mut this = Self::new();
-    this.link = Some(parent);
+    this.link = Some(parent.into());
     this
   }
   fn declare_keyword(&mut self, name: &str, value: Value) {
@@ -70,7 +72,7 @@ impl VarsManager {
     self.declare_keyword(THIS_NAME, this);
     self
   }
-  pub fn get_link(&self) -> Option<Rc<RefCell<Self>>> {
+  pub fn get_link(&self) -> Option<MultiRefHash<Self>> {
     self.link.clone()
   }
   pub fn remove(&mut self, name: &str) -> Option<Value> {

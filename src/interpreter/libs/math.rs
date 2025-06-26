@@ -22,8 +22,8 @@ pub fn math_lib() -> Value {
       Function::Native {
         name: format!("<{MATH_LIB}>::{FLOOR}"),
         path: format!("<{MATH_LIB}>"),
-        chunk: ChunkGroup::default(),
-        func: |_, args, _| {
+        chunk: ChunkGroup::default().into(),
+        func: |_, args, _, _| {
           let number = args
             .get(0)
             .ok_or_else(|| format!("{FLOOR}: se esperaba 1 argumento y se recibieron 0"))?;
@@ -35,6 +35,7 @@ pub fn math_lib() -> Value {
             Err(format!("{FLOOR}: se esperaba un número"))
           }
         },
+        custom_data: ().into(),
       }
       .into(),
     ),
@@ -46,8 +47,8 @@ pub fn math_lib() -> Value {
       Function::Native {
         name: format!("<{MATH_LIB}>::{IS_INFINITE}"),
         path: format!("<{MATH_LIB}>"),
-        chunk: ChunkGroup::default(),
-        func: |_, args, _| {
+        chunk: ChunkGroup::default().into(),
+        func: |_, args, _, _| {
           let number = args
             .get(0)
             .ok_or_else(|| format!("{IS_INFINITE}: se esperaba 1 argumento y se recibieron 0"))?;
@@ -59,6 +60,7 @@ pub fn math_lib() -> Value {
             Err(format!("{IS_INFINITE}: se esperaba un número"))
           }
         },
+        custom_data: ().into(),
       }
       .into(),
     ),
@@ -70,8 +72,8 @@ pub fn math_lib() -> Value {
       Function::Native {
         name: format!("<{MATH_LIB}>::{ROUND}"),
         path: format!("<{MATH_LIB}>"),
-        chunk: ChunkGroup::default(),
-        func: |_, args, _| {
+        chunk: ChunkGroup::default().into(),
+        func: |_, args, _, _| {
           let number = args
             .get(0)
             .ok_or_else(|| format!("{ROUND}: se esperaba 1 argumento y se recibieron 0"))?;
@@ -83,6 +85,7 @@ pub fn math_lib() -> Value {
             Err(format!("{ROUND}: se esperaba un número"))
           }
         },
+        custom_data: ().into(),
       }
       .into(),
     ),
@@ -94,8 +97,8 @@ pub fn math_lib() -> Value {
       Function::Native {
         name: format!("<{MATH_LIB}>::{CEIL}"),
         path: format!("<{MATH_LIB}>"),
-        chunk: ChunkGroup::default(),
-        func: |_, args, _| {
+        chunk: ChunkGroup::default().into(),
+        func: |_, args, _, _| {
           let number = args
             .get(0)
             .ok_or_else(|| format!("{CEIL}: se esperaba 1 argumento y se recibieron 0"))?;
@@ -107,6 +110,7 @@ pub fn math_lib() -> Value {
             Err(format!("{CEIL}: se esperaba un número"))
           }
         },
+        custom_data: ().into(),
       }
       .into(),
     ),
@@ -118,8 +122,8 @@ pub fn math_lib() -> Value {
       Function::Native {
         name: format!("<{MATH_LIB}>::{MAX}"),
         path: format!("<{MATH_LIB}>"),
-        chunk: ChunkGroup::default(),
-        func: |_, args, _| {
+        chunk: ChunkGroup::default().into(),
+        func: |_, args, _, _| {
           let mut max = Number::NegativeInfinity;
           for arg in args {
             if arg.is_number() {
@@ -133,6 +137,7 @@ pub fn math_lib() -> Value {
           }
           Ok(Value::Number(max))
         },
+        custom_data: ().into(),
       }
       .into(),
     ),
@@ -144,8 +149,8 @@ pub fn math_lib() -> Value {
       Function::Native {
         name: format!("<{MATH_LIB}>::{MIN}"),
         path: format!("<{MATH_LIB}>"),
-        chunk: ChunkGroup::default(),
-        func: |_, args, _| {
+        chunk: ChunkGroup::default().into(),
+        func: |_, args, _, _| {
           let mut min = Number::Infinity;
           for arg in args {
             if arg.is_number() {
@@ -159,6 +164,7 @@ pub fn math_lib() -> Value {
           }
           Ok(Value::Number(min))
         },
+        custom_data: ().into(),
       }
       .into(),
     ),

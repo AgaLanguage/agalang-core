@@ -1,6 +1,9 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::functions_names::{CONSTRUCTOR, SUPER};
+use crate::{
+  functions_names::{CONSTRUCTOR, SUPER},
+  util::MutClone,
+};
 
 use super::{MultiRefHash, Value};
 
@@ -11,6 +14,7 @@ pub struct Instance {
   poperties: MultiRefHash<HashMap<String, Value>>,
   public_properties: MultiRefHash<HashSet<String>>,
 }
+impl MutClone for Instance {}
 
 impl Instance {
   pub fn new(name: String) -> Self {
@@ -32,45 +36,45 @@ impl Instance {
     key: &str,
     thread: &crate::interpreter::Thread,
   ) -> Option<Value> {
-    if !self.poperties.borrow().contains_key(key) {
+    if !self.poperties.read().contains_key(key) {
       return self
         .extend
         .on_ok(|extend| extend.get_instance_property(key, thread));
     }
-    let access = if self.public_properties.borrow().contains(key) {
+    let access = if self.public_properties.read().contains(key) {
       true
     } else if let Some(class) = thread.get_calls().last().unwrap().in_class() {
       self
         .clone()
-        .is_instance(class.borrow().instance.as_ref().unwrap().clone())
+        .is_instance(class.read().instance.read().as_ref().unwrap().clone())
     } else {
       false
     };
     if access {
-      self.poperties.borrow().get(key).cloned()
+      self.poperties.read().get(key).cloned()
     } else {
       None
     }
   }
   pub fn set_instance_property(&self, key: &str, value: Value, is_public: bool) -> Value {
-    if !self.poperties.borrow().contains_key(key) {
+    if !self.poperties.read().contains_key(key) {
       self.set_public_property(key, is_public);
     }
     self
       .poperties
-      .borrow_mut()
+      .write()
       .insert(key.to_string(), value.clone())
       .unwrap_or_default()
   }
   fn set_public_property(&self, key: &str, is_public: bool) {
-    let current_is_public = self.public_properties.borrow().contains(key);
+    let current_is_public = self.public_properties.read().contains(key);
     if current_is_public == is_public {
       return;
     }
     if is_public {
-      self.public_properties.borrow_mut().insert(key.to_string());
+      self.public_properties.write().insert(key.to_string());
     } else {
-      self.public_properties.borrow_mut().remove(key);
+      self.public_properties.write().remove(key);
     }
   }
   pub fn _is_instance_of(&self, value: &Value) -> bool {
@@ -97,7 +101,7 @@ impl Instance {
   pub fn ovwerwrite_instance_property(&self, key: &str, value: Value) {
     self
       .poperties
-      .borrow_mut()
+      .write()
       .insert(key.to_string(), value.clone());
   }
 }
@@ -132,24 +136,24 @@ impl Class {
     &self.name
   }
   pub fn has_parent(&self) -> bool {
-    self.extend.borrow().is_some()
+    self.extend.read().is_some()
   }
   pub fn get_parent(&self) -> MultiRefHash<Option<Class>> {
     self.extend.clone()
   }
   pub fn set_parent(&self, parent: Class) {
-    *self.instance.as_ref().unwrap().extend.borrow_mut() = parent.instance.cloned();
-    *self.extend.borrow_mut() = Some(parent);
+    *self.instance.read().as_ref().unwrap().extend.write() = parent.instance.cloned();
+    *self.extend.write() = Some(parent);
   }
   pub fn set_instance_property(&self, key: &str, value: Value) -> Value {
     self
       .poperties
-      .borrow_mut()
+      .write()
       .insert(key.to_string(), value.clone())
       .unwrap_or_default()
   }
   pub fn get_instance_property(&self, key: &str) -> Option<Value> {
-    self.poperties.borrow().get(key).cloned()
+    self.poperties.read().get(key).cloned()
   }
   pub fn make_instance(&self) -> Value {
     self
@@ -177,3 +181,5 @@ impl Class {
     self.instance.on_some(|i| i == instance).unwrap_or_default()
   }
 }
+
+impl MutClone for Class {}

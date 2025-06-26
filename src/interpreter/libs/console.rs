@@ -20,13 +20,14 @@ fn inspect_value(value: &Value) -> String {
     Value::Iterator(_) => Color::BrightCyan,
     Value::Ref(_) => Color::BrightBlue,
     Value::Promise(_) => Color::Red,
-    Value::Lazy(l) => return inspect_value(&l.get().on_some(|l| l.clone()).unwrap_or_default()),
+    Value::Lazy(l) => return inspect_value(&l.get().clone().unwrap_or_default()),
   }
   .apply(&value.as_string())
 }
 fn inspect(value: &Value, thread: &Thread) -> String {
   match value {
     Value::Object(Object::Map(_, i)) => i
+      .read()
       .as_ref()
       .on_some_option(|i| i.get_instance_property(CONSOLE, thread))
       .on_some(|p| p.as_string())
@@ -35,7 +36,7 @@ fn inspect(value: &Value, thread: &Thread) -> String {
       let mut result = String::new();
       result.push_str("[");
       let mut is_first = true;
-      for item in arr.borrow().clone() {
+      for item in arr.read().clone() {
         if is_first {
           is_first = false;
         } else {
@@ -46,7 +47,7 @@ fn inspect(value: &Value, thread: &Thread) -> String {
       result.push_str("]");
       result
     }
-    Value::Iterator(iter) => format!("@{}", inspect(&iter.borrow(), thread)),
+    Value::Iterator(iter) => format!("@{}", inspect(&iter.read(), thread)),
     Value::Ref(item) => format!("&{}", inspect(&item.borrow(), thread)),
     item => inspect_value(item),
   }
@@ -61,8 +62,8 @@ pub fn console_lib() -> Value {
       crate::compiler::Function::Native {
         name: format!("<{CONSOLE_LIB}>::{DRAW}"),
         path: format!("<{CONSOLE_LIB}>"),
-        chunk: crate::compiler::ChunkGroup::default(),
-        func: |_, args, thread| {
+        chunk: Default::default(),
+        func: |_, args, thread, _| {
           for value in args.iter() {
             print!("{}", inspect(value, thread));
             print!(" ");
@@ -70,6 +71,7 @@ pub fn console_lib() -> Value {
           println!("");
           Ok(Value::Never)
         },
+        custom_data: ().into(),
       }
       .into(),
     ),
@@ -81,15 +83,18 @@ pub fn console_lib() -> Value {
       crate::compiler::Function::Native {
         name: format!("<{CONSOLE_LIB}>::{INSPECT}"),
         path: format!("<{CONSOLE_LIB}>"),
-        chunk: crate::compiler::ChunkGroup::default(),
-        func: |_, args, thread| {
+        chunk: Default::default(),
+        func: |_, args, thread, _| {
           args
-          .first()
-          .on_some_option(|i|
-            i.get_instance_property(CONSOLE, thread)
-          ).on_some(|v|Value::String(v.as_string()))
-          .on_error(|_|format!("{INSPECT}: se esperaba un número"))
-        }
+            .first()
+            .on_some(|value| {
+              value
+                .get_instance_property(CONSOLE, thread)
+                .unwrap_or_else(|| Value::String(inspect(value, thread)))
+            })
+            .on_error(|_| format!("{INSPECT}: se esperaba un valor para representar"))
+        },
+        custom_data: ().into(),
       }
       .into(),
     ),

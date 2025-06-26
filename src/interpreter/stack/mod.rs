@@ -1,7 +1,4 @@
-use std::cell::{RefCell, RefMut};
-use std::rc::Rc;
-
-use crate::compiler::{Function, MultiRefHash};
+use crate::{compiler::Function, MultiRefHash};
 
 mod vars_manager;
 pub use vars_manager::VarsManager;
@@ -18,44 +15,44 @@ pub enum InterpretResult {
 pub struct CallFrame {
   ip: usize,
   function: MultiRefHash<Function>,
-  locals: Vec<Rc<RefCell<VarsManager>>>,
+  locals: Vec<MultiRefHash<VarsManager>>,
 }
 impl CallFrame {
-  pub fn new_compiler(compiler: crate::compiler::Compiler, vars: Rc<RefCell<VarsManager>>) -> Self {
+  pub fn new_compiler(
+    compiler: crate::compiler::Compiler,
+    vars: MultiRefHash<VarsManager>,
+  ) -> Self {
     Self::new(
       compiler.function.into(),
-      vec![Rc::new(RefCell::new(VarsManager::crate_child(vars)))],
+      vec![VarsManager::crate_child(vars).into()],
     )
   }
-  pub fn new(function: MultiRefHash<Function>, locals: Vec<Rc<RefCell<VarsManager>>>) -> Self {
+  pub fn new(function: MultiRefHash<Function>, locals: Vec<MultiRefHash<VarsManager>>) -> Self {
     Self {
       ip: 0,
       function,
-      locals,
+      locals: locals.into(),
     }
   }
-  pub fn current_chunk(&mut self) -> RefMut<crate::compiler::ChunkGroup> {
-    RefMut::map(self.function.borrow_mut(), |func| func.chunk())
+  pub fn current_chunk(&self) -> MultiRefHash<crate::compiler::ChunkGroup> {
+    self.function.write().chunk()
   }
-  pub fn current_line(&mut self) -> usize {
+  pub fn current_line(&self) -> usize {
     let instruction = self.ip.saturating_sub(1);
     let instruction = if instruction > self.ip {
       0
     } else {
       instruction
     };
-    self.current_chunk().get_line(instruction)
+    self.current_chunk().read().get_line(instruction)
   }
   pub fn read(&mut self) -> u8 {
-    let ip = self.ip;
-    let byte = self.current_chunk().read(ip);
+    let byte = self.current_chunk().read().read(self.ip);
     self.ip += 1;
     byte
   }
-  pub fn peek(&mut self) -> u8 {
-    let ip = self.ip;
-    let byte = self.current_chunk().read(ip);
-    byte
+  pub fn peek(&self) -> u8 {
+    self.current_chunk().read().read(self.ip)
   }
   pub fn back(&mut self, offset: usize) {
     self.ip -= offset;
@@ -63,18 +60,18 @@ impl CallFrame {
   pub fn advance(&mut self, offset: usize) {
     self.ip += offset;
   }
-  pub fn globals(&self) -> Rc<RefCell<VarsManager>> {
-    self.locals[0].clone()
+  pub fn globals(&self) -> MultiRefHash<VarsManager> {
+    self.locals.get(0).unwrap().clone()
   }
-  pub fn current_vars(&self) -> Rc<RefCell<VarsManager>> {
+  pub fn current_vars(&self) -> MultiRefHash<VarsManager> {
     self.locals.last().unwrap().clone()
   }
-  pub fn resolve_vars(&mut self, name: &str) -> Rc<RefCell<VarsManager>> {
+  pub fn resolve_vars(&self, name: &str) -> MultiRefHash<VarsManager> {
     let original = self.current_vars();
-    let vars = Rc::new(RefCell::new(original.clone()));
+    let vars: MultiRefHash<MultiRefHash<VarsManager>> = original.clone().into();
     loop {
-      let ref_vars = vars.borrow();
-      let vars_manager = ref_vars.borrow();
+      let ref_vars = vars.read();
+      let vars_manager = ref_vars.read();
 
       if vars_manager.has(name) {
         break;
@@ -87,37 +84,35 @@ impl CallFrame {
       drop(ref_vars);
 
       if let Some(link) = link {
-        *vars.borrow_mut() = link;
+        *vars.write() = link;
       } else {
-        *vars.borrow_mut() = original;
+        *vars.write() = original;
         break;
       }
     }
-    let x = vars.borrow().clone();
+    let x = vars.read().clone();
     x
   }
   pub fn add_vars(&mut self) {
     self
       .locals
-      .push(Rc::new(RefCell::new(VarsManager::crate_child(
-        self.current_vars(),
-      ))));
+      .push(VarsManager::crate_child(self.current_vars()).into());
   }
-  pub fn pop_vars(&mut self) -> Rc<RefCell<VarsManager>> {
+  pub fn pop_vars(&mut self) -> MultiRefHash<VarsManager> {
     self.locals.pop().unwrap()
   }
   pub fn in_class(&self) -> Option<MultiRefHash<crate::compiler::Class>> {
-    self.function.borrow().get_in_class()
+    self.function.read().get_in_class()
   }
 }
 impl std::fmt::Debug for CallFrame {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    write!(f, "\n\t{}", self.function.borrow().location())
+    write!(f, "\n\t{}", self.function.read().location())
   }
 }
 impl ToString for CallFrame {
   fn to_string(&self) -> String {
-    self.function.borrow().to_string()
+    self.function.read().to_string()
   }
 }
 pub fn call_stack_to_string(stack: &Vec<CallFrame>) -> String {
@@ -125,10 +120,7 @@ pub fn call_stack_to_string(stack: &Vec<CallFrame>) -> String {
   let mut index = stack.len();
   while index > 0 {
     index -= 1;
-    string.push_str(&format!(
-      "\n\t{}",
-      stack[index].function.borrow().location()
-    ));
+    string.push_str(&format!("\n\t{}", stack[index].function.read().location()));
   }
   string
 }

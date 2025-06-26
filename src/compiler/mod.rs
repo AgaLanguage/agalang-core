@@ -42,6 +42,7 @@ impl Compiler {
       let _global = compiler
         .function
         .chunk()
+        .write()
         .make_arg(name, param.location.start.line);
     }
     compiler.function.set_rest(has_rest);
@@ -57,31 +58,31 @@ impl Compiler {
     Ok(compiler.function)
   }
   fn set_constant(&mut self, value: Value, line: usize) -> u8 {
-    self.function.chunk().write_constant(value, line)
+    self.function.chunk().write().write_constant(value, line)
   }
   fn set_value(&mut self, value: Value) -> u8 {
-    self.function.chunk().add_value(value)
+    self.function.chunk().write().add_value(value)
   }
   fn write(&mut self, byte: u8, line: usize) {
-    self.function.chunk().write(byte, line);
+    self.function.chunk().write().write(byte, line);
   }
   fn write_buffer(&mut self, buffer: Vec<u8>, line: usize) {
-    self.function.chunk().write_buffer(buffer, line);
+    self.function.chunk().write().write_buffer(buffer, line);
   }
   fn len(&mut self) -> usize {
-    self.function.chunk().len()
+    self.function.chunk().read().len()
   }
   fn read_var(&mut self, name: String, line: usize) {
-    self.function.chunk().read_var(name, line);
+    self.function.chunk().write().read_var(name, line);
   }
   fn jump(&mut self, code: OpCode) -> usize {
-    self.function.chunk().jump(code)
+    self.function.chunk().write().jump(code)
   }
   fn patch_jump(&mut self, offset: usize) -> Result<(), String> {
-    self.function.chunk().patch_jump(offset)
+    self.function.chunk().write().patch_jump(offset)
   }
   fn add_loop(&mut self, offset: usize) -> Result<(), String> {
-    self.function.chunk().add_loop(offset)
+    self.function.chunk().write().add_loop(offset)
   }
   fn node_value_to_bytes(&mut self, node: &Node) -> Result<(), String> {
     match node {
@@ -443,7 +444,8 @@ impl Compiler {
         );
       }
       Node::Array(node_array) => {
-        let value = Value::Object(vec![].into());
+        let vec: Vec<Value> = vec![];
+        let value = Value::Object(vec.into());
         let mut index = 0;
         for p in node_array.elements.clone() {
           self.set_constant(value.clone(), node_array.location.start.line);
@@ -654,6 +656,7 @@ impl Compiler {
             catch_block
               .function
               .chunk()
+              .write()
               .make_arg(error.clone(), block.location.start.line);
             if block.len() > 0 {
               catch_block.node_to_bytes(&block.clone().to_node())?;
@@ -677,7 +680,7 @@ impl Compiler {
       Node::Lazy(node_expression) => {
         let mut lazy_block = Self {
           function: Function::Script {
-            chunk: ChunkGroup::new(),
+            chunk: ChunkGroup::new().into(),
             path: node.get_file(),
             scope: None.into(),
           },
@@ -701,7 +704,7 @@ impl TryFrom<&Node> for Compiler {
 
   fn try_from(value: &Node) -> Result<Self, Self::Error> {
     let path = value.get_file();
-    let chunk = ChunkGroup::new();
+    let chunk = ChunkGroup::new().into();
     let function = Function::Script {
       chunk,
       path: path.clone(),

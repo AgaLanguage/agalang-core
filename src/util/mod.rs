@@ -1,9 +1,11 @@
 mod colors;
 pub mod list;
+mod multi_ref_hash;
 mod tokenize;
 
 pub use colors::*;
 pub use list::*;
+pub use multi_ref_hash::*;
 pub use tokenize::*;
 pub fn is_valid_char(valid_chars: &str, eval_char: char) -> bool {
   for c in valid_chars.chars() {
@@ -101,3 +103,17 @@ where
     Some(v)
   }
 }
+
+/// Nos asegura que el clon del valor puede mutar el valor orignal
+/// El objetivo es tener certeza de la mutabilidad de un clon
+pub trait MutClone: Clone {}
+impl<T> MutClone for Option<T> where T: MutClone {}
+impl<T, E> MutClone for Result<T, E>
+where
+  T: MutClone,
+  E: MutClone,
+{
+}
+
+// String sera tratado como primtivo apesar de no serlo
+impl MutClone for String {}
