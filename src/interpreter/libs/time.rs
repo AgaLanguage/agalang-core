@@ -4,7 +4,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::compiler::Value;
 
-pub const TIME_LIB: &str = ":tmp";
+pub const LIB_NAME: &str = ":tmp";
 const NOW: &str = "ahora";
 const ZONE: &str = "ZONA";
 
@@ -35,15 +35,15 @@ unsafe fn get_utc_in_secs() -> i32 {
   offset
 }
 
-pub fn time_lib() -> Value {
-  let hashmap = crate::compiler::Instance::new(format!("<{TIME_LIB}>"));
+pub fn lib_value() -> Value {
+  let hashmap = crate::compiler::Instance::new(format!("<{LIB_NAME}>"));
 
   hashmap.set_instance_property(
     NOW.into(),
     Value::Object(
       crate::compiler::Function::Native {
-        name: format!("<{TIME_LIB}>::{NOW}"),
-        path: format!("<{TIME_LIB}>"),
+        name: format!("<{LIB_NAME}>::{NOW}"),
+        path: format!("<{LIB_NAME}>"),
         chunk: crate::compiler::ChunkGroup::default().into(),
         func: |_, _, _, _| {
           let nanos = match SystemTime::now().duration_since(UNIX_EPOCH) {

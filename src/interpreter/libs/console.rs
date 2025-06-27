@@ -5,7 +5,7 @@ use crate::functions_names::CONSOLE;
 use crate::interpreter::Thread;
 use crate::util::{Color, OnError, OnSome};
 
-pub const CONSOLE_LIB: &str = ":consola";
+pub const LIB_NAME: &str = ":consola";
 const DRAW: &str = "pinta";
 const INSPECT: &str = "inspecciona";
 
@@ -53,15 +53,15 @@ fn inspect(value: &Value, thread: &Thread) -> String {
   }
 }
 
-pub fn console_lib() -> Value {
-  let hashmap = crate::compiler::Instance::new(format!("<{CONSOLE_LIB}>"));
+pub fn lib_value() -> Value {
+  let hashmap = crate::compiler::Instance::new(format!("<{LIB_NAME}>"));
 
   hashmap.set_instance_property(
     DRAW.into(),
     Value::Object(
       crate::compiler::Function::Native {
-        name: format!("<{CONSOLE_LIB}>::{DRAW}"),
-        path: format!("<{CONSOLE_LIB}>"),
+        name: format!("<{LIB_NAME}>::{DRAW}"),
+        path: format!("<{LIB_NAME}>"),
         chunk: Default::default(),
         func: |_, args, thread, _| {
           for value in args.iter() {
@@ -81,8 +81,8 @@ pub fn console_lib() -> Value {
     INSPECT.into(),
     Value::Object(
       crate::compiler::Function::Native {
-        name: format!("<{CONSOLE_LIB}>::{INSPECT}"),
-        path: format!("<{CONSOLE_LIB}>"),
+        name: format!("<{LIB_NAME}>::{INSPECT}"),
+        path: format!("<{LIB_NAME}>"),
         chunk: Default::default(),
         func: |_, args, thread, _| {
           args

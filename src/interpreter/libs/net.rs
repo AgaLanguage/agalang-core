@@ -9,20 +9,25 @@ use crate::interpreter::VarsManager;
 use crate::util::{OnError, OnSome};
 use crate::MultiRefHash;
 
-pub const NET_LIB: &str = ":red";
+pub const LIB_NAME: &str = ":red";
 const TCP_SERVER: &str = "servidorTCP";
-const TCP_DATA: &str = "DatosTCP";
+const TCP_SERVER_PROMISE: &str = "promesa";
 
-const TCP_DATA_WRITE: &str = "escribe";
-const TCP_DATA_CLOSE: &str = "cierra";
-const TCP_DATA_READ: &str = "lee";
+const TCP_SOCKET: &str = "SocketTCP";
+const TCP_SOCKET_WRITE: &str = "escribe";
+const TCP_SOCKET_CLOSE: &str = "cierra";
+const TCP_SOCKET_READ: &str = "lee";
+
+const TCP_DATA_PORT: &str = "puerto";
+const TCP_DATA_IP: &str = "ip";
 
 fn handle_client(
   stream: std::net::TcpStream,
+  socket: std::net::SocketAddr,
   callback: MultiRefHash<crate::compiler::Function>,
   module: MultiRefHash<crate::interpreter::ModuleThread>,
 ) {
-  let data = crate::compiler::Instance::new(format!("<{NET_LIB}>::{TCP_DATA}"));
+  let data = crate::compiler::Instance::new(format!("<{LIB_NAME}>::{TCP_SOCKET}"));
 
   let stream: MultiRefHash<crate::compiler::NativeValue> = stream.into();
 
@@ -30,19 +35,20 @@ fn handle_client(
   let frame = CallFrame::new(callback, vec![locals.into()]);
   let (thread, promise) = AsyncThread::from_frame(frame);
   thread.write().set_module(module.clone());
+  thread.write().print_on_error();
 
   data.set_instance_property(
-    TCP_DATA_READ,
+    TCP_SOCKET_READ,
     Value::Object(crate::compiler::Object::Function(MultiRefHash::new(
       Function::Native {
-        name: format!("<{TCP_DATA}>::{TCP_DATA_READ}"),
-        path: format!("<{NET_LIB}>::{TCP_SERVER}({TCP_DATA})"),
+        name: format!("<{TCP_SOCKET}>::{TCP_SOCKET_READ}"),
+        path: format!("<{LIB_NAME}>::{TCP_SERVER}({TCP_SOCKET})"),
         chunk: Default::default(),
         func: |_, _, _, stream| {
           let mut binding = stream.write();
           let stream = binding
             .mut_tcp_stream()
-            .on_error(|_| format!("{TCP_DATA_READ}: El socket TCP no esta abierto"))?;
+            .on_error(|_| format!("{TCP_SOCKET_READ}: El socket TCP no esta abierto"))?;
           let mut buf = vec![0; 1024];
           use std::io::Read;
           match stream.read(&mut buf) {
@@ -51,10 +57,10 @@ fn handle_client(
                 let value = Value::Object(buf[..bytes_read].to_vec().into());
                 Ok(value)
               } else {
-                Err(format!("{TCP_DATA_READ}: No hay datos para leer").into())
+                Err(format!("{TCP_SOCKET_READ}: No hay datos para leer").into())
               }
             }
-            Err(e) => Err(format!("{TCP_DATA_READ}: Error al leer del socket: {}", e).into()),
+            Err(e) => Err(format!("{TCP_SOCKET_READ}: Error al leer del socket: {}", e).into()),
           }
         },
         custom_data: stream.clone(),
@@ -63,27 +69,27 @@ fn handle_client(
     true,
   );
   data.set_instance_property(
-    TCP_DATA_WRITE,
+    TCP_SOCKET_WRITE,
     Value::Object(crate::compiler::Object::Function(MultiRefHash::new(
       Function::Native {
-        name: format!("<{TCP_DATA}>::{TCP_DATA_WRITE}"),
-        path: format!("<{NET_LIB}>::{TCP_SERVER}({TCP_DATA})"),
+        name: format!("<{TCP_SOCKET}>::{TCP_SOCKET_WRITE}"),
+        path: format!("<{LIB_NAME}>::{TCP_SERVER}({TCP_SOCKET})"),
         chunk: Default::default(),
         func: |_, args, thread, stream| {
           let data = args
             .get(0)
             .on_some_option(|t| t.as_strict_buffer(thread).ok())
             .on_error(|_| {
-              format!("{TCP_DATA_WRITE}: Se esperaba un valor buffer como primer argumento")
+              format!("{TCP_SOCKET_WRITE}: Se esperaba un valor buffer como primer argumento")
             })?;
           let mut binding = stream.write();
           let stream = binding
             .mut_tcp_stream()
-            .on_error(|_| format!("{TCP_DATA_WRITE}: El socket TCP no esta abierto"))?;
+            .on_error(|_| format!("{TCP_SOCKET_WRITE}: El socket TCP no esta abierto"))?;
           use std::io::Write;
           stream
             .write_all(&data)
-            .on_error(|e| format!("{TCP_DATA_WRITE}: Error al escribir en el socket: {e}"))?;
+            .on_error(|e| format!("{TCP_SOCKET_WRITE}: Error al escribir en el socket: {e}"))?;
           Ok(Value::Never)
         },
         custom_data: stream.clone(),
@@ -92,11 +98,11 @@ fn handle_client(
     true,
   );
   data.set_instance_property(
-    TCP_DATA_CLOSE,
+    TCP_SOCKET_CLOSE,
     Value::Object(crate::compiler::Object::Function(MultiRefHash::new(
       Function::Native {
-        name: format!("<{TCP_DATA}>::{TCP_DATA_CLOSE}"),
-        path: format!("<{NET_LIB}>::{TCP_SERVER}({TCP_DATA})"),
+        name: format!("<{TCP_SOCKET}>::{TCP_SOCKET_CLOSE}"),
+        path: format!("<{LIB_NAME}>::{TCP_SERVER}({TCP_SOCKET})"),
         chunk: Default::default(),
         func: |_, _, _, values| {
           *values.read().get_value().unwrap().write() = NativeValue::None;
@@ -112,6 +118,8 @@ fn handle_client(
     ))),
     true,
   );
+  data.set_instance_property(TCP_DATA_IP, Value::String(socket.ip().to_string()), true);
+  data.set_instance_property(TCP_DATA_PORT, Value::Number(socket.port().into()), true);
 
   thread
     .read()
@@ -127,15 +135,15 @@ fn handle_client(
     .push_interrupt_thread(thread);
 }
 
-pub fn net_lib() -> Value {
-  let hashmap = crate::compiler::Instance::new(format!("<{NET_LIB}>"));
+pub fn lib_value() -> Value {
+  let hashmap = crate::compiler::Instance::new(format!("<{LIB_NAME}>"));
 
   hashmap.set_instance_property(
     TCP_SERVER,
     Value::Object(
       crate::compiler::Function::Native {
-        name: format!("<{NET_LIB}>::{TCP_SERVER}"),
-        path: format!("<{NET_LIB}>"),
+        name: format!("<{LIB_NAME}>::{TCP_SERVER}"),
+        path: format!("<{LIB_NAME}>"),
         chunk: crate::compiler::ChunkGroup::default().into(),
         func: |_, args, thread, _| {
           let addr = args
@@ -164,23 +172,33 @@ pub fn net_lib() -> Value {
           let promise = Promise::new();
           let value = Value::Promise(promise.clone());
 
-          let listener = TcpListener::bind(&addr)
-            .map_err(|e| format!("{TCP_SERVER}: No se pudo iniciar servidor TCP: {}", e))?;
+          let listener = Arc::new(
+            TcpListener::bind(&addr)
+              .map_err(|e| format!("{TCP_SERVER}: No se pudo iniciar el servidor TCP: {}", e))?,
+          );
 
+          let clone_listener = Arc::clone(&listener);
           let module = thread.get_async().read().get_module();
-          std::thread::spawn(move || {
-            let listener = Arc::new(listener);
-            loop {
-              match listener.accept() {
-                Ok((stream, _addr)) => handle_client(stream, callback.clone(), module.clone()),
-                Err(e) => {
-                  promise.set_err(format!("{TCP_SERVER}: Error al aceptar conexión: {}", e));
-                  break;
-                }
+          std::thread::spawn(move || loop {
+            match clone_listener.accept() {
+              Ok((stream, addr)) => handle_client(stream, addr, callback.clone(), module.clone()),
+              Err(e) => {
+                promise.set_err(format!("{TCP_SERVER}: Error al aceptar conexión: {}", e));
+                break;
               }
             }
           });
-          Ok(value)
+          let data = crate::compiler::Instance::new(format!("<{LIB_NAME}>::{TCP_SERVER}"));
+          data.set_instance_property(TCP_SERVER_PROMISE, value, true);
+          let addr = listener
+            .local_addr()
+            .on_error(|e| format!("{TCP_SERVER}: Error al verificar el servidor: {}", e))?;
+          data.set_instance_property(TCP_DATA_IP, Value::String(addr.ip().to_string()), true);
+          data.set_instance_property(TCP_DATA_PORT, Value::Number(addr.port().into()), true);
+          Ok(Value::Object(crate::compiler::Object::Map(
+            HashMap::new().into(),
+            data.into(),
+          )))
         },
         custom_data: ().into(),
       }

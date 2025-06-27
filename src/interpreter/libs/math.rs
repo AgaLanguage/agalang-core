@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::compiler::{ChunkGroup, Function, Number, Value};
 
-pub const MATH_LIB: &str = ":mate";
+pub const LIB_NAME: &str = ":mate";
 const CEIL: &str = "techo";
 const FLOOR: &str = "suelo";
 const ROUND: &str = "redondeo";
@@ -13,15 +13,15 @@ const EULER: &str = "E";
 const TAU: &str = "TAU";
 const IS_INFINITE: &str = "esInfinito";
 
-pub fn math_lib() -> Value {
-  let hashmap = crate::compiler::Instance::new(format!("<{MATH_LIB}>"));
+pub fn lib_value() -> Value {
+  let hashmap = crate::compiler::Instance::new(format!("<{LIB_NAME}>"));
 
   hashmap.set_instance_property(
     FLOOR.into(),
     Value::Object(
       Function::Native {
-        name: format!("<{MATH_LIB}>::{FLOOR}"),
-        path: format!("<{MATH_LIB}>"),
+        name: format!("<{LIB_NAME}>::{FLOOR}"),
+        path: format!("<{LIB_NAME}>"),
         chunk: ChunkGroup::default().into(),
         func: |_, args, _, _| {
           let number = args
@@ -45,8 +45,8 @@ pub fn math_lib() -> Value {
     IS_INFINITE.into(),
     Value::Object(
       Function::Native {
-        name: format!("<{MATH_LIB}>::{IS_INFINITE}"),
-        path: format!("<{MATH_LIB}>"),
+        name: format!("<{LIB_NAME}>::{IS_INFINITE}"),
+        path: format!("<{LIB_NAME}>"),
         chunk: ChunkGroup::default().into(),
         func: |_, args, _, _| {
           let number = args
@@ -70,8 +70,8 @@ pub fn math_lib() -> Value {
     ROUND.into(),
     Value::Object(
       Function::Native {
-        name: format!("<{MATH_LIB}>::{ROUND}"),
-        path: format!("<{MATH_LIB}>"),
+        name: format!("<{LIB_NAME}>::{ROUND}"),
+        path: format!("<{LIB_NAME}>"),
         chunk: ChunkGroup::default().into(),
         func: |_, args, _, _| {
           let number = args
@@ -95,8 +95,8 @@ pub fn math_lib() -> Value {
     CEIL.into(),
     Value::Object(
       Function::Native {
-        name: format!("<{MATH_LIB}>::{CEIL}"),
-        path: format!("<{MATH_LIB}>"),
+        name: format!("<{LIB_NAME}>::{CEIL}"),
+        path: format!("<{LIB_NAME}>"),
         chunk: ChunkGroup::default().into(),
         func: |_, args, _, _| {
           let number = args
@@ -120,8 +120,8 @@ pub fn math_lib() -> Value {
     MAX.into(),
     Value::Object(
       Function::Native {
-        name: format!("<{MATH_LIB}>::{MAX}"),
-        path: format!("<{MATH_LIB}>"),
+        name: format!("<{LIB_NAME}>::{MAX}"),
+        path: format!("<{LIB_NAME}>"),
         chunk: ChunkGroup::default().into(),
         func: |_, args, _, _| {
           let mut max = Number::NegativeInfinity;
@@ -147,8 +147,8 @@ pub fn math_lib() -> Value {
     MIN.into(),
     Value::Object(
       Function::Native {
-        name: format!("<{MATH_LIB}>::{MIN}"),
-        path: format!("<{MATH_LIB}>"),
+        name: format!("<{LIB_NAME}>::{MIN}"),
+        path: format!("<{LIB_NAME}>"),
         chunk: ChunkGroup::default().into(),
         func: |_, args, _, _| {
           let mut min = Number::Infinity;
