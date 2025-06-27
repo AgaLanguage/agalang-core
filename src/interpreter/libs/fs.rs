@@ -70,7 +70,11 @@ pub fn lib_value() -> Value {
             .on_some_option(|dir| {
               let mut files = Vec::new();
               for file in dir {
-                files.push(Value::String(file.ok().on_some(|file|file.file_name().to_string_lossy().to_string())?))
+                files.push(Value::String(
+                  file
+                    .ok()
+                    .on_some(|file| file.file_name().to_string_lossy().to_string())?,
+                ))
               }
               Some(Value::Object(files.into()))
             })

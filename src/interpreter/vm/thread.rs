@@ -235,7 +235,7 @@ pub struct AsyncThread {
   thread: MultiRefHash<Thread>,
   await_thread: MultiRefHash<BlockingThread>,
   module: Option<MultiRefHash<ModuleThread>>,
-  print_error: bool
+  print_error: bool,
 }
 impl AsyncThread {
   pub fn is_waiting(&self) -> bool {
@@ -277,7 +277,7 @@ impl AsyncThread {
       thread: thread.clone(),
       await_thread: Default::default(),
       module: Default::default(),
-      print_error: false
+      print_error: false,
     }
     .into();
     thread.write().set_async(async_thread.clone());
@@ -314,7 +314,7 @@ impl AsyncThread {
             if contain_error {
               // Este es un error de la promesa, no de el programa
               InterpretResult::Ok
-            }else{
+            } else {
               InterpretResult::RuntimeError(err)
             }
           }
@@ -964,7 +964,9 @@ impl Thread {
         if a.is_iterator() && b.is_iterator() {
           let a = a.as_strict_array(&self)?;
           let b = b.as_strict_array(&self)?;
-          self.push(Value::Object(Object::Array(MultiRefHash::new(vec![a,b].concat()))));
+          self.push(Value::Object(Object::Array(MultiRefHash::new(
+            vec![a, b].concat(),
+          ))));
           return Ok(InterpretResult::Continue);
         }
         if a.is_string() || b.is_string() {
