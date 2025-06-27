@@ -332,24 +332,42 @@ impl Value {
     match self {
       Self::Byte(b) => Ok(vec![*b]),
       Self::String(string) => Ok(string.as_bytes().to_vec()),
-      Self::Ref(RefValue(l)) => l.read().as_strict_buffer(thread).or_else(|_| {
-        Err(format!(
-          "No se puede convertir a buffer: {}",
-          self.get_type()
-        ))
-      }),
-      value => value
-        .as_strict_array(thread)
-        .map_err(|e| {
-          format!(
-            "No se puede convertir a buffer ({}): {}",
-            self.get_type(),
-            e
-          )
-        })?
-        .iter()
-        .map(|v| v.as_strict_byte())
-        .collect(),
+      Self::Ref(RefValue(l)) => l
+        .read()
+        .as_strict_buffer(thread)
+        .or_else(|_| match self.as_strict_byte() {
+          Ok(byte) => Ok(vec![byte]),
+          Err(e) => Err(e),
+        })
+        .or_else(|_| {
+          Err(format!(
+            "No se puede convertir a buffer: {}",
+            self.get_type()
+          ))
+        }),
+      value => {
+        let mut result = Vec::new();
+
+        for item in value
+          .as_strict_array(thread)
+          .map_err(|e| {
+            format!(
+              "No se puede convertir a buffer ({}): {}",
+              self.get_type(),
+              e
+            )
+          })?
+          .iter()
+          .map(|v| v.as_strict_buffer(thread))
+        {
+          match item {
+            Ok(mut vec) => result.append(&mut vec),
+            Err(e) => return Err(e),
+          }
+        }
+
+        Ok(result)
+      }
     }
   }
   pub fn set_object_property(&self, key: &str, value: Value) -> Option<Value> {
@@ -420,13 +438,6 @@ impl Value {
       (Self::Ref(RefValue(r)), key) => r.read().get_instance_property(key, thread),
       (Self::Object(o), key) => o.get_instance_property(key, thread),
       (Self::String(s), "longitud") => Some(Self::Number(s.len().into())),
-      (Self::String(c), "bytes") => Some(Self::Object(
-        c.as_bytes()
-          .iter()
-          .map(|&b| Self::Byte(b))
-          .collect::<Vec<Self>>()
-          .into(),
-      )),
       (value, key) => {
         crate::interpreter::proto::proto(value.get_type().to_string(), proto_cache.clone())?
           .get_instance_property(key, thread)

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::compiler::{ChunkGroup, Function, Object, Value};
 
-const REPLACE: &str = "remplaza";
+const REPLACE: &str = "reemplaza";
 const REPEAT: &str = "repite";
 const SPLIT: &str = "separa";
 const BYTES: &str = "bytes";
@@ -19,12 +19,12 @@ pub fn string_proto() -> Value {
         func: |this, args, _, _| {
           let old = args.get(0);
           if old.is_none() {
-            return Err("remplaza: se esperaban 2 argumentos y se recibieron 0".into());
+            return Err(format!("{REPLACE}: se esperaban 2 argumentos y se recibieron 0"));
           }
           let old = old.unwrap().as_string();
           let new = args.get(1);
           if new.is_none() {
-            return Err("remplaza: se esperaban 2 argumentos y se recibieron 1".into());
+            return Err(format!("{REPLACE}: se esperaban 2 argumentos y se recibieron 1"));
           }
           let new = new.unwrap().as_string();
           let string = this.as_string();
@@ -46,7 +46,7 @@ pub fn string_proto() -> Value {
         name: format!("<cadena>::{REPEAT}"),
         func: |this, args, _, _| {
           let count = match args.get(0) {
-            None => Err("remplaza: se esperaban 2 argumentos y se recibieron 0".into()),
+            None => Err(format!("{REPEAT}: se esperaban 2 argumentos y se recibieron 0")),
             Some(count) => count.as_number()?.floor().into(),
           }?;
           if count == 0 {
@@ -95,7 +95,7 @@ pub fn string_proto() -> Value {
         func: |this, args, _, _| {
           let separator = args.get(0);
           if separator.is_none() {
-            return Err("remplaza: se esperaba 1 argumento y se recibieron 0".into());
+            return Err(format!("{SPLIT}: se esperaba 1 argumento y se recibieron 0"));
           }
           let separator = separator.unwrap().as_string();
           let string = this.as_string();

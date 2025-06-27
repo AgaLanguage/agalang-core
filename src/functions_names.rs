@@ -1,6 +1,6 @@
 pub const CONSOLE: &str = "__csl__";
 pub const _BYTE: &str = "__by__";
-pub const _STRING: &str = "__cad__";
+pub const STRING: &str = "__cad__";
 pub const ARRAY: &str = "__lis__";
 pub const _NUMBER: &str = "__num__";
 pub const _BOOLEAN: &str = "__bul__";

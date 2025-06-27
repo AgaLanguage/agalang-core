@@ -1012,6 +1012,11 @@ impl From<usize> for Number {
     Self::Basic(BasicNumber::Int(false, value.to_string().into()))
   }
 }
+impl From<u16> for Number {
+  fn from(value: u16) -> Self {
+    Self::Basic(BasicNumber::Int(false, value.to_string().into()))
+  }
+}
 impl From<u128> for Number {
   fn from(value: u128) -> Self {
     Self::Basic(BasicNumber::Int(false, value.to_string().into()))

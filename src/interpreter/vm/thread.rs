@@ -235,6 +235,7 @@ pub struct AsyncThread {
   thread: MultiRefHash<Thread>,
   await_thread: MultiRefHash<BlockingThread>,
   module: Option<MultiRefHash<ModuleThread>>,
+  print_error: bool
 }
 impl AsyncThread {
   pub fn is_waiting(&self) -> bool {
@@ -264,6 +265,9 @@ impl AsyncThread {
     thread.read().push_call(frame);
     (thread, promise)
   }
+  pub fn print_on_error(&mut self) {
+    self.print_error = true;
+  }
   pub fn new() -> (MultiRefHash<Self>, Promise) {
     let original_promise = Promise::new();
     let promise = original_promise.clone();
@@ -273,6 +277,7 @@ impl AsyncThread {
       thread: thread.clone(),
       await_thread: Default::default(),
       module: Default::default(),
+      print_error: false
     }
     .into();
     thread.write().set_async(async_thread.clone());
@@ -303,10 +308,13 @@ impl AsyncThread {
         match result {
           InterpretResult::RuntimeError(err) => {
             self.promise.set_err(err.clone());
+            if self.print_error {
+              eprintln!("{err}\n{:?}", self.get_thread().read().get_calls());
+            }
             if contain_error {
               // Este es un error de la promesa, no de el programa
               InterpretResult::Ok
-            } else {
+            }else{
               InterpretResult::RuntimeError(err)
             }
           }
@@ -951,6 +959,12 @@ impl Thread {
           let a = a.as_number()?;
           let b = b.as_number()?;
           self.push(Value::Number(a + b));
+          return Ok(InterpretResult::Continue);
+        }
+        if a.is_iterator() && b.is_iterator() {
+          let a = a.as_strict_array(&self)?;
+          let b = b.as_strict_array(&self)?;
+          self.push(Value::Object(Object::Array(MultiRefHash::new(vec![a,b].concat()))));
           return Ok(InterpretResult::Continue);
         }
         if a.is_string() || b.is_string() {
