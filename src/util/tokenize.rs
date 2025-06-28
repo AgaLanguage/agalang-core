@@ -5,24 +5,29 @@ use crate::{
   Decode, Encode, StructTag,
 };
 
-#[derive(Clone, Copy, PartialEq, Eq, Ord, Debug, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub struct Position {
   pub line: usize,
   pub column: usize,
 }
-impl PartialOrd for Position {
-  fn partial_cmp(&self, other: &Position) -> Option<Ordering> {
+impl Ord for Position {
+  fn cmp(&self, other: &Position) -> Ordering {
     if self.line < other.line {
-      return Some(Ordering::Less);
+      Ordering::Less
     } else if self.line > other.line {
-      return Some(Ordering::Greater);
+      Ordering::Greater
     } else if self.column < other.column {
-      return Some(Ordering::Less);
+      Ordering::Less
     } else if self.column > other.column {
-      return Some(Ordering::Greater);
+      Ordering::Greater
     } else {
-      return Some(Ordering::Equal);
+      Ordering::Equal
     }
+  }
+}
+impl PartialOrd for Position {
+  fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+    Some(self.cmp(other))
   }
 }
 impl Encode for Position {
@@ -45,14 +50,14 @@ impl Decode for Position {
         }
       })
       .on_error(|_| "Se esperaba una posicion".to_string())?;
-    return Ok(Self {
+    Ok(Self {
       line: usize::decode(vec)?,
       column: usize::decode(vec)?,
-    });
+    })
   }
 }
 
-#[derive(Clone, PartialEq, Eq, Ord, Debug, Hash)]
+#[derive(Clone, PartialEq, Eq, Debug, Hash)]
 pub struct Location {
   pub start: Position,
   pub end: Position,
@@ -60,19 +65,24 @@ pub struct Location {
   pub file_name: String,
 }
 
-impl PartialOrd for Location {
-  fn partial_cmp(&self, other: &Location) -> Option<Ordering> {
+impl Ord for Location {
+  fn cmp(&self, other: &Location) -> Ordering {
     if self.start < other.start {
-      return Some(Ordering::Less);
+      Ordering::Less
     } else if self.start > other.start {
-      return Some(Ordering::Greater);
+      Ordering::Greater
     } else if self.end < other.end {
-      return Some(Ordering::Less);
+      Ordering::Less
     } else if self.end > other.end {
-      return Some(Ordering::Greater);
+      Ordering::Greater
     } else {
-      return Some(Ordering::Equal);
+      Ordering::Equal
     }
+  }
+}
+impl PartialOrd for Location {
+  fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+    Some(self.cmp(other))
   }
 }
 impl Encode for Location {
@@ -97,12 +107,12 @@ impl Decode for Location {
         }
       })
       .on_error(|_| "Se esperaba una locacion".to_string())?;
-    return Ok(Self {
+    Ok(Self {
       file_name: String::decode(vec)?,
       start: Position::decode(vec)?,
       end: Position::decode(vec)?,
       length: usize::decode(vec)?,
-    });
+    })
   }
 }
 

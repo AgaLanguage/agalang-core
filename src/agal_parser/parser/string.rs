@@ -1,10 +1,10 @@
-use crate::{parser, util};
+use crate::{agal_parser, util};
 
 fn is_alpha(c: char) -> bool {
   c.is_alphabetic() || c == '_' || c == '$' || c.is_numeric()
 }
 pub fn complex_string(
-  token_string: util::Token<parser::TokenType>,
+  token_string: util::Token<agal_parser::TokenType>,
 ) -> Result<super::NodeString, super::NodeError> {
   let string = token_string.value;
   let mut result = util::List::new();
@@ -18,10 +18,10 @@ pub fn complex_string(
     }
     let c = c.unwrap();
     i += 1;
-    if c == '}' && is_id == false {
+    if c == '}' && !is_id {
       let nc = string.chars().nth(i);
       i += 1;
-      if nc == None {
+      if nc.is_none() {
         return Err(super::NodeError {
           message: "No se encontro la apertura de el identificador".to_string(),
           location: token_string.location,
@@ -33,7 +33,7 @@ pub fn complex_string(
         continue;
       }
     }
-    if c != '{' && is_id == false {
+    if c != '{' && !is_id {
       current.push(c);
       continue;
     }
@@ -51,7 +51,7 @@ pub fn complex_string(
     }
     let nc = string.chars().nth(i);
     i += 1;
-    if nc == None {
+    if nc.is_none() {
       return Err(super::NodeError {
         message: "Se esperaba un caracter literal".to_string(),
         location: token_string.location,
@@ -62,7 +62,6 @@ pub fn complex_string(
       current.push('{');
       continue;
     }
-    if nc == '}' {}
     is_id = true;
     result.push(super::StringData::Str(current.clone()));
     current.clear();
@@ -74,7 +73,7 @@ pub fn complex_string(
       location: token_string.location,
     });
   }
-  if current.len() > 0 {
+  if !current.is_empty() {
     result.push(super::StringData::Str(current));
   }
   if result.is_empty() {

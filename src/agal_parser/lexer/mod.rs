@@ -63,7 +63,7 @@ fn token_error(token: &util::Token<TokenType>, source: &str) -> ErrorTypes {
     format!("{} {cyan_line}", str_init),
   ];
   let joined = lines.join("\n");
-  ErrorTypes::StringError(joined)
+  ErrorTypes::String(joined)
 }
 
 fn comment(
@@ -146,7 +146,7 @@ pub fn tokenizer(source: &str, file_name: &str) -> Vec<util::Token<TokenType>> {
       t
     }
     Err(e) => {
-      show_error(&ErrorNames::LexerError, ErrorTypes::ErrorError(e));
+      show_error(&ErrorNames::LexerError, ErrorTypes::Error(e));
       return Vec::new();
     }
   };

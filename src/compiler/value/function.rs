@@ -1,9 +1,9 @@
 use super::{Class, Value};
 use crate::compiler::Promise;
 use crate::interpreter::VarsManager;
-use crate::parser::NodeBlock;
+use crate::agal_parser::NodeBlock;
 use crate::util::{Color, Location, MutClone};
-use crate::{compiler::ChunkGroup, parser::NodeFunction, Decode, MultiRefHash, StructTag};
+use crate::{compiler::ChunkGroup, agal_parser::NodeFunction, Decode, MultiRefHash, StructTag};
 
 pub const FUNCTION_TYPE: &str = "funcion";
 pub const SCRIPT_TYPE: &str = "script";

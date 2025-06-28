@@ -6,7 +6,7 @@ mod value;
 pub use chunk::{ChunkGroup, OpCode};
 pub use value::*;
 
-use crate::parser::{Node, NodeFunction};
+use crate::agal_parser::{Node, NodeFunction};
 use crate::{Decode, StructTag};
 
 const OBJECT_MEMBER: u8 = 0b0;
@@ -112,19 +112,19 @@ impl Compiler {
         self.node_to_bytes(&node_binary.left)?;
         self.node_to_bytes(&node_binary.right)?;
         let operator = match node_binary.operator {
-          crate::parser::NodeOperator::TruncDivision => {
+          crate::agal_parser::NodeOperator::TruncDivision => {
             vec![OpCode::OpDivide as u8, OpCode::OpApproximate as u8]
           }
-          crate::parser::NodeOperator::Division => vec![OpCode::OpDivide as u8],
-          crate::parser::NodeOperator::Minus => vec![OpCode::OpSubtract as u8],
-          crate::parser::NodeOperator::Multiply => vec![OpCode::OpMultiply as u8],
-          crate::parser::NodeOperator::Plus => vec![OpCode::OpAdd as u8],
-          crate::parser::NodeOperator::GreaterThan => vec![OpCode::OpGreaterThan as u8],
-          crate::parser::NodeOperator::Equal => vec![OpCode::OpEquals as u8],
-          crate::parser::NodeOperator::LessThan => vec![OpCode::OpLessThan as u8],
-          crate::parser::NodeOperator::Modulo => vec![OpCode::OpModulo as u8],
-          crate::parser::NodeOperator::And => vec![OpCode::OpAnd as u8],
-          crate::parser::NodeOperator::Or => vec![OpCode::OpOr as u8],
+          crate::agal_parser::NodeOperator::Division => vec![OpCode::OpDivide as u8],
+          crate::agal_parser::NodeOperator::Minus => vec![OpCode::OpSubtract as u8],
+          crate::agal_parser::NodeOperator::Multiply => vec![OpCode::OpMultiply as u8],
+          crate::agal_parser::NodeOperator::Plus => vec![OpCode::OpAdd as u8],
+          crate::agal_parser::NodeOperator::GreaterThan => vec![OpCode::OpGreaterThan as u8],
+          crate::agal_parser::NodeOperator::Equal => vec![OpCode::OpEquals as u8],
+          crate::agal_parser::NodeOperator::LessThan => vec![OpCode::OpLessThan as u8],
+          crate::agal_parser::NodeOperator::Modulo => vec![OpCode::OpModulo as u8],
+          crate::agal_parser::NodeOperator::And => vec![OpCode::OpAnd as u8],
+          crate::agal_parser::NodeOperator::Or => vec![OpCode::OpOr as u8],
           a => {
             return Err(format!(
               "NodeOperator::{a:?}: No es un nodo valido en bytecode"
@@ -155,12 +155,12 @@ impl Compiler {
       Node::UnaryFront(node_unary) => {
         self.node_to_bytes(&node_unary.operand)?;
         let operator = match &node_unary.operator {
-          crate::parser::NodeOperator::Approximate => OpCode::OpApproximate,
-          crate::parser::NodeOperator::QuestionMark => OpCode::OpAsBoolean,
-          crate::parser::NodeOperator::Minus => OpCode::OpNegate,
-          crate::parser::NodeOperator::BitAnd => OpCode::OpAsRef,
-          crate::parser::NodeOperator::Not => OpCode::OpNot,
-          crate::parser::NodeOperator::At => OpCode::OpAt,
+          crate::agal_parser::NodeOperator::Approximate => OpCode::OpApproximate,
+          crate::agal_parser::NodeOperator::QuestionMark => OpCode::OpAsBoolean,
+          crate::agal_parser::NodeOperator::Minus => OpCode::OpNegate,
+          crate::agal_parser::NodeOperator::BitAnd => OpCode::OpAsRef,
+          crate::agal_parser::NodeOperator::Not => OpCode::OpNot,
+          crate::agal_parser::NodeOperator::At => OpCode::OpAt,
           op => {
             return Err(format!(
               "NodeOperator::{op:?}: No es un nodo valido en bytecode"
@@ -176,7 +176,7 @@ impl Compiler {
         );
       }
       Node::Console(node_console) => match node_console {
-        crate::parser::NodeConsole::Output { value, location } => {
+        crate::agal_parser::NodeConsole::Output { value, location } => {
           self.node_to_bytes(&value)?;
           self.write(OpCode::OpConsoleOut as u8, location.start.line);
         }
@@ -185,13 +185,13 @@ impl Compiler {
       Node::String(node_string) => {
         for (i, data) in node_string.value.clone().enumerate() {
           match data {
-            crate::parser::StringData::Str(val) => {
+            crate::agal_parser::StringData::Str(val) => {
               self.set_constant(
                 Value::String(val.as_str().into()),
                 node_string.location.start.line,
               );
             }
-            crate::parser::StringData::Id(id) => {
+            crate::agal_parser::StringData::Id(id) => {
               self.read_var(id, node_string.location.start.line);
             }
           }
@@ -393,7 +393,7 @@ impl Compiler {
         for p in node_object.properties.clone() {
           self.set_constant(value.clone(), node_object.location.start.line);
           match p {
-            crate::parser::NodeProperty::Dynamic(key, value) => {
+            crate::agal_parser::NodeProperty::Dynamic(key, value) => {
               self.node_to_bytes(&key)?;
               self.node_value_to_bytes(&value)?;
               self.write_buffer(
@@ -405,7 +405,7 @@ impl Compiler {
                 node_object.location.start.line,
               );
             }
-            crate::parser::NodeProperty::Property(key, value) => {
+            crate::agal_parser::NodeProperty::Property(key, value) => {
               self.set_constant(Value::String(key), node_object.location.start.line);
               self.node_value_to_bytes(&value)?;
               self.write_buffer(
@@ -450,7 +450,7 @@ impl Compiler {
         for p in node_array.elements.clone() {
           self.set_constant(value.clone(), node_array.location.start.line);
           match p {
-            crate::parser::NodeProperty::Indexable(value) => {
+            crate::agal_parser::NodeProperty::Indexable(value) => {
               self.set_constant(Value::Number(index.into()), node_array.location.start.line);
               self.node_value_to_bytes(&value)?;
               self.write_buffer(
@@ -470,8 +470,8 @@ impl Compiler {
       }
       Node::LoopEdit(node_loop_editor) => {
         let byte = match node_loop_editor.action {
-          crate::parser::NodeLoopEditType::Break => OpCode::OpBreak,
-          crate::parser::NodeLoopEditType::Continue => OpCode::OpContinue,
+          crate::agal_parser::NodeLoopEditType::Break => OpCode::OpBreak,
+          crate::agal_parser::NodeLoopEditType::Continue => OpCode::OpContinue,
         } as u8;
         self.write(byte, node_loop_editor.location.start.line);
       }
@@ -500,7 +500,7 @@ impl Compiler {
       Node::Name(_) => {
         return Err(format!(
           "No se puede usar '{}' sin exportar",
-          crate::parser::KeywordsType::Name
+          crate::agal_parser::KeywordsType::Name
         ))
       }
       Node::Export(node_export) => {

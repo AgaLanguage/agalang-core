@@ -117,7 +117,7 @@ fn number_base(
                 length: i - col,
                 file_name: file_name.to_string(),
               },
-              value: format!("No se pudo analizar el byte"),
+              value: "No se pudo analizar el byte".to_string(),
             },
             i - col - 1,
           )

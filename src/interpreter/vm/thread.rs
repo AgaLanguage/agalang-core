@@ -639,9 +639,9 @@ impl Thread {
         return Ok(InterpretResult::Continue);
       }
       OpCode::OpImport | OpCode::OpExport => {
-        return Err(format!("Solo un modulo puede exportar o importar"))
+        return Err("Solo un modulo puede exportar o importar".to_string())
       }
-      OpCode::OpAwait => return Err(format!("Solo un hilo asincrono puede esperar")),
+      OpCode::OpAwait => return Err("Solo un hilo asincrono puede esperar".to_string()),
       OpCode::OpUnPromise => {
         let value = self.pop();
         match value.as_promise().get_data() {
@@ -770,7 +770,7 @@ impl Thread {
           if index.is_int() {
             index.to_string()
           } else {
-            return Err(format!("El indice debe ser entero (asignar propiedad)"));
+            return Err("El indice debe ser entero (asignar propiedad)".to_string());
           }
         } else {
           key.as_string(self)
@@ -799,46 +799,40 @@ impl Thread {
             return Ok(InterpretResult::Continue);
           }
           let type_name = object.get_type();
-          return Err(format!(
+          Err(format!(
             "No se pudo obtener la propiedad de instancia '{key}' de '{type_name}'"
-          ));
+          ))?
         }
         if !object.is_object() {
-          return Err(format!(
+          Err(format!(
             "Se esperaba un objeto para obtener la propiedad '{}' [3]",
             key.as_string(self)
-          ));
+          ))?
         }
         let key = if object.is_array() {
           if !key.is_number() {
-            return Err(format!(
+            Err(format!(
               "Se esperaba un indice de propiedad, pero se obtuvo '{}'",
               key.get_type()
-            ));
+            ))?
           }
           let key = key.as_number()?;
           let index = match key {
             Number::Basic(n) => n,
             Number::Complex(_, _) => {
-              return Err(format!(
-                "El indice no puede ser un valor complejo (obtener propiedad)"
-              ));
+              Err("El indice no puede ser un valor complejo (obtener propiedad)".to_string())?
             }
             Number::Infinity | Number::NaN | Number::NegativeInfinity => {
-              return Err(format!(
-                "El indice no puede ser NaN o infinito (obtener propiedad)"
-              ));
+              Err("El indice no puede ser NaN o infinito (obtener propiedad)".to_string())?
             }
           };
           if index.is_negative() {
-            return Err(format!(
-              "El indice debe ser un numero entero positivo (obtener propiedad)"
-            ));
+            Err("El indice debe ser un numero entero positivo (obtener propiedad)".to_string())?
           }
           if index.is_int() {
             index.to_string()
           } else {
-            return Err(format!("El indice debe ser entero (obtener propiedad)"));
+            Err("El indice debe ser entero (obtener propiedad)".to_string())?
           }
         } else {
           key.as_string(self)
@@ -965,7 +959,7 @@ impl Thread {
           let a = a.as_strict_array(&self)?;
           let b = b.as_strict_array(&self)?;
           self.push(Value::Object(Object::Array(MultiRefHash::new(
-            vec![a, b].concat(),
+            [a, b].concat(),
           ))));
           return Ok(InterpretResult::Continue);
         }

@@ -1,5 +1,5 @@
 use crate::{
-  parser::{KeywordsType, TokenType},
+  agal_parser::{KeywordsType, TokenType},
   util,
 };
 
@@ -58,16 +58,10 @@ pub enum Node {
 }
 impl Node {
   pub fn is_none(&self) -> bool {
-    match self {
-      Node::None => true,
-      _ => false,
-    }
+    matches!(self, Self::None)
   }
   pub fn is_identifier(&self) -> bool {
-    match self {
-      Node::Identifier(_) => true,
-      _ => false,
-    }
+    matches!(self, Self::Identifier(_))
   }
   pub fn get_identifier(&self) -> Option<&NodeIdentifier> {
     match self {
@@ -162,12 +156,12 @@ impl Node {
 
 impl NodeBlock {
   pub fn join(&self, separator: &str) -> String {
-    self.body.map(|node| format!("{}", node)).join(separator)
+    self.body.map(|node| node.to_string()).join(separator)
   }
 }
 impl std::fmt::Display for NodeBlock {
   fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-    let str_body = self.body.map(|node| format!("{}", node)).join("\n");
+    let str_body = self.body.map(|node| node.to_string()).join("\n");
     write!(f, "{}", data_format(str_body))
   }
 }
@@ -194,7 +188,7 @@ impl std::fmt::Display for Node {
             format!("  ...({})", object)
           }
           NodeProperty::Dynamic(name, value) => format!("  [{}]:\n  {}", name, value),
-          NodeProperty::Indexable(value) => format!("  [{}]", value.to_string()),
+          NodeProperty::Indexable(value) => format!("  [{value}]"),
         });
         format!(
           "NodeObject: {{\n{}\n}}",
@@ -208,7 +202,7 @@ impl std::fmt::Display for Node {
             format!("  ...({})", object)
           }
           NodeProperty::Dynamic(name, value) => format!("  [{}]:\n  {}", name, value),
-          NodeProperty::Indexable(value) => format!("  {}", value.to_string()),
+          NodeProperty::Indexable(value) => format!("  {value}"),
         });
         format!("NodeArray: [\n{}\n]", data_format(str_elements.join(",\n")))
       }
@@ -494,10 +488,10 @@ pub struct NodeByte {
 }
 #[derive(Clone, PartialEq, Debug, Eq, Hash)]
 pub enum NodeProperty {
-  Property(String, Node),
-  Dynamic(Node, Node),
-  Iterable(Node),
-  Indexable(Node),
+  Property(String, Box<Node>),
+  Dynamic(Box<Node>, Box<Node>),
+  Iterable(Box<Node>),
+  Indexable(Box<Node>),
 }
 #[derive(Clone, PartialEq, Debug, Eq, Hash)]
 pub struct NodeObject {

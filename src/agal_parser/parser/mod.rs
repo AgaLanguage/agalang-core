@@ -39,7 +39,7 @@ pub fn node_error(error: &ast::NodeError, source: &str) -> super::ErrorTypes {
   )
   .unwrap();
   let lines = binding.lines().collect::<Vec<&str>>();
-  let data_line = *lines.get(0).unwrap_or(&"");
+  let data_line = *lines.first().unwrap_or(&"");
   let node_value_len = error.location.end.column - error.location.start.column;
   let column = column_node + node_value_len;
 
@@ -56,7 +56,7 @@ pub fn node_error(error: &ast::NodeError, source: &str) -> super::ErrorTypes {
     "^".to_string()
   };
   let lines = [
-    format!("{}", message),
+    message.to_string(),
     format!(
       "{}{cyan_arrow} {}:{}:{}",
       str_init, error.location.file_name, line, column
@@ -71,7 +71,7 @@ pub fn node_error(error: &ast::NodeError, source: &str) -> super::ErrorTypes {
     format!("{} {cyan_line}", str_init),
   ];
   let joined = lines.join("\n");
-  super::ErrorTypes::StringError(joined)
+  super::ErrorTypes::String(joined)
 }
 
 pub struct Parser {
@@ -225,10 +225,10 @@ impl Parser {
         Ok(ast::Node::default())
       }
       super::TokenType::Error => {
-        return Err(ast::NodeError {
+        Err(ast::NodeError {
           message: token.value,
           location: token.location,
-        });
+        })
       }
       super::TokenType::Keyword(key) => match key {
         super::KeywordsType::Define | super::KeywordsType::Constant => self.parse_var_decl(),
@@ -288,7 +288,7 @@ impl Parser {
               super::TokenType::Punctuation(super::PunctuationType::SemiColon),
               &format!(
                 "Se esperaba un punto y coma ({})",
-                super::KeywordsType::Delete.to_string()
+                super::KeywordsType::Delete
               ),
             )?;
             Ok(ast::Node::VarDel(ast::NodeIdentifier {
@@ -300,7 +300,7 @@ impl Parser {
             Err(ast::NodeError {
               message: format!(
                 "Se esperaba un identificador ({})",
-                super::KeywordsType::Delete.to_string()
+                super::KeywordsType::Delete
               ),
               location: at.location,
             })
@@ -321,7 +321,7 @@ impl Parser {
       super::TokenType::Punctuation(super::PunctuationType::SemiColon),
       &format!(
         "Se esperaba un punto y coma ({})",
-        super::KeywordsType::Throw.to_string()
+        super::KeywordsType::Throw
       ),
     )?;
     ast::Node::Throw(ast::NodeValue {
@@ -417,7 +417,7 @@ impl Parser {
       super::TokenType::Punctuation(super::PunctuationType::SemiColon),
       &format!(
         "Se esperaba un punto y coma ({})",
-        super::KeywordsType::Name.to_string()
+        super::KeywordsType::Name
       ),
     )?;
     ast::Node::Name(ast::NodeIdentifier {
@@ -580,7 +580,7 @@ impl Parser {
           super::TokenType::Punctuation(super::PunctuationType::SemiColon),
           &format!(
             "Se esperaba un punto y coma ({})",
-            super::KeywordsType::Return.to_string()
+            super::KeywordsType::Return
           ),
         )?;
         ast::Node::Return(ast::NodeReturn {
@@ -616,10 +616,10 @@ impl Parser {
         location: token.location,
       }),
       _ => {
-        return Err(ast::NodeError {
+        Err(ast::NodeError {
           message: "Token inesperado (simple)".to_string(),
           location: token.location,
-        });
+        })
       }
     }
   }
@@ -908,7 +908,7 @@ impl Parser {
       super::TokenType::Punctuation(super::PunctuationType::SemiColon),
       &format!(
         "Se esperaba un punto y coma ({})",
-        super::KeywordsType::Do.to_string()
+        super::KeywordsType::Do
       ),
     )?;
     ast::Node::DoWhile(ast::NodeWhile {
@@ -1060,7 +1060,7 @@ impl Parser {
     }
     if equals_semicolon.token_type != super::TokenType::Operator(super::OperatorType::Equals) {
       return Err(ast::NodeError {
-        message: format!("Se esperaba un punto y coma (variable e)"),
+        message: "Se esperaba un punto y coma (variable e)".to_string(),
         location: semi_token.location,
       });
     }
@@ -1522,9 +1522,9 @@ impl Parser {
       super::TokenType::Punctuation(super::PunctuationType::QuadrateBracketOpen),
       super::TokenType::Punctuation(super::PunctuationType::DoubleDot),
     ]) {
-      self.parse_call_member_expr(left)?.into()
+      self.parse_call_member_expr(left)?
     } else {
-      left.into()
+      left
     };
     let token = self.at();
     if token.token_type == super::TokenType::Error {
@@ -1900,7 +1900,7 @@ impl Parser {
         value: u8::from_str_radix(&self.eat().value, 2)
           .on_error(|_| self.prev())
           .on_error(|token| NodeError {
-            message: if message != "" {
+            message: if !message.is_empty() {
               message.to_string()
             } else {
               token.value
@@ -1951,7 +1951,7 @@ impl Parser {
           op
         } else {
           return Err(NodeError {
-            message: if message != "" {
+            message: if !message.is_empty() {
               message.to_string()
             } else {
               token.value
@@ -1993,7 +1993,7 @@ impl Parser {
         | super::KeywordsType::Lazy,
       ) => self.parse_keyword_value(false, false, false, true),
       _ => Err(NodeError {
-        message: if message != "" {
+        message: if !message.is_empty() {
           message.to_string()
         } else {
           token.value
@@ -2043,7 +2043,7 @@ impl Parser {
           "Se esperaba dos puntos",
         )?;
         let value = self.parse_expr()?;
-        return Ok(ast::NodeProperty::Property(key, value));
+        Ok(ast::NodeProperty::Property(key, value.to_box()))
       }
       super::TokenType::Identifier | super::TokenType::Keyword(_) => {
         let key = &token.value;
@@ -2065,7 +2065,7 @@ impl Parser {
             ast::Node::Identifier(ast::NodeIdentifier {
               name: token.value,
               location: token.location,
-            }),
+            }).to_box(),
           ));
         }
         if colon.token_type != super::TokenType::Punctuation(super::PunctuationType::DoubleDot) {
@@ -2075,7 +2075,7 @@ impl Parser {
           });
         }
         let value = self.parse_expr()?;
-        return Ok(ast::NodeProperty::Property(key.clone(), value));
+        Ok(ast::NodeProperty::Property(key.clone(), value.to_box()))
       }
       super::TokenType::Punctuation(p) => {
         if p == super::PunctuationType::QuadrateBracketOpen {
@@ -2090,7 +2090,7 @@ impl Parser {
             "Se esperaba dos puntos",
           )?;
           let value = self.parse_expr()?;
-          return Ok(ast::NodeProperty::Dynamic(key, value));
+          return Ok(ast::NodeProperty::Dynamic(key.to_box(), value.to_box()));
         }
         if p == super::PunctuationType::Dot {
           self.expect(
@@ -2098,19 +2098,19 @@ impl Parser {
             "Se esperaba un punto",
           )?;
           let data = self.parse_expr()?;
-          return Ok(ast::NodeProperty::Iterable(data));
+          return Ok(ast::NodeProperty::Iterable(data.to_box()));
         }
 
-        return Err(ast::NodeError {
+        Err(ast::NodeError {
           message: "Se esperaba un clave para la propiedad del objeto".to_string(),
           location: token.location,
-        });
+        })
       }
       _ => {
-        return Err(ast::NodeError {
+        Err(ast::NodeError {
           message: "Se esperaba un clave para la propiedad del objeto".to_string(),
           location: token.location,
-        });
+        })
       }
     }
   }
@@ -2156,17 +2156,17 @@ impl Parser {
             "Se esperaba un punto",
           )?;
           let data = self.parse_expr()?;
-          Ok(ast::NodeProperty::Iterable(data))
+          Ok(ast::NodeProperty::Iterable(data.to_box()))
         } else {
-          return Err(ast::NodeError {
+          Err(ast::NodeError {
             message: "Se esperaba un valor para la Lista".to_string(),
             location: token.location,
-          });
+          })
         }
       }
       _ => {
         let element = self.parse_expr()?;
-        Ok(ast::NodeProperty::Indexable(element))
+        Ok(ast::NodeProperty::Indexable(element.to_box()))
       }
     }
   }

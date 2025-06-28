@@ -1,3 +1,4 @@
+#[derive(Default)]
 pub struct List<Item>(Vec<Item>);
 impl<Item> List<Item> {
   pub fn is_empty(&self) -> bool {
@@ -46,12 +47,12 @@ impl<Item> List<Item> {
 }
 impl<Item: std::fmt::Display> List<Item> {
   pub fn join(&self, sep: &str) -> String {
-    self.map(|item| item.to_string()).0.join(&sep)
+    self.map(|item| item.to_string()).0.join(sep)
   }
 }
 impl<Item: Clone> Clone for List<Item> {
   fn clone(&self) -> Self {
-    List(self.0.iter().map(|item| item.clone()).collect())
+    List(self.0.to_vec())
   }
 }
 impl<Item: std::fmt::Display> std::fmt::Display for List<Item> {
@@ -72,7 +73,7 @@ impl<Item: PartialEq> PartialEq for List<Item> {
         return false;
       }
     }
-    return true;
+    true
   }
 }
 impl<Item: Eq> Eq for List<Item> {}
@@ -88,7 +89,7 @@ impl<Item: PartialOrd> PartialOrd for List<Item> {
         return None;
       }
     }
-    return Some(std::cmp::Ordering::Equal);
+    Some(std::cmp::Ordering::Equal)
   }
 }
 impl<Item: Ord> Ord for List<Item> {
@@ -103,7 +104,7 @@ impl<Item: Ord> Ord for List<Item> {
         return std::cmp::Ordering::Less;
       }
     }
-    return std::cmp::Ordering::Equal;
+    std::cmp::Ordering::Equal
   }
 }
 impl<Item: Clone + std::hash::Hash> std::hash::Hash for List<Item> {

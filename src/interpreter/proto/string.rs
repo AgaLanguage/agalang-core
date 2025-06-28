@@ -8,7 +8,7 @@ const SPLIT: &str = "separa";
 const BYTES: &str = "bytes";
 
 pub fn string_proto() -> Value {
-  let hashmap = crate::compiler::Instance::new(format!("<cadena>"));
+  let hashmap = crate::compiler::Instance::new("<cadena>".to_string());
 
   hashmap.set_instance_property(
     REPLACE.into(),

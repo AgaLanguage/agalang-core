@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::compiler::{Object, Value};
 use crate::functions_names;
-use crate::util::{OnError, OnSome};
+use crate::util::OnError;
 
 pub const LIB_NAME: &str = ":constructores";
 const CADENA: &str = "cadena";
@@ -32,7 +32,7 @@ pub fn lib_value() -> Value {
               value
                 .as_strict_buffer(thread)
                 .ok()
-                .on_some(|buffer| Value::String(String::from_utf8_lossy(&buffer).to_string()))
+                .map(|buffer| Value::String(String::from_utf8_lossy(&buffer).to_string()))
             })
             .on_error(|_| format!("{CADENA}: se esperaba un valor bufeable"))
         },

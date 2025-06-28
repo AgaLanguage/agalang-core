@@ -30,7 +30,7 @@ fn inspect(value: &Value, thread: &Thread) -> String {
       .read()
       .as_ref()
       .on_some_option(|i| i.get_instance_property(CONSOLE, thread))
-      .on_some(|p| p.as_string(thread))
+      .map(|p| p.as_string(thread))
       .unwrap_or_else(|| inspect_value(value, thread)),
     Value::Object(Object::Array(arr)) => {
       let mut result = String::new();
@@ -87,7 +87,7 @@ pub fn lib_value() -> Value {
         func: |_, args, thread, _| {
           args
             .first()
-            .on_some(|value| {
+            .map(|value| {
               value
                 .get_instance_property(CONSOLE, thread)
                 .unwrap_or_else(|| Value::String(inspect(value, thread)))

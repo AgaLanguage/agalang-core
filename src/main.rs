@@ -10,7 +10,7 @@ use crate::{compiler::Compiler, interpreter::interpret};
 mod compiler;
 mod functions_names;
 mod interpreter;
-mod parser;
+mod agal_parser;
 mod util;
 
 use crate::compiler::binary::{Decode, Encode, StructTag};
@@ -81,7 +81,7 @@ fn main() -> ExitCode {
       _ => ExitCode::SUCCESS,
     };
   }
-  return ExitCode::SUCCESS;
+  ExitCode::SUCCESS
 }
 
 fn compress_bytes(data: &[u8]) -> std::io::Result<Vec<u8>> {
@@ -106,9 +106,9 @@ fn read_code(path: &Path) -> Option<String> {
   match contents {
     Ok(contents) => Some(contents),
     Err(err) => {
-      let ref type_err = parser::ErrorNames::PathError;
-      let err = parser::ErrorTypes::IoError(err);
-      parser::show_error(type_err, err);
+      let type_err = agal_parser::ErrorNames::PathError;
+      let err = agal_parser::ErrorTypes::Io(err);
+      agal_parser::show_error(&type_err, err);
       None
     }
   }
@@ -118,9 +118,9 @@ fn read_bin(path: &Path) -> Option<Vec<u8>> {
   match contents {
     Ok(contents) => Some(contents),
     Err(err) => {
-      let ref type_err = parser::ErrorNames::PathError;
-      let err = parser::ErrorTypes::IoError(err);
-      parser::show_error(type_err, err);
+      let type_err = agal_parser::ErrorNames::PathError;
+      let err = agal_parser::ErrorTypes::Io(err);
+      agal_parser::show_error(&type_err, err);
       None
     }
   }
@@ -132,12 +132,12 @@ fn compile(path: &Path) -> Result<(Compiler, &str), String> {
   match path.extension().on_some_option(|v| v.to_str()) {
     Some(EXTENSION) => {
       let file = read_code(path).on_error(|_| "No se pudo leer el archivo")?;
-      let ast = parser::Parser::new(&file, path.file_name().unwrap().to_str().unwrap())
+      let ast = agal_parser::Parser::new(&file, path.file_name().unwrap().to_str().unwrap())
         .produce_ast()
         .on_error(|e| {
-          parser::print_error(parser::error_to_string(
-            &parser::ErrorNames::SyntaxError,
-            parser::node_error(&e, &file),
+          agal_parser::print_error(agal_parser::error_to_string(
+            &agal_parser::ErrorNames::SyntaxError,
+            agal_parser::node_error(&e, &file),
           ));
           ""
         })?;
@@ -191,10 +191,7 @@ enum Action {
 }
 impl Action {
   pub fn is_unknown(&self) -> bool {
-    match self {
-      Self::Unknown(_) => true,
-      _ => false,
-    }
+    matches!(self, Self::Unknown(_))
   }
 }
 impl From<String> for Action {

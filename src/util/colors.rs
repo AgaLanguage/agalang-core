@@ -25,10 +25,10 @@ pub enum Color {
 impl Color {
   pub const fn get(number: u8) -> Self {
     match number {
-      01 => Color::Bold,
-      02 => Color::Dim,
-      03 => Color::Italic,
-      04 => Color::Underline,
+      1 => Color::Bold,
+      2 => Color::Dim,
+      3 => Color::Italic,
+      4 => Color::Underline,
       30 => Color::Black,
       31 => Color::DarkRed,
       32 => Color::Green,

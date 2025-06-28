@@ -92,7 +92,7 @@ impl Instance {
           if instance.eq(self) {
             return true;
           }
-          mut_instance = instance.extend.on_some(|instance| instance.clone());
+          mut_instance = instance.extend.map(|instance| instance.clone());
         }
         None => return false,
       }
@@ -124,7 +124,7 @@ impl Class {
       poperties: HashMap::new().into(),
     }
     .into();
-    instance.on_some(|this| {
+    instance.map(|this| {
       this.ovwerwrite_instance_property(
         CONSTRUCTOR,
         Value::Ref(Value::Object(super::Object::Class(class.clone())).into()),
@@ -158,13 +158,13 @@ impl Class {
   pub fn make_instance(&self) -> Value {
     self
       .extend
-      .on_some(|parent| {
+      .map(|parent| {
         let parent_instance = parent.make_instance();
         let (obj, instance) = parent_instance.as_map();
         let parent_instance = Value::Object(super::Object::Map(obj.clone(), instance));
         self
           .instance
-          .on_some(|instance| instance.ovwerwrite_instance_property(SUPER, parent_instance));
+          .map(|instance| instance.ovwerwrite_instance_property(SUPER, parent_instance));
         Value::Object(super::Object::Map(obj, self.instance.clone()))
       })
       .unwrap_or_else(|| {
@@ -178,7 +178,7 @@ impl Class {
     self.instance.clone()
   }
   pub fn is_instance(&self, instance: &Instance) -> bool {
-    self.instance.on_some(|i| i == instance).unwrap_or_default()
+    self.instance.map(|i| i == instance).unwrap_or_default()
   }
 }
 

@@ -71,11 +71,8 @@ impl<T> MultiRefHash<Option<T>> {
       None => None,
     }
   }
-  pub fn on_some<V>(&self, cb: impl FnOnce(&T) -> V) -> Option<V> {
-    match self.read().as_ref() {
-      Some(t) => Some(cb(t)),
-      None => None,
-    }
+  pub fn map<V>(&self, cb: impl FnOnce(&T) -> V) -> Option<V> {
+   self.read().as_ref().map(cb)
   }
 }
 impl<T> MultiRefHash<Option<T>>
@@ -103,6 +100,9 @@ impl<T> MultiRefHash<Vec<T>> {
   }
   pub fn len(&self) -> usize {
     self.read().len()
+  }
+  pub fn is_empty(&self) -> bool {
+    self.read().is_empty()
   }
 }
 impl<T> MultiRefHash<Vec<T>>

@@ -21,7 +21,7 @@ pub fn absolute_path(path: &str) -> String {
   let path_str = path
     .canonicalize()
     .ok()
-    .on_some(|path| path.to_string_lossy().to_string())
+    .map(|path| path.to_string_lossy().to_string())
     .unwrap_or_else(|| {
       let path = std::env::current_dir().unwrap().join(path);
       let mut string_path: Vec<String> = vec![];
@@ -59,7 +59,7 @@ pub fn lib_value() -> Value {
         func: |this, args, thread, _| {
           let path = args
             .get(0)
-            .on_some(|path| absolute_path(&path.as_string(thread)))
+            .map(|path| absolute_path(&path.as_string(thread)))
             .on_error(|_| format!("{PATH}: Se esperaba una ruta"))?;
           this.set_instance_property(
             CONSOLE,
@@ -129,7 +129,7 @@ pub fn lib_value() -> Value {
           func: |this, _, thread, _| {
             std::path::Path::new(&this.as_string(thread))
               .parent()
-              .on_some(|p| Value::String(p.to_string_lossy().to_string()))
+              .map(|p| Value::String(p.to_string_lossy().to_string()))
               .on_error(|_| format!("{PATH_GET_PARENT}: La ruta no tiene padre"))
           },
           custom_data: ().into(),
@@ -148,7 +148,7 @@ pub fn lib_value() -> Value {
           func: |this, _, thread, _| {
             std::path::Path::new(&this.as_string(thread))
               .file_name()
-              .on_some(|p| Value::String(p.to_string_lossy().to_string()))
+              .map(|p| Value::String(p.to_string_lossy().to_string()))
               .on_error(|_| format!("{PATH_GET_NAME}: La ruta no es un archivo"))
           },
           custom_data: ().into(),
@@ -167,7 +167,7 @@ pub fn lib_value() -> Value {
           func: |this, _, thread, _| {
             std::path::Path::new(&this.as_string(thread))
               .extension()
-              .on_some(|p| Value::String(p.to_string_lossy().to_string()))
+              .map(|p| Value::String(p.to_string_lossy().to_string()))
               .on_error(|_| format!("{PATH_GET_EXTENSION}: La ruta no es un archivo"))
           },
           custom_data: ().into(),
@@ -190,7 +190,7 @@ pub fn lib_value() -> Value {
         func: |_, args, thread, _| {
           let path = args
             .get(0)
-            .on_some(|t| t.as_string(thread))
+            .map(|t| t.as_string(thread))
             .on_error(|_| format!("{READ_FILE}: Se esperaba una ruta"))?;
           std::fs::File::open(&path)
             .ok()
@@ -200,7 +200,7 @@ pub fn lib_value() -> Value {
               file
                 .read_to_end(&mut buffer_writer)
                 .ok()
-                .on_some(|i| Value::Object(buffer_writer[..i].to_vec().into()))
+                .map(|i| Value::Object(buffer_writer[..i].to_vec().into()))
             })
             .on_error(|_| format!("{READ_FILE}: No se pudo leer el archivo: {path}"))
         },
@@ -220,7 +220,7 @@ pub fn lib_value() -> Value {
         func: |_, args, thread, _| {
           let path = args
             .get(0)
-            .on_some(|t| t.as_string(thread))
+            .map(|t| t.as_string(thread))
             .on_error(|_| format!("{READ_DIR}: Se esperaba una ruta"))?;
           std::fs::read_dir(&path)
             .ok()
@@ -230,7 +230,7 @@ pub fn lib_value() -> Value {
                 files.push(Value::String(
                   file
                     .ok()
-                    .on_some(|file| file.file_name().to_string_lossy().to_string())?,
+                    .map(|file| file.file_name().to_string_lossy().to_string())?,
                 ))
               }
               Some(Value::Object(files.into()))

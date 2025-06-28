@@ -1,17 +1,17 @@
 #![allow(dead_code)]
 pub enum ErrorTypes {
   //FmtError(std::fmt::Error),
-  IoError(std::io::Error),
-  ErrorError(Box<dyn std::error::Error>),
-  StringError(String),
+  Io(std::io::Error),
+  Error(Box<dyn std::error::Error>),
+  String(String),
 }
 impl std::fmt::Display for ErrorTypes {
   fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
     match self {
       //Self::FmtError(e) => write!(f,"{e}"),
-      Self::IoError(e) => write!(f, "{e}"),
-      Self::ErrorError(e) => write!(f, "{e}"),
-      Self::StringError(e) => write!(f, "{e}"),
+      Self::Io(e) => write!(f, "{e}"),
+      Self::Error(e) => write!(f, "{e}"),
+      Self::String(e) => write!(f, "{e}"),
     }
   }
 }

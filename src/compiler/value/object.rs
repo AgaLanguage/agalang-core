@@ -1,6 +1,6 @@
 use std::{collections::HashMap, hash::Hash};
 
-use crate::{functions_names::STRING, MultiRefHash, OnSome, StructTag};
+use crate::{functions_names::STRING, MultiRefHash, StructTag};
 
 use super::{Class, Function, Instance, Value};
 
@@ -94,7 +94,7 @@ impl Object {
     match self {
       Self::Map(_, i) => i
         .on_ok(|t| t.get_instance_property(STRING, thread))
-        .on_some(|t|t.as_string(thread)),
+        .map(|t|t.as_string(thread)),
       _ => None,
     }.unwrap_or_else(||self.to_string())
   }
@@ -141,7 +141,7 @@ impl ToString for Object {
     match self {
       Self::Function(f) => f.read().to_string(),
       Self::Map(_, i) => i
-        .on_some(|t| format!("<Instancia {}>", t.get_type()))
+        .map(|t| format!("<Instancia {}>", t.get_type()))
         .unwrap_or("<objeto>".to_string()),
       Self::Class(c) => {
         let has_parent = c.read().has_parent();
