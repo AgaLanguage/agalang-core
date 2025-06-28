@@ -163,7 +163,7 @@ impl Chunk {
 
     let offset = self.code.len() - loop_start + 2;
     if offset > u16::MAX.into() {
-      return Err(format!("Longitud muy alta"));
+      return Err("Longitud muy alta".to_string());
     }
     self.write(((offset >> 8) & 0xff) as u8, self.code.len());
     self.write((offset & 0xff) as u8, self.code.len());
@@ -176,7 +176,7 @@ impl Chunk {
   pub fn patch_jump(&mut self, offset: usize) -> Result<(), String> {
     let jump = self.code.len() - offset - (2/* Data bytes */);
     if jump > u16::MAX.into() {
-      return Err(format!("Longitud muy alta"));
+      return Err("Longitud muy alta".to_string());
     }
     self.overwrite(offset, ((jump >> 8) & 0xff) as u8);
     self.overwrite(offset + 1, (jump & 0xff) as u8);
@@ -219,7 +219,7 @@ impl Chunk {
           (
             "----".into(),
             format!("{index:02x}"),
-            format!("{:?}", self.constants.get(index).as_string()),
+            format!("{:?}", self.constants.get(index).to_string()),
           )
         }
         OpCode::OpLoop => {

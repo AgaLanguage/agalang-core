@@ -9,7 +9,7 @@ pub const LIB_NAME: &str = ":consola";
 const DRAW: &str = "pinta";
 const INSPECT: &str = "inspecciona";
 
-fn inspect_value(value: &Value) -> String {
+fn inspect_value(value: &Value, thread: &Thread) -> String {
   match value {
     Value::Byte(_) => Color::Magenta,
     Value::Char(_) => Color::Blue,
@@ -19,10 +19,10 @@ fn inspect_value(value: &Value) -> String {
     Value::Object(_) => Color::Cyan,
     Value::Iterator(_) => Color::BrightCyan,
     Value::Ref(_) => Color::BrightBlue,
-    Value::Promise(_) => Color::Red,
-    Value::Lazy(l) => return inspect_value(&l.get().clone().unwrap_or_default()),
+    Value::Promise(_) => Color::DarkRed,
+    Value::Lazy(l) => return inspect_value(&l.get().clone().unwrap_or_default(), thread),
   }
-  .apply(&value.as_string())
+  .apply(&value.as_string(thread))
 }
 fn inspect(value: &Value, thread: &Thread) -> String {
   match value {
@@ -30,8 +30,8 @@ fn inspect(value: &Value, thread: &Thread) -> String {
       .read()
       .as_ref()
       .on_some_option(|i| i.get_instance_property(CONSOLE, thread))
-      .on_some(|p| p.as_string())
-      .unwrap_or_else(|| inspect_value(value)),
+      .on_some(|p| p.as_string(thread))
+      .unwrap_or_else(|| inspect_value(value, thread)),
     Value::Object(Object::Array(arr)) => {
       let mut result = String::new();
       result.push_str("[");
@@ -42,14 +42,14 @@ fn inspect(value: &Value, thread: &Thread) -> String {
         } else {
           result.push_str(", ");
         };
-        result.push_str(&format!("{}", inspect_value(&item)));
+        result.push_str(&format!("{}", inspect_value(&item, thread)));
       }
       result.push_str("]");
       result
     }
     Value::Iterator(iter) => format!("@{}", inspect(&iter.read(), thread)),
     Value::Ref(item) => format!("&{}", inspect(&item.borrow(), thread)),
-    item => inspect_value(item),
+    item => inspect_value(item, thread),
   }
 }
 

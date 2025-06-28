@@ -1,6 +1,6 @@
 use std::{collections::HashMap, hash::Hash};
 
-use crate::{MultiRefHash, StructTag};
+use crate::{functions_names::STRING, MultiRefHash, OnSome, StructTag};
 
 use super::{Class, Function, Instance, Value};
 
@@ -89,6 +89,14 @@ impl Object {
           .get_instance_property(key, thread)
       }
     }
+  }
+  pub fn as_string(&self, thread: &crate::interpreter::Thread) -> String {
+    match self {
+      Self::Map(_, i) => i
+        .on_ok(|t| t.get_instance_property(STRING, thread))
+        .on_some(|t|t.as_string(thread)),
+      _ => None,
+    }.unwrap_or_else(||self.to_string())
   }
 }
 impl From<Function> for Object {

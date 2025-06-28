@@ -150,7 +150,7 @@ pub fn lib_value() -> Value {
             .get(0)
             .on_some_option(|t| {
               if t.is_string() {
-                Some(t.as_string())
+                Some(t.as_string(thread))
               } else {
                 None
               }

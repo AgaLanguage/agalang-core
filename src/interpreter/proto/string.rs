@@ -16,22 +16,22 @@ pub fn string_proto() -> Value {
       Function::Native {
         path: "".into(),
         name: format!("<cadena>::{REPLACE}"),
-        func: |this, args, _, _| {
+        func: |this, args, thread, _| {
           let old = args.get(0);
           if old.is_none() {
             return Err(format!(
               "{REPLACE}: se esperaban 2 argumentos y se recibieron 0"
             ));
           }
-          let old = old.unwrap().as_string();
+          let old = old.unwrap().as_string(thread);
           let new = args.get(1);
           if new.is_none() {
             return Err(format!(
               "{REPLACE}: se esperaban 2 argumentos y se recibieron 1"
             ));
           }
-          let new = new.unwrap().as_string();
-          let string = this.as_string();
+          let new = new.unwrap().as_string(thread);
+          let string = this.as_string(thread);
           let string = string.replace(&old, &new);
           Ok(Value::String(string.into()))
         },
@@ -48,7 +48,7 @@ pub fn string_proto() -> Value {
       Function::Native {
         path: "".into(),
         name: format!("<cadena>::{REPEAT}"),
-        func: |this, args, _, _| {
+        func: |this, args, thread, _| {
           let count = match args.get(0) {
             None => Err(format!(
               "{REPEAT}: se esperaban 2 argumentos y se recibieron 0"
@@ -58,7 +58,7 @@ pub fn string_proto() -> Value {
           if count == 0 {
             return Ok(Value::String("".into()));
           }
-          let string = this.as_string();
+          let string = this.as_string(thread);
           let string = string.repeat(count);
           Ok(Value::String(string))
         },
@@ -76,8 +76,8 @@ pub fn string_proto() -> Value {
       Function::Native {
         path: "".into(),
         name: format!("<cadena>::{BYTES}"),
-        func: |this, _, _, _| {
-          let string = this.as_string();
+        func: |this, _, thread, _| {
+          let string = this.as_string(thread);
           let list = string
             .as_bytes()
             .iter()
@@ -98,15 +98,15 @@ pub fn string_proto() -> Value {
       Function::Native {
         path: "".into(),
         name: format!("<cadena>::{SPLIT}"),
-        func: |this, args, _, _| {
+        func: |this, args, thread, _| {
           let separator = args.get(0);
           if separator.is_none() {
             return Err(format!(
               "{SPLIT}: se esperaba 1 argumento y se recibieron 0"
             ));
           }
-          let separator = separator.unwrap().as_string();
-          let string = this.as_string();
+          let separator = separator.unwrap().as_string(thread);
+          let string = this.as_string(thread);
           let list = string
             .split(&separator)
             .map(|s| Value::String(s.to_string()))

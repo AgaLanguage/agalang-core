@@ -221,7 +221,7 @@ impl Value {
     }
   }
 
-  pub fn as_string(&self) -> String {
+  pub fn as_string(&self, thread: &Thread) -> String {
     match self {
       Self::String(s) => s.clone(),
       Self::Promise(p) => p.to_string(),
@@ -229,13 +229,13 @@ impl Value {
       Self::True => TRUE_NAME.to_string(),
       Self::Null => NULL_NAME.to_string(),
       Self::Never => NEVER_NAME.to_string(),
-      Self::Iterator(v) => format!("@{}", v.read().as_string()),
-      Self::Ref(v) => format!("&{}", v.borrow().as_string()),
+      Self::Iterator(v) => format!("@{}", v.read().as_string(thread)),
+      Self::Ref(v) => format!("&{}", v.borrow().as_string(thread)),
       Self::Byte(b) => format!("0x{b:02X}"),
       Self::Number(x) => x.to_string(),
       Self::Char(c) => c.to_string(),
-      Self::Object(x) => x.to_string(),
-      Self::Lazy(l) => l.get().clone().unwrap_or_default().as_string(),
+      Self::Object(x) => x.as_string(thread),
+      Self::Lazy(l) => l.get().clone().unwrap_or_default().as_string(thread),
     }
   }
   pub fn as_function(&self) -> MultiRefHash<Function> {
@@ -445,6 +445,25 @@ impl Value {
     }
   }
 }
+impl ToString for Value {
+  fn to_string(&self) -> String {
+    match self {
+      Self::String(s) => s.clone(),
+      Self::Promise(p) => p.to_string(),
+      Self::False => FALSE_NAME.to_string(),
+      Self::True => TRUE_NAME.to_string(),
+      Self::Null => NULL_NAME.to_string(),
+      Self::Never => NEVER_NAME.to_string(),
+      Self::Iterator(v) => format!("@{}", v.read().to_string()),
+      Self::Ref(v) => format!("&{}", v.borrow().to_string()),
+      Self::Byte(b) => format!("0x{b:02X}"),
+      Self::Number(x) => x.to_string(),
+      Self::Char(c) => c.to_string(),
+      Self::Object(x) => x.to_string(),
+      Self::Lazy(l) => l.get().clone().unwrap_or_default().to_string(),
+    }
+  }
+}
 impl From<char> for Value {
   fn from(value: char) -> Self {
     Self::Char(value)
@@ -474,7 +493,7 @@ impl std::fmt::Debug for Value {
     if let Self::String(string) = self {
       write!(f, "'{}'", string.replace("\n", "\\n").replace("\'", "\\\'"))
     } else {
-      write!(f, "{}", self.as_string())
+      write!(f, "{}", self.to_string())
     }
   }
 }

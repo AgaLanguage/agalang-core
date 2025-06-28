@@ -47,7 +47,7 @@ impl ModuleThread {
         let thread = self.async_thread.read().thread.clone();
         thread.write().read();
         let module = thread.write().pop();
-        let path = module.as_string();
+        let path = module.as_string(&*thread.read());
         let meta_byte = thread.write().read();
         let name_byte = thread.write().read();
         let _is_lazy = (meta_byte & 0b10) == 0b10;
@@ -80,7 +80,7 @@ impl ModuleThread {
             .current_chunk()
             .read()
             .read_constant(name_byte)
-            .as_string();
+            .as_string(&*thread.read());
           thread.write().declare(&name, value, true);
         }
         thread.write().push(module);
@@ -469,7 +469,7 @@ impl Thread {
       .clone()
   }
   fn read_string(&mut self) -> String {
-    self.read_constant().as_string()
+    self.read_constant().as_string(self)
   }
   fn read_short(&mut self) -> u16 {
     let a = self.read() as u16;
@@ -594,7 +594,7 @@ impl Thread {
       let constructor = class.read().get_instance_property(CONSTRUCTOR);
       if let Some(Value::Object(Object::Function(fun))) = constructor {
         self.call_function(this.clone(), fun, args)?;
-      } else if let Some(_) = constructor {
+      } else if constructor.is_some() {
         return Err("Se esperaba llamar un constructor".into());
       } else {
         self.push(this);
@@ -611,7 +611,7 @@ impl Thread {
     let instruction: OpCode = byte_instruction.into();
 
     let value: Value = match instruction {
-      OpCode::OpThrow => return Err(self.pop().as_string()),
+      OpCode::OpThrow => return Err(self.pop().as_string(self)),
       OpCode::OpTry => {
         let catch_block = self.pop().as_function();
         let try_block = self.pop().as_function();
@@ -725,7 +725,7 @@ impl Thread {
         let is_public = (meta & 0b010) != 0;
         let is_class_decl = (meta & 0b100) != 0;
         if is_instance {
-          let key = key.as_string();
+          let key = key.as_string(self);
           use crate::util::OnError;
           let value = object
             .set_instance_property(&key, value.clone(), is_public, is_class_decl, self)
@@ -738,7 +738,7 @@ impl Thread {
         if !object.is_object() {
           return Err(format!(
             "Se esperaba un objeto para asignar la propiedad '{}' [3]",
-            key.as_string()
+            key.as_string(self)
           ));
         }
         let key = if object.is_array() {
@@ -773,7 +773,7 @@ impl Thread {
             return Err(format!("El indice debe ser entero (asignar propiedad)"));
           }
         } else {
-          key.as_string()
+          key.as_string(self)
         };
         match object.set_object_property(&key, value) {
           Some(value) => value,
@@ -792,7 +792,7 @@ impl Thread {
         let object = self.pop();
         let is_instance = self.read() == 1u8;
         if is_instance {
-          let key = key.as_string();
+          let key = key.as_string(self);
           if let Some(value) = object.get_instance_property(&key, self) {
             self.init(&value);
             self.push(value);
@@ -806,7 +806,7 @@ impl Thread {
         if !object.is_object() {
           return Err(format!(
             "Se esperaba un objeto para obtener la propiedad '{}' [3]",
-            key.as_string()
+            key.as_string(self)
           ));
         }
         let key = if object.is_array() {
@@ -841,7 +841,7 @@ impl Thread {
             return Err(format!("El indice debe ser entero (obtener propiedad)"));
           }
         } else {
-          key.as_string()
+          key.as_string(self)
         };
         match object.get_object_property(&key) {
           Some(value) => {
@@ -970,8 +970,8 @@ impl Thread {
           return Ok(InterpretResult::Continue);
         }
         if a.is_string() || b.is_string() {
-          let a = a.as_string();
-          let b = b.as_string();
+          let a = a.as_string(self);
+          let b = b.as_string(self);
           self.push(Value::String(format!("{a}{b}")));
           return Ok(InterpretResult::Continue);
         }
@@ -1073,12 +1073,12 @@ impl Thread {
         value
       }
       OpCode::OpAsString => {
-        let value = self.pop().as_string();
+        let value = self.pop().as_string(self);
         let value = Value::Object(value.as_str().into());
         value
       }
       OpCode::OpConsoleOut => {
-        let value = self.pop().as_string();
+        let value = self.pop().as_string(self);
         print!("{value}");
         use std::io::Write as _;
         let _ = std::io::stdout().flush();

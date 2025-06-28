@@ -38,7 +38,7 @@ impl Promise {
   }
   pub fn get_value_str(&self) -> String {
     if self.value.read().is_some() {
-      self.value.read().clone().unwrap().read().as_string()
+      self.value.read().clone().unwrap().read().to_string()
     } else if self.err.read().is_some() {
       self.err.read().clone().unwrap()
     } else {

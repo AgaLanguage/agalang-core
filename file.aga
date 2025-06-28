@@ -1,9 +1,12 @@
-importa ':sa' como Sa;
+importa ':sa' como SA;
 importa ':red' como Red;
 importa ':consola' como Consola;
 importa ':constructores' como CONSTRUCTORES;
 
-const img = Sa::leer_archivo('./icon.ico');
+const ruta = SA::Ruta('./icon.ico');
+Consola::pinta(ruta, ruta::obtener_nombre());
+
+const img = SA::leer_archivo(ruta);
 const longitud = img::longitud;
 const img_header = (
   'HTTP/1.1 200 OK\r\n' +
@@ -23,7 +26,7 @@ fn servidorHTTP(llamar, puerto) {
   csl << ('Servidor iniciado en el puerto ' + servidor::puerto + '\n');
   ret servidor::promesa;
 }
-espera servidorHTTP(fn(req) {
+servidorHTTP(fn(req) {
   const peticion_cruda = CONSTRUCTORES::cadena(req);
   const r = peticion_cruda::reemplaza('\r', '')::separa('\n');
   def data = r[0];
