@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+
 
 pub mod binary;
 mod chunk;
@@ -186,7 +186,7 @@ impl Compiler {
           match data {
             crate::agal_parser::StringData::Str(val) => {
               self.set_constant(
-                Value::String(val.as_str().into()),
+                Value::String(val),
                 node_string.location.start.line,
               );
             }
@@ -224,14 +224,14 @@ impl Compiler {
           };
           OpCode::VarDecl as u8
         };
-        let name = self.set_value(Value::String(node_var_decl.name.as_str().into()));
+        let name = self.set_value(Value::String(node_var_decl.name.clone()));
         self.write_buffer(vec![op, name], node_var_decl.location.start.line);
       }
       Node::Assignment(node_assignament) => {
         match node_assignament.identifier.as_ref() {
           Node::Identifier(id) => {
             self.node_value_to_bytes(&node_assignament.value)?;
-            let name = self.set_value(Value::String(id.name.as_str().into()));
+            let name = self.set_value(Value::String(id.name.clone()));
             self.write_buffer(
               vec![OpCode::SetVar as u8, name],
               node_assignament.location.start.line,
@@ -246,7 +246,7 @@ impl Compiler {
                 Node::Identifier(id) => id.name.as_str(),
                 _ => return Err("Se esperaba un identificador como propiedad".to_string()),
               };
-              self.set_constant(Value::String(name.into()), m.location.start.line);
+              self.set_constant(Value::String(name.to_string()), m.location.start.line);
             };
             self.node_value_to_bytes(&node_assignament.value)?;
             self.write_buffer(
@@ -327,7 +327,7 @@ impl Compiler {
         let function = Value::Object(Self::parse_function(node_function)?.into());
         self.set_constant(function.clone(), node_function.location.start.line);
 
-        let name = self.set_value(Value::String(node_function.name.as_str().into()));
+        let name = self.set_value(Value::String(node_function.name.clone()));
         self.write_buffer(
           vec![OpCode::SetScope as u8, OpCode::ConstDecl as u8, name],
           node_function.location.start.line,
@@ -348,7 +348,7 @@ impl Compiler {
                 Node::Identifier(id) => id.name.as_str(),
                 _ => return Err("Se esperaba un identificador como propiedad".to_string()),
               };
-              self.set_constant(Value::String(name.into()), m.location.start.line);
+              self.set_constant(Value::String(name.to_string()), m.location.start.line);
             };
             let is_instance = if m.instance {
               INSTANCE_MEMBER
@@ -387,7 +387,7 @@ impl Compiler {
         self.write(OpCode::Return as u8, node_return.location.start.line);
       }
       Node::Object(node_object) => {
-        let value = Value::Object(HashMap::new().into());
+        let value = Value::Object(std::collections::HashMap::new().into());
         for p in node_object.properties.clone() {
           self.set_constant(value.clone(), node_object.location.start.line);
           match p {
@@ -421,7 +421,7 @@ impl Compiler {
             Node::Identifier(id) => id.name.as_str(),
             _ => return Err("Se esperaba un identificador como propiedad".to_string()),
           };
-          self.set_constant(Value::String(name.into()), node_member.location.start.line);
+          self.set_constant(Value::String(name.to_string()), node_member.location.start.line);
         };
         let is_instance = if node_member.instance {
           INSTANCE_MEMBER
@@ -496,7 +496,7 @@ impl Compiler {
               f.location.start.line,
             );
 
-            let name = self.set_value(Value::String(f.name.as_str().into()));
+            let name = self.set_value(Value::String(f.name.clone()));
             self.write_buffer(vec![OpCode::ConstDecl as u8, name], f.location.start.line);
             &f.name
           }
@@ -525,7 +525,7 @@ impl Compiler {
               };
               OpCode::VarDecl as u8
             };
-            let name = self.set_value(Value::String(v.name.as_str().into()));
+            let name = self.set_value(Value::String(v.name.clone()));
             self.write_buffer(vec![op, name], v.location.start.line);
             &v.name
           }
@@ -599,7 +599,7 @@ impl Compiler {
           );
           self.write(OpCode::ExtendClass as u8, node_identifier.location.end.line);
         }
-        let name = self.set_value(Value::String(node_class.name.as_str().into()));
+        let name = self.set_value(Value::String(node_class.name.clone()));
         self.write_buffer(
           vec![OpCode::ConstDecl as u8, name],
           node_class.location.start.line,
@@ -657,7 +657,7 @@ impl Compiler {
       Node::Lazy(node_expression) => {
         let mut lazy_block = Self {
           function: Function::Script {
-            chunk: ChunkGroup::new().into(),
+            chunk: Default::default(),
             path: node.get_file(),
             scope: None.into(),
           },
@@ -681,7 +681,7 @@ impl TryFrom<&Node> for Compiler {
 
   fn try_from(value: &Node) -> Result<Self, Self::Error> {
     let path = value.get_file();
-    let chunk = ChunkGroup::new().into();
+    let chunk = Default::default();
     let function = Function::Script {
       chunk,
       path: path.clone(),

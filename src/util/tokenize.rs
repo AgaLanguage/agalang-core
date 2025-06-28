@@ -217,7 +217,7 @@ pub fn tokenize<TK>(
       if let Some(token) = token {
         tokens.push(token);
       } else {
-        return Err(format!("'{}'", c).into());
+        Err(format!("'{}'", c).to_string())?
       }
       column += 1;
     }

@@ -163,7 +163,7 @@ impl Chunk {
 
     let offset = self.code.len() - loop_start + 2;
     if offset > u16::MAX.into() {
-      return Err("Longitud muy alta".to_string());
+      Err("Longitud muy alta".to_string())?
     }
     self.write(((offset >> 8) & 0xff) as u8, self.code.len());
     self.write((offset & 0xff) as u8, self.code.len());
@@ -176,7 +176,7 @@ impl Chunk {
   pub fn patch_jump(&mut self, offset: usize) -> Result<(), String> {
     let jump = self.code.len() - offset - (2/* Data bytes */);
     if jump > u16::MAX.into() {
-      return Err("Longitud muy alta".to_string());
+      Err("Longitud muy alta".to_string())?
     }
     self.overwrite(offset, ((jump >> 8) & 0xff) as u8);
     self.overwrite(offset + 1, (jump & 0xff) as u8);
@@ -204,8 +204,8 @@ impl Chunk {
           offset += 2;
           (
             format!("{:04x}", (a << 8) | b),
-            "--".into(),
-            "-------------------------".into(),
+            "--".to_string(),
+            "-------------------------".to_string(),
           )
         }
         OpCode::Constant
@@ -217,7 +217,7 @@ impl Chunk {
           let index = self.read(offset);
           offset += 1;
           (
-            "----".into(),
+            "----".to_string(),
             format!("{index:02x}"),
             format!("{:?}", self.constants.get(index).to_string()),
           )
@@ -228,22 +228,22 @@ impl Chunk {
           offset += 2;
           (
             format!("{:04x}", offset as u16 - ((a << 8) | b)),
-            "--".into(),
-            "-------------------------".into(),
+            "--".to_string(),
+            "-------------------------".to_string(),
           )
         }
         OpCode::Call | OpCode::SetMember | OpCode::GetMember => {
           offset += 1;
           (
-            "----".into(),
-            "--".into(),
-            "-------------------------".into(),
+            "----".to_string(),
+            "--".to_string(),
+            "-------------------------".to_string(),
           )
         }
         _ => (
-          "----".into(),
-          "--".into(),
-          "-------------------------".into(),
+          "----".to_string(),
+          "--".to_string(),
+          "-------------------------".to_string(),
         ),
       };
       println!(
@@ -456,7 +456,7 @@ impl ChunkGroup {
     }
     let index = self
       .current_chunk_mut()
-      .add_constant(super::Value::String(name.as_str().into()));
+      .add_constant(super::Value::String(name));
     self.write_buffer(vec![OpCode::GetVar as u8, index], line);
     index
   }
@@ -468,7 +468,7 @@ impl ChunkGroup {
     }
     let index = self
       .current_chunk_mut()
-      .add_constant(super::Value::String(name.as_str().into()));
+      .add_constant(super::Value::String(name));
     self.write_buffer(vec![OpCode::ArgDecl as u8, index], line);
     index
   }

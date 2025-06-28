@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+
 
 use crate::compiler::{Object, Value};
 use crate::functions_names;
@@ -42,5 +42,5 @@ pub fn lib_value() -> Value {
     ),
     true,
   );
-  Value::Object(Object::Map(HashMap::new().into(), hashmap.into()))
+  Value::Object(Object::Map(Default::default(), hashmap.into()))
 }

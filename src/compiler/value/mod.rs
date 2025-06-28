@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+
 use std::fmt::Display;
 
 mod class;
@@ -15,7 +15,7 @@ pub use promise::{Promise, PromiseData, PROMISE_TYPE};
 use crate::interpreter::{Thread, VarsManager};
 use crate::util::{MutClone, OnError, Valuable};
 use crate::MultiRefHash;
-use crate::{compiler::ChunkGroup, Decode, StructTag};
+use crate::{ Decode, StructTag};
 
 pub const NULL_NAME: &str = "nulo";
 pub const NEVER_NAME: &str = "nada";
@@ -243,7 +243,7 @@ impl Value {
       Self::Object(Object::Function(f)) => f.clone(),
       Self::Ref(RefValue(r)) | Self::Iterator(r) => r.read().as_function(),
       _ => Function::Script {
-        chunk: ChunkGroup::new().into(),
+        chunk: Default::default(),
         scope: None.into(),
         path: "<nulo>".to_string(),
       }
@@ -253,13 +253,13 @@ impl Value {
   pub fn as_map(
     &self,
   ) -> (
-    MultiRefHash<HashMap<String, Value>>,
+    MultiRefHash<std::collections::HashMap<String, Value>>,
     MultiRefHash<Option<Instance>>,
   ) {
     match self {
       Self::Object(Object::Map(prop, instance)) => (prop.clone(), instance.clone()),
       Self::Ref(RefValue(r)) | Self::Iterator(r) => r.read().as_map(),
-      _ => (HashMap::new().into(), None.into()),
+      _ => (Default::default(), None.into()),
     }
   }
   pub fn as_class(&self) -> MultiRefHash<Class> {

@@ -686,7 +686,7 @@ impl Parser {
         } else {
           Err(NodeError::new(
             &self.at(),
-            Some("se esperaba un editor de bits".into()),
+            Some("se esperaba un editor de bits".to_string()),
           ))
         }
       }
@@ -794,7 +794,7 @@ impl Parser {
       if self.check_token(super::TokenType::Identifier) {
         self.prev().value
       } else {
-        "".into()
+        "".to_string()
       }
     } else {
       self

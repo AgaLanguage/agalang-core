@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+
 
 use crate::compiler::{Class, Value};
 use crate::functions_names::{CONSOLE, CONSTRUCTOR, STRING};
@@ -248,7 +248,7 @@ pub fn lib_value() -> Value {
     true,
   );
   Value::Object(crate::compiler::Object::Map(
-    HashMap::new().into(),
+    Default::default(),
     hashmap.into(),
   ))
 }

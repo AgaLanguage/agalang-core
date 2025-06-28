@@ -177,7 +177,7 @@ impl Decode for usize {
       .on_error(|_| "Se esperaba un usize".to_string())?;
     let mut raw = [0u8; std::mem::size_of::<usize>()];
     if len as usize >= std::mem::size_of::<usize>() {
-      return Err("Binario corrupto".to_string());
+      Err("Binario corrupto".to_string())?
     }
     for i in 0..len {
       match vec.pop_front() {

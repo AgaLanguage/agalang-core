@@ -196,7 +196,7 @@ impl From<&NodeFunction> for Function {
   fn from(value: &NodeFunction) -> Self {
     Self::Value {
       arity: value.params.len(),
-      chunk: ChunkGroup::new().into(),
+      chunk: Default::default(),
       name: value.name.clone(),
       is_async: value.is_async,
       location: value.location.clone(),
@@ -209,7 +209,7 @@ impl From<&NodeFunction> for Function {
 impl From<&NodeBlock> for Function {
   fn from(value: &NodeBlock) -> Self {
     Self::Script {
-      chunk: ChunkGroup::new().into(),
+      chunk: Default::default(),
       path: value.location.file_name.clone(),
       scope: None.into(),
     }

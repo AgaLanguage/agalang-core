@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+
 
 use crate::compiler::{ChunkGroup, Function, Number, Value};
 
@@ -132,7 +132,7 @@ pub fn lib_value() -> Value {
                 max = number;
               }
             } else {
-              return Err(format!("{MAX}: se esperaba un número"));
+              Err(format!("{MAX}: se esperaba un número"))?
             }
           }
           Ok(Value::Number(max))
@@ -159,7 +159,7 @@ pub fn lib_value() -> Value {
                 min = number;
               }
             } else {
-              return Err(format!("{MIN}: se esperaba un número"));
+              Err(format!("{MIN}: se esperaba un número"))?
             }
           }
           Ok(Value::Number(min))
@@ -174,7 +174,7 @@ pub fn lib_value() -> Value {
   hashmap.set_instance_property(TAU, Value::Number("6.2831853071795864769252867665590057683943387987502116419498891846156328125724179972560696506842341359".parse::<Number>().unwrap()),true);
   hashmap.set_instance_property(EULER, Value::Number("2.7182818284590452353602874713526624977572470936999595749669676277240766303535475945713821785251664274".parse::<Number>().unwrap()),true);
   Value::Object(crate::compiler::Object::Map(
-    HashMap::new().into(),
+    Default::default(),
     hashmap.into(),
   ))
 }

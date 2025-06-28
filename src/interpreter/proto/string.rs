@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+
 
 use crate::compiler::{ChunkGroup, Function, Object, Value};
 
@@ -14,7 +14,7 @@ pub fn string_proto() -> Value {
     REPLACE,
     Value::Object(
       Function::Native {
-        path: "".into(),
+        path: "".to_string(),
         name: format!("<cadena>::{REPLACE}"),
         func: |this, args, thread, _| {
           let old = args.first();
@@ -46,7 +46,7 @@ pub fn string_proto() -> Value {
     REPEAT,
     Value::Object(
       Function::Native {
-        path: "".into(),
+        path: "".to_string(),
         name: format!("<cadena>::{REPEAT}"),
         func: |this, args, thread, _| {
           let count = match args.first() {
@@ -56,7 +56,7 @@ pub fn string_proto() -> Value {
             Some(count) => count.as_number()?.floor().into(),
           }?;
           if count == 0 {
-            return Ok(Value::String("".into()));
+            return Ok(Value::String("".to_string()));
           }
           let string = this.as_string(thread);
           let string = string.repeat(count);
@@ -74,7 +74,7 @@ pub fn string_proto() -> Value {
     BYTES,
     Value::Object(
       Function::Native {
-        path: "".into(),
+        path: "".to_string(),
         name: format!("<cadena>::{BYTES}"),
         func: |this, _, thread, _| {
           let string = this.as_string(thread);
@@ -96,7 +96,7 @@ pub fn string_proto() -> Value {
     SPLIT,
     Value::Object(
       Function::Native {
-        path: "".into(),
+        path: "".to_string(),
         name: format!("<cadena>::{SPLIT}"),
         func: |this, args, thread, _| {
           let separator = args.first();
@@ -121,5 +121,5 @@ pub fn string_proto() -> Value {
     true,
   );
 
-  Value::Object(Object::Map(HashMap::new().into(), hashmap.into()))
+  Value::Object(Object::Map(Default::default(), hashmap.into()))
 }

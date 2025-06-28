@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+
 use std::net::TcpListener;
 use std::sync::Arc;
 
@@ -127,7 +127,7 @@ fn handle_client(
   thread
     .read()
     .push(Value::Object(crate::compiler::Object::Map(
-      HashMap::new().into(),
+      Default::default(),
       data.into(),
     )));
 
@@ -199,7 +199,7 @@ pub fn lib_value() -> Value {
           data.set_instance_property(TCP_DATA_IP, Value::String(addr.ip().to_string()), true);
           data.set_instance_property(TCP_DATA_PORT, Value::Number(addr.port().into()), true);
           Ok(Value::Object(crate::compiler::Object::Map(
-            HashMap::new().into(),
+            Default::default(),
             data.into(),
           )))
         },
@@ -210,7 +210,7 @@ pub fn lib_value() -> Value {
     true,
   );
   Value::Object(crate::compiler::Object::Map(
-    HashMap::new().into(),
+    Default::default(),
     hashmap.into(),
   ))
 }

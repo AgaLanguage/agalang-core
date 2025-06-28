@@ -12,7 +12,7 @@ pub fn interpret(compiler: crate::compiler::Compiler) -> Result<crate::compiler:
   match vm.interpret() {
     stack::InterpretResult::Ok => {}
     _ => {
-      return Err(());
+      Err(())?
     }
   }
   Ok(vm.clone().as_value())

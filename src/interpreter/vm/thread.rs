@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::path::Path;
 
 use super::VM;
@@ -24,7 +23,7 @@ impl ModuleThread {
       path: path.to_string(),
       async_thread: async_thread.clone(),
       value: Value::Object(Object::Map(
-        HashMap::new().into(),
+        Default::default(),
         crate::compiler::Instance::new(format!("<{path}>")).into(),
       )),
       status: InterpretResult::Continue,
@@ -508,7 +507,7 @@ impl Thread {
 
     if arity > args.len() {
       if arity == 1 && args.is_empty() {
-        return Err("Se esperaba llamar una funcion con un argumento".into());
+        Err("Se esperaba llamar una funcion con un argumento".to_string())?
       }
       return Err(format!(
         "Se esperaban {} argumentos, pero se recibieron {}",
@@ -556,11 +555,11 @@ impl Thread {
 
     if callee.is_number() {
       if arity != 1 || args.len() != 1 {
-        return Err("Solo se puede multiplicar un numero (llamada)".into());
+        Err("Solo se puede multiplicar un numero (llamada)".to_string())?
       }
       let arg = args.first().unwrap();
       if !arg.is_number() {
-        return Err("Solo se pueden multiplicar numeros (llamada)".into());
+        Err("Solo se pueden multiplicar numeros (llamada)".to_string())?
       }
       let num = callee.as_number()?;
       let arg = arg.as_number()?;
@@ -585,7 +584,7 @@ impl Thread {
       if let Some(Value::Object(Object::Function(fun))) = constructor {
         self.call_function(this.clone(), fun, args)?;
       } else if constructor.is_some() {
-        return Err("Se esperaba llamar un constructor".into());
+        Err("Se esperaba llamar un constructor".to_string())?
       } else {
         self.push(this);
       }
@@ -702,7 +701,7 @@ impl Thread {
       OpCode::Approximate => {
         let value = self.pop();
         if !value.is_number() {
-          return Err(format!("No se pudo operar '~{}'", value.get_type()));
+          Err(format!("No se pudo operar '~{}'", value.get_type()))?
         }
         Value::Number(value.as_number()?.trunc())
       }
@@ -747,7 +746,7 @@ impl Thread {
               );
             }
             Number::Infinity | Number::NaN | Number::NegativeInfinity => {
-              return Err("El indice no puede ser NaN o infinito (asignar propiedad)".to_string());
+              Err("El indice no puede ser NaN o infinito (asignar propiedad)".to_string())?
             }
           };
           if index.is_negative() {
@@ -758,7 +757,7 @@ impl Thread {
           if index.is_int() {
             index.to_string()
           } else {
-            return Err("El indice debe ser entero (asignar propiedad)".to_string());
+            Err("El indice debe ser entero (asignar propiedad)".to_string())?
           }
         } else {
           key.as_string(self)
@@ -902,7 +901,7 @@ impl Thread {
         let name = self.read_string();
         let vars = self.resolve(&name);
         if !vars.read().has(&name) {
-          return Err(format!("No se pudo eliminar la variable '{name}'"));
+          Err(format!("No se pudo eliminar la variable '{name}'"))?
         }
         let value = vars.write().remove(&name);
         match value {
@@ -1040,7 +1039,7 @@ impl Thread {
       OpCode::Negate => {
         let value = self.pop();
         if !value.is_number() {
-          return Err(format!("No se pudo operar '-{}'", value.get_type()));
+          Err(format!("No se pudo operar '-{}'", value.get_type()))?
         }
         Value::Number(-value.as_number()?)
       }
@@ -1060,11 +1059,7 @@ impl Thread {
           Value::False
         }
       }
-      OpCode::AsString => {
-        let value = self.pop().as_string(self);
-        let value = Value::Object(value.as_str().into());
-        value
-      }
+      OpCode::AsString => Value::String(self.pop().as_string(self)),
       OpCode::ConsoleOut => {
         let value = self.pop().as_string(self);
         print!("{value}");

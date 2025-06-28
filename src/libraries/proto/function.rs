@@ -41,7 +41,7 @@ pub fn get_sub_module(
             .or_else(|| Some(&this))
             .ok_or_else(|| internal::AgalThrow::Params {
               type_error: parser::ErrorNames::TypeError,
-              message: "Se esperaba un argumento".into(),
+              message: "Se esperaba un argumento".to_string(),
               stack: stack.clone(),
             })?
             .to_agal_string(stack, modules)?
@@ -63,7 +63,7 @@ pub fn get_sub_module(
             .first()
             .ok_or_else(|| internal::AgalThrow::Params {
               type_error: parser::ErrorNames::TypeError,
-              message: "Se esperaba un argumento".into(),
+              message: "Se esperaba un argumento".to_string(),
               stack: stack.clone(),
             })?
             .clone();
@@ -71,7 +71,7 @@ pub fn get_sub_module(
             .get(1)
             .ok_or_else(|| internal::AgalThrow::Params {
               type_error: parser::ErrorNames::TypeError,
-              message: "Se esperaba un argumento".into(),
+              message: "Se esperaba un argumento".to_string(),
               stack: stack.clone(),
             })?
             .to_agal_array(stack.clone(), modules.clone())?

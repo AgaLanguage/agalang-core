@@ -1,10 +1,10 @@
-use std::collections::HashMap;
+
 
 use crate::compiler::Value;
 
 #[derive(Debug, Clone, Default)]
 pub struct DataManager<K: Eq + std::hash::Hash, V: Clone> {
-  data: crate::MultiRefHash<HashMap<K, V>>,
+  data: crate::MultiRefHash<std::collections::HashMap<K, V>>,
 }
 impl<K: Eq + std::hash::Hash, V: Clone> DataManager<K, V> {
   pub fn get(&self, key: &K) -> V {

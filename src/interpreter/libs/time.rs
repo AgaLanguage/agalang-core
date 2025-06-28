@@ -1,5 +1,5 @@
 use libc::{gmtime_s, localtime_s, time, time_t, tm};
-use std::collections::HashMap;
+
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::compiler::Value;
@@ -74,7 +74,7 @@ pub fn lib_value() -> Value {
     true,
   );
   Value::Object(crate::compiler::Object::Map(
-    HashMap::new().into(),
+    Default::default(),
     hashmap.into(),
   ))
 }

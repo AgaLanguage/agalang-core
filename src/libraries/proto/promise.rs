@@ -33,7 +33,7 @@ fn then(
 ) -> Pin<Box<dyn Future<Output = ResultAgalValue> + Send>> {
   let cb = arguments.first().ok_or_else(|| internal::AgalThrow::Params {
     type_error: parser::ErrorNames::TypeError,
-    message: "Se esperaba un argumento".into(),
+    message: "Se esperaba un argumento".to_string(),
     stack: stack.clone(),
   });
   if let Err(e) = cb {
@@ -87,7 +87,7 @@ fn catch(
 ) -> Pin<Box<dyn Future<Output = ResultAgalValue> + Send>> {
   let cb = arguments.first().ok_or_else(|| internal::AgalThrow::Params {
     type_error: parser::ErrorNames::TypeError,
-    message: "Se esperaba un argumento".into(),
+    message: "Se esperaba un argumento".to_string(),
     stack: stack.clone(),
   });
   if let Err(e) = cb {
@@ -157,7 +157,7 @@ pub fn get_sub_module(
             .or_else(|| Some(&this))
             .ok_or_else(|| internal::AgalThrow::Params {
               type_error: parser::ErrorNames::TypeError,
-              message: "Se esperaba un argumento".into(),
+              message: "Se esperaba un argumento".to_string(),
               stack: stack.clone(),
             })?
             .to_agal_string(stack, modules)?

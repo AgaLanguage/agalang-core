@@ -21,8 +21,8 @@ impl Instance {
     let this = Self {
       name,
       extend: None.into(),
-      poperties: HashMap::new().into(),
-      public_properties: HashSet::new().into(),
+      poperties: Default::default(),
+      public_properties: Default::default(),
     };
     this.set_instance_property(SUPER, Default::default(), true);
     this.set_instance_property(CONSTRUCTOR, Value::Ref(Default::default()), true);
@@ -121,7 +121,7 @@ impl Class {
       name,
       extend: None.into(),
       instance: instance.clone(),
-      poperties: HashMap::new().into(),
+      poperties: Default::default(),
     }
     .into();
     instance.map(|this| {
@@ -169,7 +169,7 @@ impl Class {
       })
       .unwrap_or_else(|| {
         Value::Object(super::Object::Map(
-          HashMap::new().into(),
+          Default::default(),
           self.instance.clone(),
         ))
       })
