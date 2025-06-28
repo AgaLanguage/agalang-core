@@ -57,10 +57,13 @@ fn handle_client(
                 let value = Value::Object(buf[..bytes_read].to_vec().into());
                 Ok(value)
               } else {
-                Err(format!("{TCP_SOCKET_READ}: No hay datos para leer").into())
+                Err(format!("{TCP_SOCKET_READ}: No hay datos para leer"))
               }
             }
-            Err(e) => Err(format!("{TCP_SOCKET_READ}: Error al leer del socket: {}", e).into()),
+            Err(e) => Err(format!(
+              "{TCP_SOCKET_READ}: Error al leer del socket: {}",
+              e
+            )),
           }
         },
         custom_data: stream.clone(),
@@ -77,7 +80,7 @@ fn handle_client(
         chunk: Default::default(),
         func: |_, args, thread, stream| {
           let data = args
-            .get(0)
+            .first()
             .on_some_option(|t| t.as_strict_buffer(thread).ok())
             .on_error(|_| {
               format!("{TCP_SOCKET_WRITE}: Se esperaba un valor buffer como primer argumento")
@@ -147,7 +150,7 @@ pub fn lib_value() -> Value {
         chunk: crate::compiler::ChunkGroup::default().into(),
         func: |_, args, thread, _| {
           let addr = args
-            .get(0)
+            .first()
             .on_some_option(|t| {
               if t.is_string() {
                 Some(t.as_string(thread))

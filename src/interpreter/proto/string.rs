@@ -11,13 +11,13 @@ pub fn string_proto() -> Value {
   let hashmap = crate::compiler::Instance::new("<cadena>".to_string());
 
   hashmap.set_instance_property(
-    REPLACE.into(),
+    REPLACE,
     Value::Object(
       Function::Native {
         path: "".into(),
         name: format!("<cadena>::{REPLACE}"),
         func: |this, args, thread, _| {
-          let old = args.get(0);
+          let old = args.first();
           if old.is_none() {
             return Err(format!(
               "{REPLACE}: se esperaban 2 argumentos y se recibieron 0"
@@ -33,7 +33,7 @@ pub fn string_proto() -> Value {
           let new = new.unwrap().as_string(thread);
           let string = this.as_string(thread);
           let string = string.replace(&old, &new);
-          Ok(Value::String(string.into()))
+          Ok(Value::String(string))
         },
         chunk: ChunkGroup::default().into(),
         custom_data: ().into(),
@@ -43,13 +43,13 @@ pub fn string_proto() -> Value {
     true,
   );
   hashmap.set_instance_property(
-    REPEAT.into(),
+    REPEAT,
     Value::Object(
       Function::Native {
         path: "".into(),
         name: format!("<cadena>::{REPEAT}"),
         func: |this, args, thread, _| {
-          let count = match args.get(0) {
+          let count = match args.first() {
             None => Err(format!(
               "{REPEAT}: se esperaban 2 argumentos y se recibieron 0"
             )),
@@ -71,7 +71,7 @@ pub fn string_proto() -> Value {
   );
 
   hashmap.set_instance_property(
-    BYTES.into(),
+    BYTES,
     Value::Object(
       Function::Native {
         path: "".into(),
@@ -93,13 +93,13 @@ pub fn string_proto() -> Value {
     true,
   );
   hashmap.set_instance_property(
-    SPLIT.into(),
+    SPLIT,
     Value::Object(
       Function::Native {
         path: "".into(),
         name: format!("<cadena>::{SPLIT}"),
         func: |this, args, thread, _| {
-          let separator = args.get(0);
+          let separator = args.first();
           if separator.is_none() {
             return Err(format!(
               "{SPLIT}: se esperaba 1 argumento y se recibieron 0"

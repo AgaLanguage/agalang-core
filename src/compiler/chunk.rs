@@ -3,62 +3,62 @@ use crate::{compiler::ValueArray, Decode, Encode, StructTag};
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum OpCode {
   // Const
-  OpConstant,
+  Constant,
   // Math
-  OpAdd,
-  OpSubtract,
-  OpMultiply,
-  OpDivide,
-  OpNegate,
-  OpModulo,
+  Add,
+  Subtract,
+  Multiply,
+  Divide,
+  Negate,
+  Modulo,
   // Expr
-  OpNot,
-  OpApproximate,
-  OpAt,
-  OpAsRef,
-  OpAsBoolean,
-  OpAsString,
-  OpCall,
-  OpArgDecl,
-  OpGetMember,
-  OpSetMember,
+  Not,
+  Approximate,
+  At,
+  AsRef,
+  AsBoolean,
+  AsString,
+  Call,
+  ArgDecl,
+  GetMember,
+  SetMember,
   // Binary
-  OpAnd,
-  OpOr,
-  OpGreaterThan,
-  OpLessThan,
-  OpEquals,
+  And,
+  Or,
+  GreaterThan,
+  LessThan,
+  Equals,
   // Statement
-  OpConsoleOut,
-  OpVarDecl,
-  OpConstDecl,
-  OpDelVar,
-  OpGetVar,
-  OpSetVar,
-  OpLoop,
-  OpImport,
-  OpExport,
-  OpExtendClass,
-  OpThrow,
-  OpTry,
+  ConsoleOut,
+  VarDecl,
+  ConstDecl,
+  DelVar,
+  GetVar,
+  SetVar,
+  Loop,
+  Import,
+  Export,
+  ExtendClass,
+  Throw,
+  Try,
   // Control
-  OpPop,
-  OpAwait,
-  OpUnPromise, // obtiene el valor de una promesa
-  OpPromised,  // mueve el frame a los asincronos
-  OpNewLocals,
-  OpRemoveLocals,
-  OpJumpIfFalse,
-  OpJump,
-  OpReturn,
-  OpBreak,
-  OpContinue,
-  OpCopy,        // Para duplicar el ultimo valor en el stack (obtener el padre de un objeto)
-  OpSetScope,    // Agrega el scope actual a el ultimo valor de la pila (para funciones)
-  OpInClass,     // Determina que el scope actual es una clase (metodos de clase)
-  OpGetInstance, // Para agregar las propiedades de inctancia al declarar la clase
+  Pop,
+  Await,
+  UnPromise, // obtiene el valor de una promesa
+  Promised,  // mueve el frame a los asincronos
+  NewLocals,
+  RemoveLocals,
+  JumpIfFalse,
+  Jump,
+  Return,
+  Break,
+  Continue,
+  Copy,        // Para duplicar el ultimo valor en el stack (obtener el padre de un objeto)
+  SetScope,    // Agrega el scope actual a el ultimo valor de la pila (para funciones)
+  InClass,     // Determina que el scope actual es una clase (metodos de clase)
+  GetInstance, // Para agregar las propiedades de inctancia al declarar la clase
   // Invalid
-  OpNull,
+  Null,
 }
 impl From<&u8> for OpCode {
   fn from(value: &u8) -> Self {
@@ -68,55 +68,55 @@ impl From<&u8> for OpCode {
 impl From<u8> for OpCode {
   fn from(value: u8) -> Self {
     match value {
-      x if x == Self::OpApproximate as u8 => Self::OpApproximate,
-      x if x == Self::OpGetMember as u8 => Self::OpGetMember,
-      x if x == Self::OpSetMember as u8 => Self::OpSetMember,
-      x if x == Self::OpConstant as u8 => Self::OpConstant,
-      x if x == Self::OpCall as u8 => Self::OpCall,
-      x if x == Self::OpAdd as u8 => Self::OpAdd,
-      x if x == Self::OpArgDecl as u8 => Self::OpArgDecl,
-      x if x == Self::OpSubtract as u8 => Self::OpSubtract,
-      x if x == Self::OpMultiply as u8 => Self::OpMultiply,
-      x if x == Self::OpDivide as u8 => Self::OpDivide,
-      x if x == Self::OpNegate as u8 => Self::OpNegate,
-      x if x == Self::OpNot as u8 => Self::OpNot,
-      x if x == Self::OpAsBoolean as u8 => Self::OpAsBoolean,
-      x if x == Self::OpAsString as u8 => Self::OpAsString,
-      x if x == Self::OpGreaterThan as u8 => Self::OpGreaterThan,
-      x if x == Self::OpLessThan as u8 => Self::OpLessThan,
-      x if x == Self::OpEquals as u8 => Self::OpEquals,
-      x if x == Self::OpConsoleOut as u8 => Self::OpConsoleOut,
-      x if x == Self::OpGetVar as u8 => Self::OpGetVar,
-      x if x == Self::OpSetVar as u8 => Self::OpSetVar,
-      x if x == Self::OpVarDecl as u8 => Self::OpVarDecl,
-      x if x == Self::OpConstDecl as u8 => Self::OpConstDecl,
-      x if x == Self::OpPop as u8 => Self::OpPop,
-      x if x == Self::OpAnd as u8 => Self::OpAnd,
-      x if x == Self::OpOr as u8 => Self::OpOr,
-      x if x == Self::OpLoop as u8 => Self::OpLoop,
-      x if x == Self::OpNewLocals as u8 => Self::OpNewLocals,
-      x if x == Self::OpRemoveLocals as u8 => Self::OpRemoveLocals,
-      x if x == Self::OpJumpIfFalse as u8 => Self::OpJumpIfFalse,
-      x if x == Self::OpJump as u8 => Self::OpJump,
-      x if x == Self::OpReturn as u8 => Self::OpReturn,
-      x if x == Self::OpCopy as u8 => Self::OpCopy,
-      x if x == Self::OpSetScope as u8 => Self::OpSetScope,
-      x if x == Self::OpImport as u8 => Self::OpImport,
-      x if x == Self::OpExport as u8 => Self::OpExport,
-      x if x == Self::OpDelVar as u8 => Self::OpDelVar,
-      x if x == Self::OpAwait as u8 => Self::OpAwait,
-      x if x == Self::OpUnPromise as u8 => Self::OpUnPromise,
-      x if x == Self::OpPromised as u8 => Self::OpPromised,
-      x if x == Self::OpModulo as u8 => Self::OpModulo,
-      x if x == Self::OpInClass as u8 => Self::OpInClass,
-      x if x == Self::OpExtendClass as u8 => Self::OpExtendClass,
-      x if x == Self::OpGetInstance as u8 => Self::OpGetInstance,
-      x if x == Self::OpThrow as u8 => Self::OpThrow,
-      x if x == Self::OpTry as u8 => Self::OpTry,
+      x if x == Self::Approximate as u8 => Self::Approximate,
+      x if x == Self::GetMember as u8 => Self::GetMember,
+      x if x == Self::SetMember as u8 => Self::SetMember,
+      x if x == Self::Constant as u8 => Self::Constant,
+      x if x == Self::Call as u8 => Self::Call,
+      x if x == Self::Add as u8 => Self::Add,
+      x if x == Self::ArgDecl as u8 => Self::ArgDecl,
+      x if x == Self::Subtract as u8 => Self::Subtract,
+      x if x == Self::Multiply as u8 => Self::Multiply,
+      x if x == Self::Divide as u8 => Self::Divide,
+      x if x == Self::Negate as u8 => Self::Negate,
+      x if x == Self::Not as u8 => Self::Not,
+      x if x == Self::AsBoolean as u8 => Self::AsBoolean,
+      x if x == Self::AsString as u8 => Self::AsString,
+      x if x == Self::GreaterThan as u8 => Self::GreaterThan,
+      x if x == Self::LessThan as u8 => Self::LessThan,
+      x if x == Self::Equals as u8 => Self::Equals,
+      x if x == Self::ConsoleOut as u8 => Self::ConsoleOut,
+      x if x == Self::GetVar as u8 => Self::GetVar,
+      x if x == Self::SetVar as u8 => Self::SetVar,
+      x if x == Self::VarDecl as u8 => Self::VarDecl,
+      x if x == Self::ConstDecl as u8 => Self::ConstDecl,
+      x if x == Self::Pop as u8 => Self::Pop,
+      x if x == Self::And as u8 => Self::And,
+      x if x == Self::Or as u8 => Self::Or,
+      x if x == Self::Loop as u8 => Self::Loop,
+      x if x == Self::NewLocals as u8 => Self::NewLocals,
+      x if x == Self::RemoveLocals as u8 => Self::RemoveLocals,
+      x if x == Self::JumpIfFalse as u8 => Self::JumpIfFalse,
+      x if x == Self::Jump as u8 => Self::Jump,
+      x if x == Self::Return as u8 => Self::Return,
+      x if x == Self::Copy as u8 => Self::Copy,
+      x if x == Self::SetScope as u8 => Self::SetScope,
+      x if x == Self::Import as u8 => Self::Import,
+      x if x == Self::Export as u8 => Self::Export,
+      x if x == Self::DelVar as u8 => Self::DelVar,
+      x if x == Self::Await as u8 => Self::Await,
+      x if x == Self::UnPromise as u8 => Self::UnPromise,
+      x if x == Self::Promised as u8 => Self::Promised,
+      x if x == Self::Modulo as u8 => Self::Modulo,
+      x if x == Self::InClass as u8 => Self::InClass,
+      x if x == Self::ExtendClass as u8 => Self::ExtendClass,
+      x if x == Self::GetInstance as u8 => Self::GetInstance,
+      x if x == Self::Throw as u8 => Self::Throw,
+      x if x == Self::Try as u8 => Self::Try,
 
-      x if x == Self::OpAt as u8 => Self::OpAt,
-      x if x == Self::OpAsRef as u8 => Self::OpAsRef,
-      _ => Self::OpNull,
+      x if x == Self::At as u8 => Self::At,
+      x if x == Self::AsRef as u8 => Self::AsRef,
+      _ => Self::Null,
     }
   }
 }
@@ -137,7 +137,7 @@ impl Chunk {
     }
   }
   pub fn read(&self, index: usize) -> u8 {
-    return self.code[index];
+    self.code[index]
   }
   fn overwrite(&mut self, index: usize, byte: u8) {
     self.code[index] = byte;
@@ -159,7 +159,7 @@ impl Chunk {
     self.constants.len() - 1
   }
   pub fn add_loop(&mut self, loop_start: usize) -> Result<(), String> {
-    self.write(OpCode::OpLoop as u8, self.code.len());
+    self.write(OpCode::Loop as u8, self.code.len());
 
     let offset = self.code.len() - loop_start + 2;
     if offset > u16::MAX.into() {
@@ -198,7 +198,7 @@ impl Chunk {
       let op = OpCode::from(self.code[offset]);
       offset += 1;
       let (jump_to, index, value): (String, String, String) = match op {
-        OpCode::OpJump | OpCode::OpJumpIfFalse => {
+        OpCode::Jump | OpCode::JumpIfFalse => {
           let a = self.read(offset) as u16;
           let b = self.read(offset + 1) as u16;
           offset += 2;
@@ -208,12 +208,12 @@ impl Chunk {
             "-------------------------".into(),
           )
         }
-        OpCode::OpConstant
-        | OpCode::OpGetVar
-        | OpCode::OpConstDecl
-        | OpCode::OpVarDecl
-        | OpCode::OpArgDecl
-        | OpCode::OpExport => {
+        OpCode::Constant
+        | OpCode::GetVar
+        | OpCode::ConstDecl
+        | OpCode::VarDecl
+        | OpCode::ArgDecl
+        | OpCode::Export => {
           let index = self.read(offset);
           offset += 1;
           (
@@ -222,7 +222,7 @@ impl Chunk {
             format!("{:?}", self.constants.get(index).to_string()),
           )
         }
-        OpCode::OpLoop => {
+        OpCode::Loop => {
           let a = self.read(offset) as u16;
           let b = self.read(offset + 1) as u16;
           offset += 2;
@@ -232,7 +232,7 @@ impl Chunk {
             "-------------------------".into(),
           )
         }
-        OpCode::OpCall | OpCode::OpSetMember | OpCode::OpGetMember => {
+        OpCode::Call | OpCode::SetMember | OpCode::GetMember => {
           offset += 1;
           (
             "----".into(),
@@ -263,14 +263,14 @@ impl Encode for Chunk {
       for (_, value) in self.constants.enumerate() {
         encode.extend(value.encode()?);
       }
-      encode.push(StructTag::EOB as u8);
+      encode.push(StructTag::EndOfBlock as u8);
     };
     {
       encode.push(StructTag::Code as u8);
       for byte in &self.code {
         let use_byte = match *byte {
-          x if x == StructTag::SOB as u8 => true,
-          x if x == StructTag::EOB as u8 => true,
+          x if x == StructTag::StartOfBlock as u8 => true,
+          x if x == StructTag::EndOfBlock as u8 => true,
           x if x == StructTag::Byte as u8 => true,
           _ => false,
         };
@@ -279,14 +279,14 @@ impl Encode for Chunk {
         }
         encode.push(*byte);
       }
-      encode.push(StructTag::EOB as u8);
+      encode.push(StructTag::EndOfBlock as u8);
     };
     {
       encode.push(StructTag::Lines as u8);
       for line in &self.lines {
         encode.extend(line.encode()?);
       }
-      encode.push(StructTag::EOB as u8);
+      encode.push(StructTag::EndOfBlock as u8);
     };
     Ok(encode)
   }
@@ -317,8 +317,8 @@ impl Decode for Chunk {
         .on_error(|_| "Se esperaban valores de un fragmento".to_string())?;
       let mut constants = ValueArray::new();
       loop {
-        let byte = vec.get(0).on_error(|_| "Binario corrupto".to_string())?;
-        if *byte == StructTag::EOB as u8 {
+        let byte = vec.front().on_error(|_| "Binario corrupto".to_string())?;
+        if *byte == StructTag::EndOfBlock as u8 {
           vec.pop_front(); // EOB
           break;
         }
@@ -342,7 +342,7 @@ impl Decode for Chunk {
         let byte = vec
           .pop_front()
           .on_error(|_| "Binario corrupto".to_string())?;
-        if byte == StructTag::EOB as u8 {
+        if byte == StructTag::EndOfBlock as u8 {
           break;
         }
         let byte = if byte == StructTag::Byte as u8 {
@@ -369,8 +369,8 @@ impl Decode for Chunk {
         .on_error(|_| "Se esperaban lineas de un fragmento".to_string())?;
       let mut lines = vec![];
       loop {
-        let byte = vec.get(0).on_error(|_| "Binario corrupto".to_string())?;
-        if *byte == StructTag::EOB as u8 {
+        let byte = vec.front().on_error(|_| "Binario corrupto".to_string())?;
+        if *byte == StructTag::EndOfBlock as u8 {
           vec.pop_front(); // EOB
           break;
         }
@@ -449,7 +449,7 @@ impl ChunkGroup {
     self.current_chunk().constants.get(index)
   }
   pub fn read_var(&mut self, name: String, line: usize) -> u8 {
-    if self.current_chunk_mut().constants.len() >= u8::MAX {
+    if self.current_chunk_mut().constants.len() == u8::MAX {
       self.current += 1;
       self.chunks.push(Chunk::new());
       self.aggregate_len.push(self.prev_aggregate_len());
@@ -457,11 +457,11 @@ impl ChunkGroup {
     let index = self
       .current_chunk_mut()
       .add_constant(super::Value::String(name.as_str().into()));
-    self.write_buffer(vec![OpCode::OpGetVar as u8, index], line);
+    self.write_buffer(vec![OpCode::GetVar as u8, index], line);
     index
   }
   pub fn make_arg(&mut self, name: String, line: usize) -> u8 {
-    if self.current_chunk_mut().constants.len() >= u8::MAX {
+    if self.current_chunk_mut().constants.len() == u8::MAX {
       self.current += 1;
       self.chunks.push(Chunk::new());
       self.aggregate_len.push(self.prev_aggregate_len());
@@ -469,7 +469,7 @@ impl ChunkGroup {
     let index = self
       .current_chunk_mut()
       .add_constant(super::Value::String(name.as_str().into()));
-    self.write_buffer(vec![OpCode::OpArgDecl as u8, index], line);
+    self.write_buffer(vec![OpCode::ArgDecl as u8, index], line);
     index
   }
   pub fn add_value(&mut self, value: super::Value) -> u8 {
@@ -480,7 +480,7 @@ impl ChunkGroup {
         .get_index(&value)
         .unwrap_or_default()
     } else {
-      if self.current_chunk_mut().constants.len() >= u8::MAX {
+      if self.current_chunk_mut().constants.len() == u8::MAX {
         self.current += 1;
         self.chunks.push(Chunk::new());
         self.aggregate_len.push(self.prev_aggregate_len());
@@ -490,7 +490,7 @@ impl ChunkGroup {
   }
   pub fn write_constant(&mut self, value: super::Value, line: usize) -> u8 {
     let index = self.add_value(value);
-    self.write_buffer(vec![OpCode::OpConstant as u8, index], line);
+    self.write_buffer(vec![OpCode::Constant as u8, index], line);
     index
   }
   pub fn write_buffer(&mut self, bytes: Vec<u8>, line: usize) {
@@ -537,7 +537,7 @@ impl Default for ChunkGroup {
   fn default() -> Self {
     let mut group = Self::new();
     group.write_constant(super::Value::Never, 0);
-    group.write(OpCode::OpReturn as u8, 0);
+    group.write(OpCode::Return as u8, 0);
     group
   }
 }
@@ -549,7 +549,7 @@ impl Encode for ChunkGroup {
       encode.extend(chunk.encode()?)
     }
 
-    encode.push(StructTag::EOB as u8);
+    encode.push(StructTag::EndOfBlock as u8);
     Ok(encode)
   }
 }
@@ -572,8 +572,8 @@ impl Decode for ChunkGroup {
       current: 0,
     };
     loop {
-      let byte = vec.get(0).on_error(|_| "Binario corrupto".to_string())?;
-      if *byte == StructTag::EOB as u8 {
+      let byte = vec.front().on_error(|_| "Binario corrupto".to_string())?;
+      if *byte == StructTag::EndOfBlock as u8 {
         vec.pop_front(); // EOB
         break;
       }

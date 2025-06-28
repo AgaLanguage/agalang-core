@@ -17,7 +17,7 @@ pub fn lib_value() -> Value {
   let hashmap = crate::compiler::Instance::new(format!("<{LIB_NAME}>"));
 
   hashmap.set_instance_property(
-    FLOOR.into(),
+    FLOOR,
     Value::Object(
       Function::Native {
         name: format!("<{LIB_NAME}>::{FLOOR}"),
@@ -25,7 +25,7 @@ pub fn lib_value() -> Value {
         chunk: ChunkGroup::default().into(),
         func: |_, args, _, _| {
           let number = args
-            .get(0)
+            .first()
             .ok_or_else(|| format!("{FLOOR}: se esperaba 1 argumento y se recibieron 0"))?;
 
           if number.is_number() {
@@ -42,7 +42,7 @@ pub fn lib_value() -> Value {
     true,
   );
   hashmap.set_instance_property(
-    IS_INFINITE.into(),
+    IS_INFINITE,
     Value::Object(
       Function::Native {
         name: format!("<{LIB_NAME}>::{IS_INFINITE}"),
@@ -50,7 +50,7 @@ pub fn lib_value() -> Value {
         chunk: ChunkGroup::default().into(),
         func: |_, args, _, _| {
           let number = args
-            .get(0)
+            .first()
             .ok_or_else(|| format!("{IS_INFINITE}: se esperaba 1 argumento y se recibieron 0"))?;
 
           if number.is_number() {
@@ -67,7 +67,7 @@ pub fn lib_value() -> Value {
     true,
   );
   hashmap.set_instance_property(
-    ROUND.into(),
+    ROUND,
     Value::Object(
       Function::Native {
         name: format!("<{LIB_NAME}>::{ROUND}"),
@@ -75,7 +75,7 @@ pub fn lib_value() -> Value {
         chunk: ChunkGroup::default().into(),
         func: |_, args, _, _| {
           let number = args
-            .get(0)
+            .first()
             .ok_or_else(|| format!("{ROUND}: se esperaba 1 argumento y se recibieron 0"))?;
 
           if number.is_number() {
@@ -92,7 +92,7 @@ pub fn lib_value() -> Value {
     true,
   );
   hashmap.set_instance_property(
-    CEIL.into(),
+    CEIL,
     Value::Object(
       Function::Native {
         name: format!("<{LIB_NAME}>::{CEIL}"),
@@ -100,7 +100,7 @@ pub fn lib_value() -> Value {
         chunk: ChunkGroup::default().into(),
         func: |_, args, _, _| {
           let number = args
-            .get(0)
+            .first()
             .ok_or_else(|| format!("{CEIL}: se esperaba 1 argumento y se recibieron 0"))?;
 
           if number.is_number() {
@@ -117,7 +117,7 @@ pub fn lib_value() -> Value {
     true,
   );
   hashmap.set_instance_property(
-    MAX.into(),
+    MAX,
     Value::Object(
       Function::Native {
         name: format!("<{LIB_NAME}>::{MAX}"),
@@ -144,7 +144,7 @@ pub fn lib_value() -> Value {
     true,
   );
   hashmap.set_instance_property(
-    MIN.into(),
+    MIN,
     Value::Object(
       Function::Native {
         name: format!("<{LIB_NAME}>::{MIN}"),
@@ -170,9 +170,9 @@ pub fn lib_value() -> Value {
     ),
     true,
   );
-  hashmap.set_instance_property(PI.into(), Value::Number("3.1415926535897932384626433832795028841971693993751058209749445923078164062862089986280348253421170679".parse::<Number>().unwrap()),true);
-  hashmap.set_instance_property(TAU.into(), Value::Number("6.2831853071795864769252867665590057683943387987502116419498891846156328125724179972560696506842341359".parse::<Number>().unwrap()),true);
-  hashmap.set_instance_property(EULER.into(), Value::Number("2.7182818284590452353602874713526624977572470936999595749669676277240766303535475945713821785251664274".parse::<Number>().unwrap()),true);
+  hashmap.set_instance_property(PI, Value::Number("3.1415926535897932384626433832795028841971693993751058209749445923078164062862089986280348253421170679".parse::<Number>().unwrap()),true);
+  hashmap.set_instance_property(TAU, Value::Number("6.2831853071795864769252867665590057683943387987502116419498891846156328125724179972560696506842341359".parse::<Number>().unwrap()),true);
+  hashmap.set_instance_property(EULER, Value::Number("2.7182818284590452353602874713526624977572470936999595749669676277240766303535475945713821785251664274".parse::<Number>().unwrap()),true);
   Value::Object(crate::compiler::Object::Map(
     HashMap::new().into(),
     hashmap.into(),

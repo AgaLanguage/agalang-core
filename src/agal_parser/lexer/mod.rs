@@ -26,7 +26,7 @@ fn token_error(token: &util::Token<TokenType>, source: &str) -> ErrorTypes {
   )
   .unwrap();
   let lines = binding.lines().collect::<Vec<&str>>();
-  let data_line = *lines.get(0).unwrap_or(&"");
+  let data_line = *lines.first().unwrap_or(&"");
   let token_value = data_line
     .chars()
     .skip(token.location.start.column)
@@ -41,13 +41,13 @@ fn token_error(token: &util::Token<TokenType>, source: &str) -> ErrorTypes {
   let cyan_line = COLOR.apply("|");
   let cyan_arrow = COLOR.apply("-->");
 
-  let indicator = if token_value.len() > 0 {
+  let indicator = if !token_value.is_empty() {
     format!("{}^", "-".repeat(token_value.len()))
   } else {
     "^".to_string()
   };
   let lines = [
-    format!("{}", token.value),
+    token.value.to_string(),
     format!(
       "{}{cyan_arrow} {}:{}:{}",
       str_init, token.location.file_name, line, column
@@ -127,13 +127,13 @@ pub fn tokenizer(source: &str, file_name: &str) -> Vec<util::Token<TokenType>> {
   );
   let tokens = match tokens {
     Ok(mut t) => {
-      let end_token = t.get(t.len() - 1).unwrap();
+      let end_token = t.last().unwrap();
       let pos = util::Position {
         line: end_token.location.end.line,
         column: end_token.location.end.column + 1,
       };
       t.push(util::Token {
-        token_type: TokenType::EOF,
+        token_type: TokenType::EndOfFile,
         location: util::Location {
           start: pos,
           end: pos,
@@ -155,7 +155,7 @@ pub fn tokenizer(source: &str, file_name: &str) -> Vec<util::Token<TokenType>> {
     .filter(|x| x.token_type == TokenType::Error)
     .map(|x| token_error(x, source))
     .collect::<Vec<ErrorTypes>>();
-  if errors.len() > 0 {
+  if !errors.is_empty() {
     show_multiple_errors(&ErrorNames::LexerError, errors);
     return Vec::new();
   }

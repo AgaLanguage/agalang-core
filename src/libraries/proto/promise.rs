@@ -31,7 +31,7 @@ fn then(
   modules: libraries::RefModules,
   this: DefaultRefAgalValue,
 ) -> Pin<Box<dyn Future<Output = ResultAgalValue> + Send>> {
-  let cb = arguments.get(0).ok_or_else(|| internal::AgalThrow::Params {
+  let cb = arguments.first().ok_or_else(|| internal::AgalThrow::Params {
     type_error: parser::ErrorNames::TypeError,
     message: "Se esperaba un argumento".into(),
     stack: stack.clone(),
@@ -85,7 +85,7 @@ fn catch(
   modules: libraries::RefModules,
   this: DefaultRefAgalValue,
 ) -> Pin<Box<dyn Future<Output = ResultAgalValue> + Send>> {
-  let cb = arguments.get(0).ok_or_else(|| internal::AgalThrow::Params {
+  let cb = arguments.first().ok_or_else(|| internal::AgalThrow::Params {
     type_error: parser::ErrorNames::TypeError,
     message: "Se esperaba un argumento".into(),
     stack: stack.clone(),
@@ -153,7 +153,7 @@ pub fn get_sub_module(
         name: format!("{module_name}::{}", functions_names::TO_AGAL_STRING),
         func: Arc::new(|arguments, stack, modules, this| {
           arguments
-            .get(0)
+            .first()
             .or_else(|| Some(&this))
             .ok_or_else(|| internal::AgalThrow::Params {
               type_error: parser::ErrorNames::TypeError,

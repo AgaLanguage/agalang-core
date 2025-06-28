@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt::Display;
 
 mod class;
 mod function;
@@ -129,9 +130,8 @@ impl Value {
     }
   }
   pub fn set_in_class(&self, class: MultiRefHash<Class>) {
-    match self {
-      Self::Object(Object::Function(f)) => f.write().set_in_class(class),
-      _ => {}
+    if let Self::Object(Object::Function(f)) = self {
+      f.write().set_in_class(class);
     }
   }
   pub fn is_number(&self) -> bool {
@@ -274,7 +274,7 @@ impl Value {
       Self::Object(Object::Array(array)) => Ok(array.read().clone()),
       Self::Object(Object::Map(_, instance)) => {
         let instance = instance.cloned();
-        if matches!(instance, None) {
+        if instance.is_none() {
           return Err(format!(
             "No se puede convertir a lista: {}",
             self.get_type()
@@ -283,7 +283,7 @@ impl Value {
         let value = instance
           .unwrap()
           .get_instance_property(crate::functions_names::ARRAY, thread);
-        if matches!(value, None) {
+        if value.is_none() {
           return Err(format!(
             "No se puede convertir a lista: {}",
             self.get_type()
@@ -298,14 +298,10 @@ impl Value {
           self.get_type()
         ))
       }
-      Self::Ref(RefValue(l)) | Self::Iterator(l) => {
-        l.read().as_strict_array(thread).or_else(|_| {
-          Err(format!(
-            "No se puede convertir a lista: {}",
-            self.get_type()
-          ))
-        })
-      }
+      Self::Ref(RefValue(l)) | Self::Iterator(l) => l
+        .read()
+        .as_strict_array(thread)
+        .map_err(|_| format!("No se puede convertir a lista: {}", self.get_type())),
       Self::String(string) => {
         let chars = string.chars().map(Value::from).collect::<Vec<Value>>();
         Ok(chars)
@@ -318,12 +314,10 @@ impl Value {
   }
   pub fn as_strict_byte(&self) -> Result<u8, String> {
     match self {
-      Self::Ref(RefValue(l)) => l.read().as_strict_byte().or_else(|_| {
-        Err(format!(
-          "No se puede convertir a lista: {}",
-          self.get_type()
-        ))
-      }),
+      Self::Ref(RefValue(l)) => l
+        .read()
+        .as_strict_byte()
+        .map_err(|_| format!("No se puede convertir a lista: {}", self.get_type())),
       Self::Byte(b) => Ok(*b),
       _ => Err(format!("No se puede convertir a byte: {}", self.get_type())),
     }
@@ -339,12 +333,7 @@ impl Value {
           Ok(byte) => Ok(vec![byte]),
           Err(e) => Err(e),
         })
-        .or_else(|_| {
-          Err(format!(
-            "No se puede convertir a buffer: {}",
-            self.get_type()
-          ))
-        }),
+        .map_err(|_| format!("No se puede convertir a buffer: {}", self.get_type())),
       value => {
         let mut result = Vec::new();
 
@@ -445,22 +434,22 @@ impl Value {
     }
   }
 }
-impl ToString for Value {
-  fn to_string(&self) -> String {
+impl Display for Value {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     match self {
-      Self::String(s) => s.clone(),
-      Self::Promise(p) => p.to_string(),
-      Self::False => FALSE_NAME.to_string(),
-      Self::True => TRUE_NAME.to_string(),
-      Self::Null => NULL_NAME.to_string(),
-      Self::Never => NEVER_NAME.to_string(),
-      Self::Iterator(v) => format!("@{}", v.read().to_string()),
-      Self::Ref(v) => format!("&{}", v.borrow().to_string()),
-      Self::Byte(b) => format!("0x{b:02X}"),
-      Self::Number(x) => x.to_string(),
-      Self::Char(c) => c.to_string(),
-      Self::Object(x) => x.to_string(),
-      Self::Lazy(l) => l.get().clone().unwrap_or_default().to_string(),
+      Self::String(s) => write!(f, "{s}"),
+      Self::Promise(p) => write!(f, "{p}"),
+      Self::False => write!(f, "{FALSE_NAME}"),
+      Self::True => write!(f, "{TRUE_NAME}"),
+      Self::Null => write!(f, "{NULL_NAME}"),
+      Self::Never => write!(f, "{NEVER_NAME}"),
+      Self::Iterator(v) => write!(f, "@{}", v.read()),
+      Self::Ref(v) => write!(f, "&{}", v.borrow()),
+      Self::Byte(b) => write!(f, "0x{b:02X}"),
+      Self::Number(x) => write!(f, "{x}"),
+      Self::Char(x) => write!(f, "{x}"),
+      Self::Object(x) => write!(f, "{x}"),
+      Self::Lazy(l) => write!(f, "{}", l.get().clone().unwrap_or_default()),
     }
   }
 }
@@ -493,7 +482,7 @@ impl std::fmt::Debug for Value {
     if let Self::String(string) = self {
       write!(f, "'{}'", string.replace("\n", "\\n").replace("\'", "\\\'"))
     } else {
-      write!(f, "{}", self.to_string())
+      write!(f, "{self}") // usa Display
     }
   }
 }
@@ -518,7 +507,7 @@ impl crate::Encode for Value {
 }
 impl Decode for Value {
   fn decode(vec: &mut std::collections::VecDeque<u8>) -> Result<Self, String> {
-    let tag_byte = (*vec.get(0).on_error(|_| "Se esperaba un valor")?).into();
+    let tag_byte = (*vec.front().on_error(|_| "Se esperaba un valor")?).into();
     match tag_byte {
       StructTag::Byte => {
         vec.pop_front();
@@ -588,11 +577,12 @@ impl ValueArray {
     self.values.len() as u8
   }
   pub fn get(&self, index: u8) -> &Value {
-    self.values.get(index as usize).expect(&format!(
-      "Error: el índice {} está fuera de rango (0-{})",
-      index,
-      self.values.len() - 1
-    ))
+    self.values.get(index as usize).unwrap_or_else(|| {
+      panic!(
+        "Error: el índice {index} está fuera de rango (0-{})",
+        self.values.len() - 1
+      )
+    })
   }
   pub fn has_value(&self, value: &Value) -> bool {
     self.values.iter().any(|v| v == value)

@@ -39,7 +39,7 @@ pub fn lib_value() -> Value {
   let hashmap = crate::compiler::Instance::new(format!("<{LIB_NAME}>"));
 
   hashmap.set_instance_property(
-    NOW.into(),
+    NOW,
     Value::Object(
       crate::compiler::Function::Native {
         name: format!("<{LIB_NAME}>::{NOW}"),
@@ -59,7 +59,7 @@ pub fn lib_value() -> Value {
     true,
   );
   hashmap.set_instance_property(
-    ZONE.into(),
+    ZONE,
     Value::Object(
       {
         let offset = unsafe { get_utc_in_secs() };

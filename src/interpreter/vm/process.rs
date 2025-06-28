@@ -25,7 +25,7 @@ impl ProcessManager {
     }
   }
   pub fn as_value(&self) -> crate::compiler::Value {
-    self.main.read().clone().as_value()
+    self.main.read().clone().into_value()
   }
   pub fn get_root_thread(&self) -> MultiRefHash<Thread> {
     self.main.read().get_async().read().get_thread()

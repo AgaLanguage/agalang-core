@@ -74,7 +74,7 @@ impl VM {
       _ => {}
     };
     let stack = thread.read().get_stack().clone();
-    if stack.len() != 0 {
+    if !stack.is_empty() {
       thread
         .write()
         .runtime_error(&format!("Error de pila no vacia | {stack:?}"));
@@ -93,14 +93,14 @@ impl VM {
       Ok((compiler, _)) => compiler,
       Err(e) => {
         result.write().set_status(InterpretResult::CompileError(e));
-        return result.into();
+        return result;
       }
     };
 
     result
       .read()
       .push_call(CallFrame::new_compiler(compiler, vars));
-    result.into()
+    result
   }
   pub fn clear_stack(&self) {
     self

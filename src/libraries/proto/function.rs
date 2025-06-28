@@ -37,7 +37,7 @@ pub fn get_sub_module(
         name: format!("{module_name}::{}", functions_names::TO_AGAL_STRING),
         func: Arc::new(|arguments, stack, modules, this| {
           arguments
-            .get(0)
+            .first()
             .or_else(|| Some(&this))
             .ok_or_else(|| internal::AgalThrow::Params {
               type_error: parser::ErrorNames::TypeError,
@@ -60,7 +60,7 @@ pub fn get_sub_module(
         name: format!("{module_name}::{FUNCTION_CALL}"),
         func: Arc::new(|arguments, stack, modules, real_this| {
           let this = arguments
-            .get(0)
+            .first()
             .ok_or_else(|| internal::AgalThrow::Params {
               type_error: parser::ErrorNames::TypeError,
               message: "Se esperaba un argumento".into(),

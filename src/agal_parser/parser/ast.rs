@@ -69,7 +69,7 @@ impl Node {
       _ => None,
     }
   }
-  pub fn to_box(self) -> BNode {
+  pub fn into_box(self) -> BNode {
     Box::new(self)
   }
   pub fn get_location(&self) -> util::Location {
@@ -447,7 +447,10 @@ impl NodeBlock {
   pub fn len(&self) -> usize {
     self.body.len()
   }
-  pub fn to_node(self) -> Node {
+  pub fn is_empty(&self) -> bool {
+    self.body.is_empty()
+  }
+  pub fn into_node(self) -> Node {
     let is_async = self.clone().is_async;
     Node::Block(self, is_async)
   }

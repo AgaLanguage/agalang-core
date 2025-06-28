@@ -41,11 +41,10 @@ pub fn absolute_path(path: &str) -> String {
       string_path.join("\\")
     });
 
-  if path_str.starts_with(r"\\?\") {
-    path_str[4..].to_string()
-  } else {
-    path_str
-  }
+  path_str
+    .strip_prefix(r"\\?\")
+    .unwrap_or(&path_str)
+    .to_string()
 }
 pub fn lib_value() -> Value {
   let path_class = Class::new(PATH.to_string());
@@ -58,7 +57,7 @@ pub fn lib_value() -> Value {
         chunk: Default::default(),
         func: |this, args, thread, _| {
           let path = args
-            .get(0)
+            .first()
             .map(|path| absolute_path(&path.as_string(thread)))
             .on_error(|_| format!("{PATH}: Se esperaba una ruta"))?;
           this.set_instance_property(
@@ -189,7 +188,7 @@ pub fn lib_value() -> Value {
         chunk: crate::compiler::ChunkGroup::default().into(),
         func: |_, args, thread, _| {
           let path = args
-            .get(0)
+            .first()
             .map(|t| t.as_string(thread))
             .on_error(|_| format!("{READ_FILE}: Se esperaba una ruta"))?;
           std::fs::File::open(&path)
@@ -219,7 +218,7 @@ pub fn lib_value() -> Value {
         chunk: crate::compiler::ChunkGroup::default().into(),
         func: |_, args, thread, _| {
           let path = args
-            .get(0)
+            .first()
             .map(|t| t.as_string(thread))
             .on_error(|_| format!("{READ_DIR}: Se esperaba una ruta"))?;
           std::fs::read_dir(&path)

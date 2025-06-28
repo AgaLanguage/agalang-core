@@ -207,7 +207,7 @@ impl Parser {
     }
   }
   pub fn produce_ast(&mut self) -> Result<ast::Node, NodeError> {
-    let body = self.parse_block(true, false, false, true, super::TokenType::EOF)?;
+    let body = self.parse_block(true, false, false, true, super::TokenType::EndOfFile)?;
     let location = body.clone().location;
     ast::Node::Program(ast::NodeProgram { body, location }).into()
   }
@@ -220,16 +220,14 @@ impl Parser {
   ) -> Result<ast::Node, NodeError> {
     let token = self.at();
     match token.token_type {
-      super::TokenType::EOF => {
+      super::TokenType::EndOfFile => {
         self.eat();
         Ok(ast::Node::default())
       }
-      super::TokenType::Error => {
-        Err(ast::NodeError {
-          message: token.value,
-          location: token.location,
-        })
-      }
+      super::TokenType::Error => Err(ast::NodeError {
+        message: token.value,
+        location: token.location,
+      }),
       super::TokenType::Keyword(key) => match key {
         super::KeywordsType::Define | super::KeywordsType::Constant => self.parse_var_decl(),
         super::KeywordsType::While
@@ -275,7 +273,7 @@ impl Parser {
             });
           }
           ast::Node::Await(ast::NodeExpressionMedicator {
-            expression: self.parse_stmt_expr()?.to_box(),
+            expression: self.parse_stmt_expr()?.into_box(),
             location: token.location,
           })
           .into()
@@ -477,7 +475,7 @@ impl Parser {
     )?;
     Ok(ast::NodeClassProperty {
       name: name.value.clone(),
-      value: value.to_box(),
+      value: value.into_box(),
       meta,
     })
   }
@@ -584,7 +582,7 @@ impl Parser {
           ),
         )?;
         ast::Node::Return(ast::NodeReturn {
-          value: Some(expr.to_box()),
+          value: Some(expr.into_box()),
           location: token.location,
         })
         .into()
@@ -615,12 +613,10 @@ impl Parser {
         message: token.value.clone(),
         location: token.location,
       }),
-      _ => {
-        Err(ast::NodeError {
-          message: "Token inesperado (simple)".to_string(),
-          location: token.location,
-        })
-      }
+      _ => Err(ast::NodeError {
+        message: "Token inesperado (simple)".to_string(),
+        location: token.location,
+      }),
     }
   }
   fn parse_keyword_value(
@@ -696,7 +692,7 @@ impl Parser {
       }
       super::TokenType::Keyword(super::KeywordsType::Lazy) => {
         self.eat();
-        let expression = self.parse_expr()?.to_box();
+        let expression = self.parse_expr()?.into_box();
         ast::Node::Lazy(ast::NodeExpressionMedicator {
           expression,
           location: token.location,
@@ -705,7 +701,7 @@ impl Parser {
       }
       super::TokenType::Keyword(super::KeywordsType::Await) => {
         self.eat();
-        let expression = self.parse_expr()?.to_box();
+        let expression = self.parse_expr()?.into_box();
         ast::Node::Await(ast::NodeExpressionMedicator {
           expression,
           location: token.location,
@@ -731,7 +727,7 @@ impl Parser {
       super::TokenType::Punctuation(super::PunctuationType::CircularBracketOpen),
       "Se esperaba un paréntesis de apertura",
     )?;
-    let init = self.parse_var_decl()?.to_box();
+    let init = self.parse_var_decl()?.into_box();
     let condition = self.parse_expr()?;
     self.expect(
       super::TokenType::Punctuation(super::PunctuationType::SemiColon),
@@ -873,7 +869,7 @@ impl Parser {
     {
       self.eat();
       let else_block = self.parse_block_expr(is_function, is_loop, is_async)?;
-      if else_block.len() == 0 {
+      if else_block.is_empty() {
         None
       } else {
         Some(else_block)
@@ -882,7 +878,7 @@ impl Parser {
       None
     };
     ast::Node::If(ast::NodeIf {
-      condition: condition.to_box(),
+      condition: condition.into_box(),
       body,
       else_body,
       location: token.location,
@@ -903,13 +899,10 @@ impl Parser {
         super::KeywordsType::While.as_str()
       ),
     )?;
-    let condition = self.parse_expr()?.to_box();
+    let condition = self.parse_expr()?.into_box();
     self.expect(
       super::TokenType::Punctuation(super::PunctuationType::SemiColon),
-      &format!(
-        "Se esperaba un punto y coma ({})",
-        super::KeywordsType::Do
-      ),
+      &format!("Se esperaba un punto y coma ({})", super::KeywordsType::Do),
     )?;
     ast::Node::DoWhile(ast::NodeWhile {
       condition,
@@ -927,7 +920,7 @@ impl Parser {
     let condition = self.parse_expr()?;
     let body = self.parse_block_expr(is_function, true, is_async)?;
     ast::Node::While(ast::NodeWhile {
-      condition: condition.to_box(),
+      condition: condition.into_box(),
       body,
       location: token.location,
     })
@@ -1089,7 +1082,7 @@ impl Parser {
     semi_token.location.start.column += 1;
     ast::Node::VarDecl(ast::NodeVarDecl {
       name: identifier.value.clone(),
-      value: Some(value.to_box()),
+      value: Some(value.into_box()),
       is_const,
       location: token.location,
     })
@@ -1127,7 +1120,7 @@ impl Parser {
       let mut arguments = util::List::new();
       arguments.push(left.clone());
       left = ast::Node::Call(ast::NodeCall {
-        callee: right.to_box(),
+        callee: right.into_box(),
         arguments,
         location: left.get_location(),
       })
@@ -1184,8 +1177,8 @@ impl Parser {
       let right = self.parse_equals_expr()?;
       left = ast::Node::Binary(ast::NodeBinary {
         operator,
-        left: left.clone().to_box(),
-        right: right.to_box(),
+        left: left.clone().into_box(),
+        right: right.into_box(),
         location: left.get_location(),
       })
     }
@@ -1223,20 +1216,20 @@ impl Parser {
       if operator == NodeOperator::NotEqual {
         let equals = ast::Node::Binary(ast::NodeBinary {
           operator: ast::NodeOperator::Equal,
-          left: left.clone().to_box(),
-          right: right.clone().to_box(),
+          left: left.clone().into_box(),
+          right: right.clone().into_box(),
           location: left.get_location(),
         });
         left = ast::Node::UnaryFront(ast::NodeUnary {
           operator: ast::NodeOperator::Not,
           location: equals.get_location(),
-          operand: equals.to_box(),
+          operand: equals.into_box(),
         });
       } else {
         left = ast::Node::Binary(ast::NodeBinary {
           operator,
-          left: left.clone().to_box(),
-          right: right.to_box(),
+          left: left.clone().into_box(),
+          right: right.into_box(),
           location: left.get_location(),
         })
       }
@@ -1277,46 +1270,46 @@ impl Parser {
       if operator == ast::NodeOperator::GreaterThanOrEqual {
         let greater_than = ast::Node::Binary(ast::NodeBinary {
           operator: ast::NodeOperator::GreaterThan,
-          left: left.clone().to_box(),
-          right: right.clone().to_box(),
+          left: left.clone().into_box(),
+          right: right.clone().into_box(),
           location: left.get_location(),
         });
         let equal = ast::Node::Binary(ast::NodeBinary {
           operator: ast::NodeOperator::Equal,
-          left: left.clone().to_box(),
-          right: right.clone().to_box(),
+          left: left.clone().into_box(),
+          right: right.clone().into_box(),
           location: left.get_location(),
         });
         left = ast::Node::Binary(ast::NodeBinary {
           operator: ast::NodeOperator::Or,
-          left: greater_than.to_box(),
-          right: equal.to_box(),
+          left: greater_than.into_box(),
+          right: equal.into_box(),
           location: left.get_location(),
         });
       } else if operator == ast::NodeOperator::LessThanOrEqual {
         let less_than = ast::Node::Binary(ast::NodeBinary {
           operator: ast::NodeOperator::LessThan,
-          left: left.clone().to_box(),
-          right: right.clone().to_box(),
+          left: left.clone().into_box(),
+          right: right.clone().into_box(),
           location: left.get_location(),
         });
         let equal = ast::Node::Binary(ast::NodeBinary {
           operator: ast::NodeOperator::Equal,
-          left: left.clone().to_box(),
-          right: right.clone().to_box(),
+          left: left.clone().into_box(),
+          right: right.clone().into_box(),
           location: left.get_location(),
         });
         left = ast::Node::Binary(ast::NodeBinary {
           operator: ast::NodeOperator::Or,
-          left: less_than.to_box(),
-          right: equal.to_box(),
+          left: less_than.into_box(),
+          right: equal.into_box(),
           location: left.get_location(),
         });
       } else {
         left = ast::Node::Binary(ast::NodeBinary {
           operator,
-          left: left.clone().to_box(),
-          right: right.to_box(),
+          left: left.clone().into_box(),
+          right: right.into_box(),
           location: left.get_location(),
         })
       }
@@ -1361,8 +1354,8 @@ impl Parser {
       let right = self.parse_bit_expr()?;
       left = ast::Node::Binary(ast::NodeBinary {
         operator,
-        left: left.clone().to_box(),
-        right: right.to_box(),
+        left: left.clone().into_box(),
+        right: right.into_box(),
         location: left.get_location(),
       })
     }
@@ -1402,8 +1395,8 @@ impl Parser {
       let right = self.parse_math_lineal_expr()?;
       left = ast::Node::Binary(ast::NodeBinary {
         operator,
-        left: left.clone().to_box(),
-        right: right.to_box(),
+        left: left.clone().into_box(),
+        right: right.into_box(),
         location: left.get_location(),
       })
     }
@@ -1431,8 +1424,8 @@ impl Parser {
       let right = self.parse_math_multiplicative_expr()?;
       left = ast::Node::Binary(ast::NodeBinary {
         operator,
-        left: left.clone().to_box(),
-        right: right.to_box(),
+        left: left.clone().into_box(),
+        right: right.into_box(),
         location: left.get_location(),
       });
     }
@@ -1473,8 +1466,8 @@ impl Parser {
       let right = self.parse_math_exponential_expr()?;
       left = ast::Node::Binary(ast::NodeBinary {
         operator,
-        left: left.clone().to_box(),
-        right: right.to_box(),
+        left: left.clone().into_box(),
+        right: right.into_box(),
         location: left.get_location(),
       })
     }
@@ -1493,10 +1486,10 @@ impl Parser {
     };
     let right = self
       .parse_simple_expr("Token inesperado (exponencial de)")?
-      .to_box();
+      .into_box();
     ast::Node::Binary(ast::NodeBinary {
       operator: ast::NodeOperator::Exponential,
-      left: left.clone().to_box(),
+      left: left.clone().into_box(),
       right,
       location: left.get_location(),
     })
@@ -1728,35 +1721,35 @@ impl Parser {
         } else {
           NodeOperator::GreaterThan
         },
-        left: left.clone().to_box(),
-        right: right.clone().to_box(),
+        left: left.clone().into_box(),
+        right: right.clone().into_box(),
         location: left.get_location(),
       });
       let equal = ast::Node::Binary(ast::NodeBinary {
         operator: NodeOperator::Equal,
-        left: left.clone().to_box(),
-        right: right.to_box(),
+        left: left.clone().into_box(),
+        right: right.into_box(),
         location: left.get_location(),
       });
       ast::Node::Binary(ast::NodeBinary {
         operator: NodeOperator::Or,
-        left: value_than.clone().to_box(),
-        right: equal.to_box(),
+        left: value_than.clone().into_box(),
+        right: equal.into_box(),
         location: value_than.get_location(),
       })
     } else {
       let right = self.parse_expr()?;
       ast::Node::Binary(ast::NodeBinary {
         operator,
-        left: left.clone().to_box(),
-        right: right.to_box(),
+        left: left.clone().into_box(),
+        right: right.into_box(),
         location: left.get_location(),
       })
     };
     if is_assignment {
       ast::Node::Assignment(ast::NodeAssignment {
-        identifier: left.clone().to_box(),
-        value: right.to_box(),
+        identifier: left.clone().into_box(),
+        value: right.into_box(),
         location: left.get_location(),
       })
       .into()
@@ -1796,7 +1789,7 @@ impl Parser {
       });
     }
     let call_expr = ast::Node::Call(ast::NodeCall {
-      callee: callee.to_box(),
+      callee: callee.into_box(),
       arguments: args,
       location: token.location,
     });
@@ -1842,8 +1835,8 @@ impl Parser {
         )?;
       }
       value = ast::Node::Member(ast::NodeMember {
-        object: value.clone().to_box(),
-        member: property.to_box(),
+        object: value.clone().into_box(),
+        member: property.into_box(),
         computed,
         instance,
         location: value.get_location(),
@@ -1946,7 +1939,7 @@ impl Parser {
         | super::OperatorType::At,
       ) => {
         self.eat();
-        let operand = self.parse_literal_expr(message)?.to_box();
+        let operand = self.parse_literal_expr(message)?.into_box();
         let operator = if let super::TokenType::Operator(op) = token.token_type {
           op
         } else {
@@ -2043,7 +2036,7 @@ impl Parser {
           "Se esperaba dos puntos",
         )?;
         let value = self.parse_expr()?;
-        Ok(ast::NodeProperty::Property(key, value.to_box()))
+        Ok(ast::NodeProperty::Property(key, value.into_box()))
       }
       super::TokenType::Identifier | super::TokenType::Keyword(_) => {
         let key = &token.value;
@@ -2065,7 +2058,8 @@ impl Parser {
             ast::Node::Identifier(ast::NodeIdentifier {
               name: token.value,
               location: token.location,
-            }).to_box(),
+            })
+            .into_box(),
           ));
         }
         if colon.token_type != super::TokenType::Punctuation(super::PunctuationType::DoubleDot) {
@@ -2075,7 +2069,7 @@ impl Parser {
           });
         }
         let value = self.parse_expr()?;
-        Ok(ast::NodeProperty::Property(key.clone(), value.to_box()))
+        Ok(ast::NodeProperty::Property(key.clone(), value.into_box()))
       }
       super::TokenType::Punctuation(p) => {
         if p == super::PunctuationType::QuadrateBracketOpen {
@@ -2090,7 +2084,7 @@ impl Parser {
             "Se esperaba dos puntos",
           )?;
           let value = self.parse_expr()?;
-          return Ok(ast::NodeProperty::Dynamic(key.to_box(), value.to_box()));
+          return Ok(ast::NodeProperty::Dynamic(key.into_box(), value.into_box()));
         }
         if p == super::PunctuationType::Dot {
           self.expect(
@@ -2098,7 +2092,7 @@ impl Parser {
             "Se esperaba un punto",
           )?;
           let data = self.parse_expr()?;
-          return Ok(ast::NodeProperty::Iterable(data.to_box()));
+          return Ok(ast::NodeProperty::Iterable(data.into_box()));
         }
 
         Err(ast::NodeError {
@@ -2106,12 +2100,10 @@ impl Parser {
           location: token.location,
         })
       }
-      _ => {
-        Err(ast::NodeError {
-          message: "Se esperaba un clave para la propiedad del objeto".to_string(),
-          location: token.location,
-        })
-      }
+      _ => Err(ast::NodeError {
+        message: "Se esperaba un clave para la propiedad del objeto".to_string(),
+        location: token.location,
+      }),
     }
   }
   fn parse_array_expr(&mut self) -> Result<ast::Node, NodeError> {
@@ -2156,7 +2148,7 @@ impl Parser {
             "Se esperaba un punto",
           )?;
           let data = self.parse_expr()?;
-          Ok(ast::NodeProperty::Iterable(data.to_box()))
+          Ok(ast::NodeProperty::Iterable(data.into_box()))
         } else {
           Err(ast::NodeError {
             message: "Se esperaba un valor para la Lista".to_string(),
@@ -2166,7 +2158,7 @@ impl Parser {
       }
       _ => {
         let element = self.parse_expr()?;
-        Ok(ast::NodeProperty::Indexable(element.to_box()))
+        Ok(ast::NodeProperty::Indexable(element.into_box()))
       }
     }
   }

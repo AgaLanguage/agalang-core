@@ -11,7 +11,7 @@ pub fn lib_value() -> Value {
   let hashmap = crate::compiler::Instance::new(format!("<{LIB_NAME}>"));
 
   hashmap.set_instance_property(
-    CADENA.into(),
+    CADENA,
     Value::Object(
       crate::compiler::Function::Native {
         name: format!("<{LIB_NAME}>::{CADENA}"),

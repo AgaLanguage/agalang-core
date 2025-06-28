@@ -176,13 +176,13 @@ fn number_base(
           Some(c) => c,
           None => break,
         };
-        if !ch.is_digit(10) {
+        if !ch.is_ascii_digit() {
           break;
         }
         base_str.push(ch);
         i += 1;
       }
-      if base_str.len() == 0 {
+      if base_str.is_empty() {
         return (
           util::Token {
             token_type: TokenType::Error,
@@ -220,7 +220,7 @@ fn number_base(
         );
       }
       let base_number = base_number.unwrap();
-      if 2 > base_number || base_number > 36 {
+      if !(2..=36).contains(&base_number) {
         return (
           util::Token {
             token_type: TokenType::Error,
@@ -240,7 +240,7 @@ fn number_base(
       }
       base = base_number;
       let value_char = line.chars().nth(i);
-      if value_char == None {
+      if value_char.is_none() {
         return (
           util::Token {
             token_type: TokenType::Error,
@@ -344,7 +344,7 @@ pub fn token_number(
 ) -> (util::Token<TokenType>, usize) {
   if c == '0' {
     let next = line.chars().nth(pos.column + 1);
-    if next != None && util::is_valid_char("bodxn", next.unwrap()) {
+    if next.is_some() && util::is_valid_char("bodxn", next.unwrap()) {
       return number_base(c, pos, line, file_name);
     }
   }

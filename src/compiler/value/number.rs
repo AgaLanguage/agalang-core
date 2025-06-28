@@ -10,8 +10,11 @@ use crate::{
 };
 
 const DIVISION_DECIMALS: usize = 100;
+const NAN_NAME: &str = "NeN";
+const INFINITY_NAME: &str = "infinito";
 
 #[derive(Clone, Eq, Hash, Debug)]
+#[allow(clippy::derived_hash_with_manual_eq)]
 pub struct Decimals(Vec<u8>);
 impl Decimals {
   pub fn is_zero(&self) -> bool {
@@ -41,7 +44,7 @@ impl PartialEq for Decimals {
 }
 impl PartialOrd for Decimals {
   fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-    self.cmp(other).into()
+    Some(self.cmp(other))
   }
 }
 impl Ord for Decimals {
@@ -74,12 +77,12 @@ impl From<String> for Decimals {
     Self(result)
   }
 }
-
+#[allow(clippy::derived_hash_with_manual_eq)]
 #[derive(Clone, Eq, Hash, Debug)]
 pub struct BCDUInt(Vec<u8>);
 impl BCDUInt {
   pub fn is_zero(&self) -> bool {
-    if self.0.len() == 0 {
+    if self.0.is_empty() {
       return true;
     }
     self.0.iter().all(|&x| x == 0)
@@ -229,7 +232,7 @@ impl Add for BCDUInt {
 
       // restar 10 es suficiente y menos costoso
 
-      result.push(((sub1 as u8) << 4) | (sub0 as u8));
+      result.push(((sub1) << 4) | sub0);
     }
 
     // Eliminar ceros a la izquierda, excepto si es cero solo
@@ -390,14 +393,14 @@ impl Div for &BCDUInt {
 impl Rem for &BCDUInt {
   type Output = BCDUInt;
   fn rem(self, rhs: Self) -> Self::Output {
-    let ref div = self / rhs;
-    let ref mul = rhs * div;
+    let div = &(self / rhs);
+    let mul = &(rhs * div);
     self - mul
   }
 }
 impl PartialOrd for BCDUInt {
   fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-    self.cmp(other).into()
+    Some(self.cmp(other))
   }
 }
 impl Ord for BCDUInt {
@@ -441,7 +444,8 @@ impl From<u8> for BCDUInt {
     BCDUInt(vec![byte])
   }
 }
-#[derive(Clone, Eq, Hash, Debug)]
+#[allow(clippy::derived_hash_with_manual_eq)]
+#[derive(Clone, Eq, Debug, Hash)]
 pub enum BasicNumber {
   Int(bool, BCDUInt),
   Float(bool, BCDUInt, Decimals),
@@ -455,7 +459,7 @@ impl BasicNumber {
   }
   pub fn floor(&self) -> Self {
     match self {
-      Self::Int(x_neg, x) => Self::Int(x_neg.clone(), x.clone()),
+      Self::Int(x_neg, x) => Self::Int(*x_neg, x.clone()),
       Self::Float(x_neg, x_int, x_dec) => {
         if x_dec.to_string() == "0" {
           return Self::Int(*x_neg, x_int.clone());
@@ -531,13 +535,11 @@ impl BasicNumber {
     }
   }
 }
-impl ToString for BasicNumber {
-  fn to_string(&self) -> String {
+impl Display for BasicNumber {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     match self {
-      Self::Int(x_neg, x) => format!("{}{}", if *x_neg { "-" } else { "" }, x),
-      Self::Float(x_neg, x, x_dec) => {
-        format!("{}{}.{}", if *x_neg { "-" } else { "" }, x, x_dec)
-      }
+      Self::Int(x_neg, x) => write!(f, "{}{}", if *x_neg { "-" } else { "" }, x),
+      Self::Float(x_neg, x, x_dec) => write!(f, "{}{}.{}", if *x_neg { "-" } else { "" }, x, x_dec),
     }
   }
 }
@@ -567,7 +569,7 @@ impl Add for BasicNumber {
         if y > x {
           return Self::Int(y_neg, y - x);
         }
-        return Self::Int(x_neg, x - y);
+        Self::Int(x_neg, x - y)
       }
       (Self::Float(x_neg, x, x_dec), Self::Float(y_neg, y, y_dec)) => {
         if !x_neg && y_neg {
@@ -597,7 +599,7 @@ impl Add for BasicNumber {
             let sum_1 = a_byte_1 + b_byte_1 + carry;
             carry = sum_1 / 10;
             let sum = (sum_1 % 10) << 4 | (sum_0 % 10);
-            result.push(sum as u8);
+            result.push(sum);
           }
           result.reverse();
           Decimals(result)
@@ -641,8 +643,8 @@ impl Sub for BasicNumber {
         let mut x_dec = x_dec.to_string();
         let mut y_dec = y_dec.to_string();
         let decimals = x_dec.len().max(y_dec.len());
-        x_dec.extend(std::iter::repeat('0').take(decimals - x_dec.len()));
-        y_dec.extend(std::iter::repeat('0').take(decimals - y_dec.len()));
+        x_dec.extend(std::iter::repeat_n('0', decimals - x_dec.len()));
+        y_dec.extend(std::iter::repeat_n('0', decimals - y_dec.len()));
 
         let x_full = BCDUInt::from(format!("{}{}", x, x_dec));
         let y_full = BCDUInt::from(format!("{}{}", y, y_dec));
@@ -694,14 +696,13 @@ impl Mul for BasicNumber {
         let result = x * y;
         let result = result.to_string();
 
-        let int_part: String;
         let mut frac_part = String::new();
         let mut number = result.chars().collect::<Vec<_>>();
         while decimals > 0 {
           decimals -= 1;
           frac_part.push(number.pop().unwrap_or('0'));
         }
-        int_part = if number.is_empty() {
+        let int_part = if number.is_empty() {
           "0".to_string()
         } else {
           number.iter().collect()
@@ -729,8 +730,11 @@ impl Div for BasicNumber {
         let mut x_dec = x_dec.to_string();
         let mut y_dec = y_dec.to_string();
         let max_dec = x_dec.len().max(y_dec.len());
-        x_dec.extend(std::iter::repeat('0').take(max_dec + DIVISION_DECIMALS - x_dec.len()));
-        y_dec.extend(std::iter::repeat('0').take(max_dec - y_dec.len()));
+        x_dec.extend(std::iter::repeat_n(
+          '0',
+          max_dec + DIVISION_DECIMALS - x_dec.len(),
+        ));
+        y_dec.extend(std::iter::repeat_n('0', max_dec - y_dec.len()));
         let x_str = format!("{}{}", x, x_dec);
         let y_str = format!("{}{}", y, y_dec);
         let mut decimals = max_dec + DIVISION_DECIMALS - 1;
@@ -738,14 +742,13 @@ impl Div for BasicNumber {
         let result = BCDUInt::from(x_str) / BCDUInt::from(y_str);
         let result = result.to_string();
 
-        let int_part: String;
         let mut frac_part = String::new();
         let mut number = result.chars().collect::<Vec<_>>();
         while decimals > 0 {
           decimals -= 1;
           frac_part.push(number.pop().unwrap_or('0'));
         }
-        int_part = if number.is_empty() {
+        let int_part = if number.is_empty() {
           "0".to_string()
         } else {
           number.iter().collect()
@@ -788,7 +791,7 @@ impl Rem for BasicNumber {
 }
 impl PartialOrd for BasicNumber {
   fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-    self.cmp(other).into()
+    Some(self.cmp(other))
   }
 }
 impl Ord for BasicNumber {
@@ -806,9 +809,9 @@ impl Ord for BasicNumber {
         }
 
         if *x_neg && *y_neg {
-          return x.cmp(&y).reverse();
+          return x.cmp(y).reverse();
         }
-        x.cmp(&y)
+        x.cmp(y)
       }
       (Self::Float(x_neg, x_int, x_dec), Self::Float(y_neg, y_int, y_dec)) => {
         if x_int.is_zero() && y_int.is_zero() {
@@ -825,7 +828,7 @@ impl Ord for BasicNumber {
           }
           return x_dec.cmp(y_dec);
         }
-        return x_int.cmp(y_int);
+        x_int.cmp(y_int)
       }
       (Self::Int(x_neg, x_int), y) => Self::Float(*x_neg, x_int.clone(), Decimals(vec![0])).cmp(y),
       (x, Self::Int(y_neg, y_int)) => Self::Float(*y_neg, y_int.clone(), Decimals(vec![0]))
@@ -842,6 +845,7 @@ impl From<String> for BasicNumber {
     Self::Float(false, int_part.into(), frac_part.into())
   }
 }
+#[allow(clippy::derived_hash_with_manual_eq)]
 #[derive(Clone, Eq, Default, Hash)]
 pub enum Number {
   #[default]
@@ -930,7 +934,7 @@ impl Number {
     }
   }
   pub fn from_str_radix(value: &str, radix: u8) -> Self {
-    if radix < 2 || radix > 36 {
+    if !(2..=36).contains(&radix) {
       return Self::NaN;
     }
     i32::from_str_radix(value, radix as u32)
@@ -965,7 +969,7 @@ impl FromStr for Number {
         }
         if part
           .chars()
-          .any(|c| c.is_digit(10) || c == '-' || c == '+' || c == '.')
+          .any(|c| c.is_ascii_digit() || c == '-' || c == '+' || c == '.')
         {
           return Err(format!(
             "No se puede poner numeros despues de las constantes: {}",
@@ -1001,7 +1005,7 @@ impl FromStr for Number {
         frac_part.into(),
       )));
     }
-    if s.chars().all(|c| c.is_digit(10)) {
+    if s.chars().all(|c| c.is_ascii_digit()) {
       return Ok(Self::Basic(BasicNumber::Int(false, s.to_string().into())));
     }
     Err(format!("No se puede convertir el string '{s}' a un número",))
@@ -1038,24 +1042,23 @@ impl From<Number> for Result<usize, String> {
       .on_error(|_| format!("No se puede convertir el número '{}' a usize", string))
   }
 }
-impl ToString for Number {
-  fn to_string(&self) -> String {
+impl Display for Number {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     match self {
-      Self::NaN => "NeN".to_string(),
-      Self::Infinity => "infinito".to_string(),
-      Self::NegativeInfinity => "-infinito".to_string(),
-      Self::Basic(x) => x.to_string(),
+      Self::NaN => write!(f, "{NAN_NAME}"),
+      Self::Infinity => write!(f, "{INFINITY_NAME}"),
+      Self::NegativeInfinity => write!(f, "-{INFINITY_NAME}"),
+      Self::Basic(x) => write!(f, "{x}"),
       Self::Complex(x, y) => {
         if x.is_zero() && y.is_zero() {
-          return "0".to_string();
+          write!(f, "0")
+        } else if x.is_zero() {
+          write!(f, "{y}i")
+        } else if y.is_zero() {
+          write!(f, "{x}")
+        } else {
+          write!(f, "{x} + {y}i")
         }
-        if x.is_zero() {
-          return format!("{}i", y.to_string());
-        }
-        if y.is_zero() {
-          return x.to_string();
-        }
-        return format!("{} + {}i", x.to_string(), y.to_string());
       }
     }
   }
@@ -1230,7 +1233,7 @@ impl Rem for Number {
 }
 impl PartialOrd for Number {
   fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-    self.cmp(other).into()
+    Some(self.cmp(other))
   }
 }
 impl Ord for Number {
@@ -1264,12 +1267,12 @@ impl Ord for Number {
 }
 impl std::fmt::Debug for Number {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    write!(f, "{}", self.to_string())
+    write!(f, "{self}") // usa Display
   }
 }
 impl Encode for Number {
   fn encode(&self) -> Result<Vec<u8>, String> {
-    let mut encode = vec![StructTag::Number as u8, StructTag::SOB as u8];
+    let mut encode = vec![StructTag::Number as u8, StructTag::StartOfBlock as u8];
 
     encode.extend(
       self
@@ -1279,7 +1282,7 @@ impl Encode for Number {
         .replace('\x01', "\\x01")
         .as_bytes(),
     );
-    encode.push(StructTag::EOB as u8);
+    encode.push(StructTag::EndOfBlock as u8);
 
     Ok(encode)
   }
@@ -1300,15 +1303,11 @@ impl crate::Decode for Number {
     let mut bytes = vec![];
     loop {
       let byte = vec.pop_front().on_error(|_| "Binario corrupto")?;
-      if byte == StructTag::EOB as u8 {
+      if byte == StructTag::EndOfBlock as u8 {
         break;
       }
       bytes.push(byte);
     }
-    Ok(
-      String::from_utf8_lossy(&bytes)
-        .to_string()
-        .parse::<Self>()?,
-    )
+    String::from_utf8_lossy(&bytes).to_string().parse::<Self>()
   }
 }

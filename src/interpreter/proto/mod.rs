@@ -12,5 +12,5 @@ pub fn proto(
     _ => return None,
   };
   cache.set(value_type, value.clone());
-  return Some(value);
+  Some(value)
 }

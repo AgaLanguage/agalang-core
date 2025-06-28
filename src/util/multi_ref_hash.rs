@@ -72,7 +72,7 @@ impl<T> MultiRefHash<Option<T>> {
     }
   }
   pub fn map<V>(&self, cb: impl FnOnce(&T) -> V) -> Option<V> {
-   self.read().as_ref().map(cb)
+    self.read().as_ref().map(cb)
   }
 }
 impl<T> MultiRefHash<Option<T>>

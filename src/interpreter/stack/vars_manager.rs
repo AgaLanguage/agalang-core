@@ -33,7 +33,7 @@ impl VarsManager {
   }
   pub fn crate_child(parent: MultiRefHash<Self>) -> Self {
     let mut this = Self::new();
-    this.link = Some(parent.into());
+    this.link = Some(parent);
     this
   }
   fn declare_keyword(&mut self, name: &str, value: Value) {
@@ -83,5 +83,10 @@ impl VarsManager {
       return None;
     }
     self.variables.remove(name)
+  }
+}
+impl Default for VarsManager {
+  fn default() -> Self {
+    Self::new()
   }
 }

@@ -7,10 +7,10 @@ use flate2::{read::GzDecoder, write::GzEncoder, Compression};
 pub use crate::util::{MultiRefHash, OnError, OnSome};
 use crate::{compiler::Compiler, interpreter::interpret};
 
+mod agal_parser;
 mod compiler;
 mod functions_names;
 mod interpreter;
-mod agal_parser;
 mod util;
 
 use crate::compiler::binary::{Decode, Encode, StructTag};

@@ -21,5 +21,5 @@ pub fn libs(lib_name: String, mut cache: DataCache, resolver: impl FnOnce(&str) 
     path => resolver(path),
   };
   cache.set(lib_name, value.clone());
-  return value;
+  value
 }

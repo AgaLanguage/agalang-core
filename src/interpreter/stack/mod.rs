@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::{compiler::Function, MultiRefHash};
 
 mod vars_manager;
@@ -31,7 +33,7 @@ impl CallFrame {
     Self {
       ip: 0,
       function,
-      locals: locals.into(),
+      locals,
     }
   }
   pub fn current_chunk(&self) -> MultiRefHash<crate::compiler::ChunkGroup> {
@@ -61,7 +63,7 @@ impl CallFrame {
     self.ip += offset;
   }
   pub fn globals(&self) -> MultiRefHash<VarsManager> {
-    self.locals.get(0).unwrap().clone()
+    self.locals.first().unwrap().clone()
   }
   pub fn current_vars(&self) -> MultiRefHash<VarsManager> {
     self.locals.last().unwrap().clone()
@@ -110,12 +112,12 @@ impl std::fmt::Debug for CallFrame {
     write!(f, "\n\t{}", self.function.read().location())
   }
 }
-impl ToString for CallFrame {
-  fn to_string(&self) -> String {
-    self.function.read().to_string()
+impl Display for CallFrame {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "{}", self.function.read())
   }
 }
-pub fn call_stack_to_string(stack: &Vec<CallFrame>) -> String {
+pub fn call_stack_to_string(stack: &[CallFrame]) -> String {
   let mut string = String::new();
   let mut index = stack.len();
   while index > 0 {

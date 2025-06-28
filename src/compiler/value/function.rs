@@ -1,9 +1,11 @@
+use std::fmt::Display;
+
 use super::{Class, Value};
+use crate::agal_parser::NodeBlock;
 use crate::compiler::Promise;
 use crate::interpreter::VarsManager;
-use crate::agal_parser::NodeBlock;
 use crate::util::{Color, Location, MutClone};
-use crate::{compiler::ChunkGroup, agal_parser::NodeFunction, Decode, MultiRefHash, StructTag};
+use crate::{agal_parser::NodeFunction, compiler::ChunkGroup, Decode, MultiRefHash, StructTag};
 
 pub const FUNCTION_TYPE: &str = "funcion";
 pub const SCRIPT_TYPE: &str = "script";
@@ -56,10 +58,15 @@ impl From<(MultiRefHash<NativeValue>, Promise)> for MultiRefHash<NativeValue> {
     MultiRefHash::new(NativeValue::ValuePromise(values.0, values.1))
   }
 }
-
+type NativeFn = fn(
+  Value,
+  Vec<Value>,
+  &mut crate::interpreter::Thread,
+  MultiRefHash<NativeValue>,
+) -> Result<Value, String>;
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub enum Function {
-  Function {
+  Value {
     arity: usize,
     chunk: MultiRefHash<ChunkGroup>,
     name: String,
@@ -78,58 +85,52 @@ pub enum Function {
     name: String,
     path: String,
     chunk: MultiRefHash<ChunkGroup>,
-    func: for<'a> fn(
-      Value,
-      Vec<Value>,
-      &'a mut crate::interpreter::Thread,
-      MultiRefHash<NativeValue>,
-    ) -> Result<Value, String>,
+    func: NativeFn,
     custom_data: MultiRefHash<NativeValue>,
   },
 }
 impl Function {
   pub fn set_rest(&mut self, rest: bool) {
-    match self {
-      Self::Function { has_rest, .. } => *has_rest = rest,
-      _ => {}
+    if let Self::Value { has_rest, .. } = self {
+      *has_rest = rest;
     }
   }
   pub fn get_type(&self) -> &'static str {
     match self {
-      Self::Function { .. } => FUNCTION_TYPE,
+      Self::Value { .. } => FUNCTION_TYPE,
       Self::Script { .. } => SCRIPT_TYPE,
       Self::Native { .. } => NATIVE_FUNCTION_TYPE,
     }
   }
   pub fn set_in_class(&self, class: MultiRefHash<Class>) {
     match self {
-      Self::Function { in_class, .. } => *in_class.write() = Some(class),
+      Self::Value { in_class, .. } => *in_class.write() = Some(class),
       Self::Script { .. } | Self::Native { .. } => {}
     }
   }
   pub fn get_in_class(&self) -> Option<MultiRefHash<Class>> {
     match self {
-      Self::Function { in_class, .. } => in_class.cloned(),
+      Self::Value { in_class, .. } => in_class.cloned(),
       Self::Script { .. } | Self::Native { .. } => None,
     }
   }
   pub fn set_scope(&self, vars: MultiRefHash<VarsManager>) {
     match self {
-      Self::Function { scope: v, .. } => *v.write() = Some(vars),
+      Self::Value { scope: v, .. } => *v.write() = Some(vars),
       Self::Script { scope: v, .. } => *v.write() = Some(vars),
       Self::Native { .. } => {}
     }
   }
   pub fn get_scope(&self) -> Option<MultiRefHash<VarsManager>> {
     match self {
-      Self::Function { scope: vars, .. } => vars.cloned(),
+      Self::Value { scope: vars, .. } => vars.cloned(),
       Self::Script { scope: vars, .. } => vars.cloned(),
       Self::Native { .. } => None,
     }
   }
   pub fn chunk(&self) -> MultiRefHash<ChunkGroup> {
     match self {
-      Self::Function { chunk, .. } => chunk.clone(),
+      Self::Value { chunk, .. } => chunk.clone(),
       Self::Script { chunk, .. } => chunk.clone(),
       Self::Native { chunk, .. } => chunk.clone(),
     }
@@ -137,7 +138,7 @@ impl Function {
   pub fn location(&self) -> String {
     use crate::util::SetColor as _;
     match self {
-      Self::Function {
+      Self::Value {
         name,
         is_async,
         location,
@@ -180,20 +181,20 @@ impl Function {
     }
   }
 }
-impl ToString for Function {
-  fn to_string(&self) -> String {
+impl Display for Function {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     match self {
-      Self::Function { name, is_async, .. } => {
-        format!("<{} {name}>", if *is_async { "asinc fn" } else { "fn" })
+      Self::Value { name, is_async, .. } => {
+        write!(f, "<{} {name}>", if *is_async { "asinc fn" } else { "fn" })
       }
-      Self::Script { path, .. } => format!("<script '{path}'>"),
-      Self::Native { name, .. } => format!("<nativo fn {name}>"),
+      Self::Script { path, .. } => write!(f, "<script '{path}'>"),
+      Self::Native { name, .. } => write!(f, "<nativo fn {name}>"),
     }
   }
 }
 impl From<&NodeFunction> for Function {
   fn from(value: &NodeFunction) -> Self {
-    Self::Function {
+    Self::Value {
       arity: value.params.len(),
       chunk: ChunkGroup::new().into(),
       name: value.name.clone(),
@@ -216,14 +217,14 @@ impl From<&NodeBlock> for Function {
 }
 impl std::fmt::Debug for Function {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    write!(f, "{}", self.to_string())
+    write!(f, "{self}") // usa Display
   }
 }
 impl crate::Encode for Function {
   fn encode(&self) -> Result<Vec<u8>, String> {
     let mut encode = vec![StructTag::Function as u8];
     match self {
-      Function::Function {
+      Function::Value {
         arity,
         chunk,
         name,
@@ -267,8 +268,8 @@ impl Decode for Function {
     let type_byte = vec
       .pop_front()
       .on_error(|_| "Se esperaba un tipo de funcion".to_string())?;
-    return match type_byte {
-      0 => Ok(Self::Function {
+    match type_byte {
+      0 => Ok(Self::Value {
         in_class: Default::default(),
         scope: Default::default(),
         arity: usize::decode(vec)?,
@@ -284,7 +285,7 @@ impl Decode for Function {
         chunk: ChunkGroup::decode(vec)?.into(),
       }),
       _ => Err("Se esperaba una funcion".to_string()),
-    };
+    }
   }
 }
 impl MutClone for Function {}

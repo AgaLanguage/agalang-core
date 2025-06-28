@@ -34,7 +34,7 @@ fn inspect(value: &Value, thread: &Thread) -> String {
       .unwrap_or_else(|| inspect_value(value, thread)),
     Value::Object(Object::Array(arr)) => {
       let mut result = String::new();
-      result.push_str("[");
+      result.push('[');
       let mut is_first = true;
       for item in arr.read().clone() {
         if is_first {
@@ -42,9 +42,9 @@ fn inspect(value: &Value, thread: &Thread) -> String {
         } else {
           result.push_str(", ");
         };
-        result.push_str(&format!("{}", inspect_value(&item, thread)));
+        result.push_str(&inspect_value(&item, thread));
       }
-      result.push_str("]");
+      result.push(']');
       result
     }
     Value::Iterator(iter) => format!("@{}", inspect(&iter.read(), thread)),
@@ -57,7 +57,7 @@ pub fn lib_value() -> Value {
   let hashmap = crate::compiler::Instance::new(format!("<{LIB_NAME}>"));
 
   hashmap.set_instance_property(
-    DRAW.into(),
+    DRAW,
     Value::Object(
       crate::compiler::Function::Native {
         name: format!("<{LIB_NAME}>::{DRAW}"),
@@ -68,7 +68,7 @@ pub fn lib_value() -> Value {
             print!("{}", inspect(value, thread));
             print!(" ");
           }
-          println!("");
+          println!();
           Ok(Value::Never)
         },
         custom_data: ().into(),
@@ -78,7 +78,7 @@ pub fn lib_value() -> Value {
     true,
   );
   hashmap.set_instance_property(
-    INSPECT.into(),
+    INSPECT,
     Value::Object(
       crate::compiler::Function::Native {
         name: format!("<{LIB_NAME}>::{INSPECT}"),

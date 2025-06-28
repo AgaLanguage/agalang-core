@@ -2,8 +2,8 @@ use crate::util::{OnError, OnSome};
 
 #[derive(PartialEq, Eq)]
 pub(crate) enum StructTag {
-  SOB,
-  EOB,
+  StartOfBlock,
+  EndOfBlock,
   Byte,
   Compile,
   USize,
@@ -33,8 +33,8 @@ pub(crate) enum StructTag {
 impl From<u8> for StructTag {
   fn from(value: u8) -> Self {
     match value {
-      x if x == StructTag::SOB as u8 => StructTag::SOB,
-      x if x == StructTag::EOB as u8 => StructTag::EOB,
+      x if x == StructTag::StartOfBlock as u8 => StructTag::StartOfBlock,
+      x if x == StructTag::EndOfBlock as u8 => StructTag::EndOfBlock,
       x if x == StructTag::Byte as u8 => StructTag::Byte,
       x if x == StructTag::Compile as u8 => StructTag::Compile,
       x if x == StructTag::USize as u8 => StructTag::USize,
@@ -88,7 +88,7 @@ impl Encode for bool {
 }
 impl Encode for String {
   fn encode(&self) -> Result<Vec<u8>, String> {
-    let mut encode = vec![StructTag::String as u8, StructTag::SOB as u8];
+    let mut encode = vec![StructTag::String as u8, StructTag::StartOfBlock as u8];
 
     encode.extend(
       self
@@ -97,7 +97,7 @@ impl Encode for String {
         .replace('\x01', "\\x01")
         .as_bytes(),
     );
-    encode.push(StructTag::EOB as u8);
+    encode.push(StructTag::EndOfBlock as u8);
 
     Ok(encode)
   }
@@ -136,7 +136,7 @@ impl Decode for String {
       let byte = vec
         .pop_front()
         .on_error(|_| "Binario corrupto".to_string())?;
-      if byte == StructTag::EOB as u8 {
+      if byte == StructTag::EndOfBlock as u8 {
         break;
       }
       bytes.push(byte);

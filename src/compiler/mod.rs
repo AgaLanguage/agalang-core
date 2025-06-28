@@ -35,9 +35,9 @@ impl Compiler {
       let name = if param.name.starts_with('@') {
         has_rest = true;
         rest_param = Some(param.name.clone());
-        param.name.replace('@', "").into()
+        param.name.replace('@', "")
       } else {
-        param.name.clone()
+        param.name
       };
       let _global = compiler
         .function
@@ -47,14 +47,14 @@ impl Compiler {
     }
     compiler.function.set_rest(has_rest);
     if function.is_async {
-      compiler.write(OpCode::OpPromised as u8, function.location.start.line);
+      compiler.write(OpCode::Promised as u8, function.location.start.line);
     }
-    if function.body.len() > 0 {
-      compiler.node_to_bytes(&function.body.clone().to_node())?;
+    if !function.body.is_empty() {
+      compiler.node_to_bytes(&function.body.clone().into_node())?;
     } else {
       compiler.set_constant(Value::Never, function.location.end.line);
     }
-    compiler.write(OpCode::OpReturn as u8, function.location.end.line);
+    compiler.write(OpCode::Return as u8, function.location.end.line);
     Ok(compiler.function)
   }
   fn set_constant(&mut self, value: Value, line: usize) -> u8 {
@@ -89,7 +89,7 @@ impl Compiler {
       Node::Function(node_function) => {
         let function = Value::Object(Self::parse_function(node_function)?.into());
         self.set_constant(function.clone(), node_function.location.start.line);
-        self.write(OpCode::OpSetScope as u8, node_function.location.start.line);
+        self.write(OpCode::SetScope as u8, node_function.location.start.line);
         Ok(())
       }
       node => self.node_to_bytes(node),
@@ -113,18 +113,18 @@ impl Compiler {
         self.node_to_bytes(&node_binary.right)?;
         let operator = match node_binary.operator {
           crate::agal_parser::NodeOperator::TruncDivision => {
-            vec![OpCode::OpDivide as u8, OpCode::OpApproximate as u8]
+            vec![OpCode::Divide as u8, OpCode::Approximate as u8]
           }
-          crate::agal_parser::NodeOperator::Division => vec![OpCode::OpDivide as u8],
-          crate::agal_parser::NodeOperator::Minus => vec![OpCode::OpSubtract as u8],
-          crate::agal_parser::NodeOperator::Multiply => vec![OpCode::OpMultiply as u8],
-          crate::agal_parser::NodeOperator::Plus => vec![OpCode::OpAdd as u8],
-          crate::agal_parser::NodeOperator::GreaterThan => vec![OpCode::OpGreaterThan as u8],
-          crate::agal_parser::NodeOperator::Equal => vec![OpCode::OpEquals as u8],
-          crate::agal_parser::NodeOperator::LessThan => vec![OpCode::OpLessThan as u8],
-          crate::agal_parser::NodeOperator::Modulo => vec![OpCode::OpModulo as u8],
-          crate::agal_parser::NodeOperator::And => vec![OpCode::OpAnd as u8],
-          crate::agal_parser::NodeOperator::Or => vec![OpCode::OpOr as u8],
+          crate::agal_parser::NodeOperator::Division => vec![OpCode::Divide as u8],
+          crate::agal_parser::NodeOperator::Minus => vec![OpCode::Subtract as u8],
+          crate::agal_parser::NodeOperator::Multiply => vec![OpCode::Multiply as u8],
+          crate::agal_parser::NodeOperator::Plus => vec![OpCode::Add as u8],
+          crate::agal_parser::NodeOperator::GreaterThan => vec![OpCode::GreaterThan as u8],
+          crate::agal_parser::NodeOperator::Equal => vec![OpCode::Equals as u8],
+          crate::agal_parser::NodeOperator::LessThan => vec![OpCode::LessThan as u8],
+          crate::agal_parser::NodeOperator::Modulo => vec![OpCode::Modulo as u8],
+          crate::agal_parser::NodeOperator::And => vec![OpCode::And as u8],
+          crate::agal_parser::NodeOperator::Or => vec![OpCode::Or as u8],
           a => {
             return Err(format!(
               "NodeOperator::{a:?}: No es un nodo valido en bytecode"
@@ -134,33 +134,33 @@ impl Compiler {
         self.write_buffer(operator, node_binary.location.start.line);
       }
       Node::Program(node_program) => {
-        if node_program.body.len() != 0 {
-          self.node_to_bytes(&node_program.body.clone().to_node())?;
-          self.write(OpCode::OpPop as u8, node_program.location.start.line);
+        if !node_program.body.is_empty() {
+          self.node_to_bytes(&node_program.body.clone().into_node())?;
+          self.write(OpCode::Pop as u8, node_program.location.start.line);
         }
         self.set_constant(Value::Never, node_program.location.start.line);
-        self.write(OpCode::OpReturn as u8, node_program.location.end.line);
+        self.write(OpCode::Return as u8, node_program.location.end.line);
       }
       Node::Block(node_block, _is_async) => {
-        self.write(OpCode::OpNewLocals as u8, node_block.location.start.line);
+        self.write(OpCode::NewLocals as u8, node_block.location.start.line);
         let code_len = node_block.body.len();
         for (index, node) in node_block.body.clone().enumerate() {
           self.node_to_bytes(&node)?;
           if index < (code_len - 1) {
-            self.write(OpCode::OpPop as u8, node.get_location().end.line);
+            self.write(OpCode::Pop as u8, node.get_location().end.line);
           }
         }
-        self.write(OpCode::OpRemoveLocals as u8, node_block.location.end.line);
+        self.write(OpCode::RemoveLocals as u8, node_block.location.end.line);
       }
       Node::UnaryFront(node_unary) => {
         self.node_to_bytes(&node_unary.operand)?;
         let operator = match &node_unary.operator {
-          crate::agal_parser::NodeOperator::Approximate => OpCode::OpApproximate,
-          crate::agal_parser::NodeOperator::QuestionMark => OpCode::OpAsBoolean,
-          crate::agal_parser::NodeOperator::Minus => OpCode::OpNegate,
-          crate::agal_parser::NodeOperator::BitAnd => OpCode::OpAsRef,
-          crate::agal_parser::NodeOperator::Not => OpCode::OpNot,
-          crate::agal_parser::NodeOperator::At => OpCode::OpAt,
+          crate::agal_parser::NodeOperator::Approximate => OpCode::Approximate,
+          crate::agal_parser::NodeOperator::QuestionMark => OpCode::AsBoolean,
+          crate::agal_parser::NodeOperator::Minus => OpCode::Negate,
+          crate::agal_parser::NodeOperator::BitAnd => OpCode::AsRef,
+          crate::agal_parser::NodeOperator::Not => OpCode::Not,
+          crate::agal_parser::NodeOperator::At => OpCode::At,
           op => {
             return Err(format!(
               "NodeOperator::{op:?}: No es un nodo valido en bytecode"
@@ -175,13 +175,12 @@ impl Compiler {
           node_identifier.location.start.line,
         );
       }
-      Node::Console(node_console) => match node_console {
-        crate::agal_parser::NodeConsole::Output { value, location } => {
-          self.node_to_bytes(&value)?;
-          self.write(OpCode::OpConsoleOut as u8, location.start.line);
+      Node::Console(node_console) => {
+        if let crate::agal_parser::NodeConsole::Output { value, location } = node_console {
+          self.node_to_bytes(value)?;
+          self.write(OpCode::ConsoleOut as u8, location.start.line);
         }
-        _ => {}
-      },
+      }
       Node::String(node_string) => {
         for (i, data) in node_string.value.clone().enumerate() {
           match data {
@@ -196,16 +195,15 @@ impl Compiler {
             }
           }
           if i != 0 {
-            self.write(OpCode::OpAdd as u8, node_string.location.start.line);
+            self.write(OpCode::Add as u8, node_string.location.start.line);
           }
         }
       }
       Node::VarDecl(node_var_decl) => {
-        let op;
-        if node_var_decl.is_const {
+        let op = if node_var_decl.is_const {
           match &node_var_decl.value {
             Some(value) => {
-              self.node_value_to_bytes(&value)?;
+              self.node_value_to_bytes(value)?;
             }
             None => {
               return Err(format!(
@@ -214,18 +212,18 @@ impl Compiler {
               ))
             }
           }
-          op = OpCode::OpConstDecl as u8;
+          OpCode::ConstDecl as u8
         } else {
           match &node_var_decl.value {
             Some(value) => {
-              self.node_value_to_bytes(&value)?;
+              self.node_value_to_bytes(value)?;
             }
             None => {
               self.set_constant(Value::Never, node_var_decl.location.start.line);
             }
           };
-          op = OpCode::OpVarDecl as u8;
-        }
+          OpCode::VarDecl as u8
+        };
         let name = self.set_value(Value::String(node_var_decl.name.as_str().into()));
         self.write_buffer(vec![op, name], node_var_decl.location.start.line);
       }
@@ -235,7 +233,7 @@ impl Compiler {
             self.node_value_to_bytes(&node_assignament.value)?;
             let name = self.set_value(Value::String(id.name.as_str().into()));
             self.write_buffer(
-              vec![OpCode::OpSetVar as u8, name],
+              vec![OpCode::SetVar as u8, name],
               node_assignament.location.start.line,
             );
           }
@@ -253,7 +251,7 @@ impl Compiler {
             self.node_value_to_bytes(&node_assignament.value)?;
             self.write_buffer(
               vec![
-                OpCode::OpSetMember as u8,
+                OpCode::SetMember as u8,
                 if m.instance {
                   INSTANCE_MEMBER
                 } else {
@@ -268,14 +266,14 @@ impl Compiler {
       }
       Node::If(node_if) => {
         self.node_to_bytes(&node_if.condition)?;
-        let jump_if = self.jump(OpCode::OpJumpIfFalse);
-        self.node_to_bytes(&node_if.body.clone().to_node())?;
+        let jump_if = self.jump(OpCode::JumpIfFalse);
+        self.node_to_bytes(&node_if.body.clone().into_node())?;
 
-        let jump_else = self.jump(OpCode::OpJump);
+        let jump_else = self.jump(OpCode::Jump);
         self.patch_jump(jump_if)?;
 
         if let Some(e) = &node_if.else_body {
-          self.node_to_bytes(&e.clone().to_node())?;
+          self.node_to_bytes(&e.clone().into_node())?;
         } else {
           self.set_constant(Value::Never, node_if.location.start.line);
         }
@@ -284,45 +282,45 @@ impl Compiler {
       Node::While(node_while) => {
         let loop_start = self.len();
         self.node_to_bytes(&node_while.condition)?;
-        let jump_while = self.jump(OpCode::OpJumpIfFalse);
-        self.node_to_bytes(&node_while.body.clone().to_node())?;
-        if node_while.body.len() > 0 {
-          self.write(OpCode::OpPop as u8, 0);
+        let jump_while = self.jump(OpCode::JumpIfFalse);
+        self.node_to_bytes(&node_while.body.clone().into_node())?;
+        if !node_while.body.is_empty() {
+          self.write(OpCode::Pop as u8, 0);
         }
         self.add_loop(loop_start)?;
         self.patch_jump(jump_while)?;
         self.set_constant(Value::Never, node_while.location.start.line);
       }
       Node::DoWhile(node_do_while) => {
-        let jump_do = self.jump(OpCode::OpJump);
+        let jump_do = self.jump(OpCode::Jump);
         let loop_start = self.len();
         self.node_to_bytes(&node_do_while.condition)?;
-        let jump_do_while = self.jump(OpCode::OpJumpIfFalse);
+        let jump_do_while = self.jump(OpCode::JumpIfFalse);
         self.patch_jump(jump_do)?;
-        self.node_to_bytes(&node_do_while.body.clone().to_node())?;
-        if node_do_while.body.len() > 0 {
-          self.write(OpCode::OpPop as u8, 0);
+        self.node_to_bytes(&node_do_while.body.clone().into_node())?;
+        if !node_do_while.body.is_empty() {
+          self.write(OpCode::Pop as u8, 0);
         }
         self.add_loop(loop_start)?;
         self.patch_jump(jump_do_while)?;
         self.set_constant(Value::Never, node_do_while.location.start.line);
       }
       Node::For(node_for) => {
-        self.write(OpCode::OpNewLocals as u8, node_for.location.start.line);
+        self.write(OpCode::NewLocals as u8, node_for.location.start.line);
         self.node_to_bytes(&node_for.init)?;
-        self.write(OpCode::OpPop as u8, 0);
+        self.write(OpCode::Pop as u8, 0);
         let loop_start = self.len();
         self.node_to_bytes(&node_for.condition)?;
-        let jump_for = self.jump(OpCode::OpJumpIfFalse);
-        self.node_to_bytes(&node_for.body.clone().to_node())?;
-        if node_for.body.len() > 0 {
-          self.write(OpCode::OpPop as u8, 0);
+        let jump_for = self.jump(OpCode::JumpIfFalse);
+        self.node_to_bytes(&node_for.body.clone().into_node())?;
+        if !node_for.body.is_empty() {
+          self.write(OpCode::Pop as u8, 0);
         }
         self.node_to_bytes(&node_for.update)?;
-        self.write(OpCode::OpPop as u8, 0);
+        self.write(OpCode::Pop as u8, 0);
         self.add_loop(loop_start)?;
         self.patch_jump(jump_for)?;
-        self.write(OpCode::OpRemoveLocals as u8, node_for.location.start.line);
+        self.write(OpCode::RemoveLocals as u8, node_for.location.start.line);
         self.set_constant(Value::Never, node_for.location.end.line);
       }
       Node::Function(node_function) => {
@@ -331,7 +329,7 @@ impl Compiler {
 
         let name = self.set_value(Value::String(node_function.name.as_str().into()));
         self.write_buffer(
-          vec![OpCode::OpSetScope as u8, OpCode::OpConstDecl as u8, name],
+          vec![OpCode::SetScope as u8, OpCode::ConstDecl as u8, name],
           node_function.location.start.line,
         );
       }
@@ -342,7 +340,7 @@ impl Compiler {
         match node_call.callee.as_ref() {
           Node::Member(m) => {
             self.node_to_bytes(&m.object)?;
-            self.write(OpCode::OpCopy as u8, m.object.get_location().end.line);
+            self.write(OpCode::Copy as u8, m.object.get_location().end.line);
             if m.computed {
               self.node_to_bytes(&m.member)?;
             } else {
@@ -358,35 +356,35 @@ impl Compiler {
               OBJECT_MEMBER
             };
             self.write_buffer(
-              vec![OpCode::OpGetMember as u8, is_instance],
+              vec![OpCode::GetMember as u8, is_instance],
               m.location.start.line,
             );
           }
           Node::Identifier(i) => {
             self.read_var(i.name.clone(), i.location.start.line);
-            self.write(OpCode::OpCopy as u8, node.get_location().start.line)
+            self.write(OpCode::Copy as u8, node.get_location().start.line)
           }
           node => {
             self.node_value_to_bytes(&node_call.callee)?;
-            self.write(OpCode::OpCopy as u8, node.get_location().start.line)
+            self.write(OpCode::Copy as u8, node.get_location().start.line)
           }
         };
 
         self.write_buffer(
-          vec![OpCode::OpCall as u8, node_call.arguments.len() as u8],
+          vec![OpCode::Call as u8, node_call.arguments.len() as u8],
           node_call.location.start.line,
         );
       }
       Node::Return(node_return) => {
         match &node_return.value {
           Some(value) => {
-            self.node_to_bytes(&value)?;
+            self.node_to_bytes(value)?;
           }
           None => {
             self.set_constant(Value::Never, node_return.location.start.line);
           }
         };
-        self.write(OpCode::OpReturn as u8, node_return.location.start.line);
+        self.write(OpCode::Return as u8, node_return.location.start.line);
       }
       Node::Object(node_object) => {
         let value = Value::Object(HashMap::new().into());
@@ -397,11 +395,7 @@ impl Compiler {
               self.node_to_bytes(&key)?;
               self.node_value_to_bytes(&value)?;
               self.write_buffer(
-                vec![
-                  OpCode::OpSetMember as u8,
-                  OBJECT_MEMBER,
-                  OpCode::OpPop as u8,
-                ],
+                vec![OpCode::SetMember as u8, OBJECT_MEMBER, OpCode::Pop as u8],
                 node_object.location.start.line,
               );
             }
@@ -409,11 +403,7 @@ impl Compiler {
               self.set_constant(Value::String(key), node_object.location.start.line);
               self.node_value_to_bytes(&value)?;
               self.write_buffer(
-                vec![
-                  OpCode::OpSetMember as u8,
-                  OBJECT_MEMBER,
-                  OpCode::OpPop as u8,
-                ],
+                vec![OpCode::SetMember as u8, OBJECT_MEMBER, OpCode::Pop as u8],
                 node_object.location.start.line,
               );
             }
@@ -439,39 +429,30 @@ impl Compiler {
           OBJECT_MEMBER
         };
         self.write_buffer(
-          vec![OpCode::OpGetMember as u8, is_instance],
+          vec![OpCode::GetMember as u8, is_instance],
           node_member.location.start.line,
         );
       }
       Node::Array(node_array) => {
         let vec: Vec<Value> = vec![];
         let value = Value::Object(vec.into());
-        let mut index = 0;
-        for p in node_array.elements.clone() {
+        for (index, p) in node_array.elements.clone().into_iter().enumerate() {
           self.set_constant(value.clone(), node_array.location.start.line);
-          match p {
-            crate::agal_parser::NodeProperty::Indexable(value) => {
-              self.set_constant(Value::Number(index.into()), node_array.location.start.line);
-              self.node_value_to_bytes(&value)?;
-              self.write_buffer(
-                vec![
-                  OpCode::OpSetMember as u8,
-                  OBJECT_MEMBER,
-                  OpCode::OpPop as u8,
-                ],
-                node_array.location.start.line,
-              );
-            }
-            _ => {}
-          };
-          index += 1;
+          if let crate::agal_parser::NodeProperty::Indexable(value) = p {
+            self.set_constant(Value::Number(index.into()), node_array.location.start.line);
+            self.node_value_to_bytes(&value)?;
+            self.write_buffer(
+              vec![OpCode::SetMember as u8, OBJECT_MEMBER, OpCode::Pop as u8],
+              node_array.location.start.line,
+            );
+          }
         }
         self.set_constant(value, node_array.location.start.line);
       }
       Node::LoopEdit(node_loop_editor) => {
         let byte = match node_loop_editor.action {
-          crate::agal_parser::NodeLoopEditType::Break => OpCode::OpBreak,
-          crate::agal_parser::NodeLoopEditType::Continue => OpCode::OpContinue,
+          crate::agal_parser::NodeLoopEditType::Break => OpCode::Break,
+          crate::agal_parser::NodeLoopEditType::Continue => OpCode::Continue,
         } as u8;
         self.write(byte, node_loop_editor.location.start.line);
       }
@@ -493,7 +474,7 @@ impl Compiler {
           0
         };
         self.write_buffer(
-          vec![OpCode::OpImport as u8, meta_byte, name_byte],
+          vec![OpCode::Import as u8, meta_byte, name_byte],
           node_import.location.start.line,
         );
       }
@@ -516,15 +497,14 @@ impl Compiler {
             );
 
             let name = self.set_value(Value::String(f.name.as_str().into()));
-            self.write_buffer(vec![OpCode::OpConstDecl as u8, name], f.location.start.line);
+            self.write_buffer(vec![OpCode::ConstDecl as u8, name], f.location.start.line);
             &f.name
           }
           Node::VarDecl(v) => {
-            let op;
-            if v.is_const {
+            let op = if v.is_const {
               match &v.value {
                 Some(value) => {
-                  self.node_to_bytes(&value)?;
+                  self.node_to_bytes(value)?;
                 }
                 None => {
                   return Err(format!(
@@ -533,18 +513,18 @@ impl Compiler {
                   ))
                 }
               }
-              op = OpCode::OpConstDecl as u8;
+              OpCode::ConstDecl as u8
             } else {
               match &v.value {
                 Some(value) => {
-                  self.node_to_bytes(&value)?;
+                  self.node_to_bytes(value)?;
                 }
                 None => {
                   self.set_constant(Value::Never, v.location.start.line);
                 }
               };
-              op = OpCode::OpVarDecl as u8;
-            }
+              OpCode::VarDecl as u8
+            };
             let name = self.set_value(Value::String(v.name.as_str().into()));
             self.write_buffer(vec![op, name], v.location.start.line);
             &v.name
@@ -559,7 +539,7 @@ impl Compiler {
         };
         let name_byte = self.set_value(Value::String(name.to_string()));
         self.write_buffer(
-          vec![OpCode::OpExport as u8, name_byte],
+          vec![OpCode::Export as u8, name_byte],
           node_export.location.start.line,
         );
       }
@@ -568,12 +548,12 @@ impl Compiler {
           node_identifier.name.clone(),
           node_identifier.location.start.line,
         );
-        self.write(OpCode::OpDelVar as u8, node_identifier.location.start.line);
+        self.write(OpCode::DelVar as u8, node_identifier.location.start.line);
       }
       Node::Await(node_expression) => {
         self.node_value_to_bytes(&node_expression.expression)?;
         self.write_buffer(
-          vec![OpCode::OpAwait as u8, OpCode::OpUnPromise as u8],
+          vec![OpCode::Await as u8, OpCode::UnPromise as u8],
           node_expression.location.start.line,
         );
       }
@@ -589,7 +569,7 @@ impl Compiler {
             prop.value.get_location().start.line,
           );
           if !is_static {
-            self.write(OpCode::OpGetInstance as u8, node_class.location.start.line);
+            self.write(OpCode::GetInstance as u8, node_class.location.start.line);
           };
 
           self.set_constant(
@@ -603,10 +583,10 @@ impl Compiler {
           );
           self.write_buffer(
             vec![
-              OpCode::OpInClass as u8,
-              OpCode::OpSetMember as u8,
+              OpCode::InClass as u8,
+              OpCode::SetMember as u8,
               INSTANCE_MEMBER | CLASS_DECLARATION | is_public,
-              OpCode::OpPop as u8,
+              OpCode::Pop as u8,
             ],
             prop.value.get_location().start.line,
           );
@@ -617,32 +597,29 @@ impl Compiler {
             node_identifier.name.clone(),
             node_identifier.location.start.line,
           );
-          self.write(
-            OpCode::OpExtendClass as u8,
-            node_identifier.location.end.line,
-          );
+          self.write(OpCode::ExtendClass as u8, node_identifier.location.end.line);
         }
         let name = self.set_value(Value::String(node_class.name.as_str().into()));
         self.write_buffer(
-          vec![OpCode::OpConstDecl as u8, name],
+          vec![OpCode::ConstDecl as u8, name],
           node_class.location.start.line,
         );
       }
       Node::Throw(node_value) => {
         self.node_value_to_bytes(node)?;
-        self.write(OpCode::OpThrow as u8, node_value.location.start.line);
+        self.write(OpCode::Throw as u8, node_value.location.start.line);
       }
       Node::Try(node_try) => {
         let mut try_block = Self {
           function: (&node_try.body).into(),
           path: node_try.location.file_name.clone(),
         };
-        if node_try.body.len() > 0 {
-          try_block.node_to_bytes(&node_try.body.clone().to_node())?;
+        if !node_try.body.is_empty() {
+          try_block.node_to_bytes(&node_try.body.clone().into_node())?;
         } else {
           try_block.set_constant(Value::Never, node_try.location.end.line);
         }
-        try_block.write(OpCode::OpReturn as u8, node_try.location.end.line);
+        try_block.write(OpCode::Return as u8, node_try.location.end.line);
         self.set_constant(
           Value::Object(try_block.function.into()),
           node_try.location.start.line,
@@ -658,8 +635,8 @@ impl Compiler {
               .chunk()
               .write()
               .make_arg(error.clone(), block.location.start.line);
-            if block.len() > 0 {
-              catch_block.node_to_bytes(&block.clone().to_node())?;
+            if !block.is_empty() {
+              catch_block.node_to_bytes(&block.clone().into_node())?;
             } else {
               catch_block.set_constant(Value::Never, block.location.end.line);
             }
@@ -668,13 +645,13 @@ impl Compiler {
             catch_block.set_constant(Value::Never, node_try.location.end.line);
           }
         };
-        catch_block.write(OpCode::OpReturn as u8, node_try.location.end.line);
+        catch_block.write(OpCode::Return as u8, node_try.location.end.line);
         let catch_block = catch_block.function;
         self.set_constant(
           Value::Object(catch_block.into()),
           node_try.location.start.line,
         );
-        self.write(OpCode::OpTry as u8, node_try.location.start.line);
+        self.write(OpCode::Try as u8, node_try.location.start.line);
         self.set_constant(Value::Never, node_try.location.end.line);
       }
       Node::Lazy(node_expression) => {
@@ -687,12 +664,12 @@ impl Compiler {
           path: node_expression.location.file_name.clone(),
         };
         lazy_block.node_to_bytes(&node_expression.expression)?;
-        lazy_block.write(OpCode::OpReturn as u8, node_expression.location.end.line);
+        lazy_block.write(OpCode::Return as u8, node_expression.location.end.line);
         self.set_constant(
           Value::Lazy(lazy_block.function.into()),
           node_expression.location.start.line,
         );
-        self.write(OpCode::OpSetScope as u8, node_expression.location.end.line);
+        self.write(OpCode::SetScope as u8, node_expression.location.end.line);
       }
       Node::None => return Err("Se encontro un error de nodos".to_string()),
     };

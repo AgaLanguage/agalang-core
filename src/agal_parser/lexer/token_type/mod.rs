@@ -18,7 +18,7 @@ pub enum TokenType {
   Error,
   None,
   Byte, // 0by00000000
-  EOF,
+  EndOfFile,
 }
 impl PartialEq for TokenType {
   fn eq(&self, other: &Self) -> bool {
@@ -39,11 +39,8 @@ impl PartialEq for TokenType {
       }
       (Self::Error, Self::Error) => true,
       (Self::None, Self::None) => true,
-      (Self::EOF, Self::EOF) => true,
+      (Self::EndOfFile, Self::EndOfFile) => true,
       _ => false,
     }
-  }
-  fn ne(&self, other: &Self) -> bool {
-    !self.eq(other)
   }
 }

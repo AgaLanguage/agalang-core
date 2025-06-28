@@ -34,7 +34,7 @@ impl ModuleThread {
     async_thread.write().set_module(module.clone());
     module
   }
-  pub fn as_value(self) -> Value {
+  pub fn into_value(self) -> Value {
     self.value
   }
   pub fn run_instruction(&self) -> InterpretResult {
@@ -43,11 +43,11 @@ impl ModuleThread {
     }
     let code = self.async_thread.read().thread.write().peek();
     match code {
-      OpCode::OpImport => {
+      OpCode::Import => {
         let thread = self.async_thread.read().thread.clone();
         thread.write().read();
         let module = thread.write().pop();
-        let path = module.as_string(&*thread.read());
+        let path = module.as_string(&thread.read());
         let meta_byte = thread.write().read();
         let name_byte = thread.write().read();
         let _is_lazy = (meta_byte & 0b10) == 0b10;
@@ -71,7 +71,7 @@ impl ModuleThread {
         let value = crate::interpreter::libs::libs(lib_name, proto, |path| {
           let module = VM::resolve(self.get_vm(), path, thread.write().globals());
           *self.async_thread.read().await_thread.write() = BlockingThread::Module(module.clone());
-          let x = module.read().clone().as_value();
+          let x = module.read().clone().into_value();
           x
         });
         if alias {
@@ -80,13 +80,13 @@ impl ModuleThread {
             .current_chunk()
             .read()
             .read_constant(name_byte)
-            .as_string(&*thread.read());
+            .as_string(&thread.read());
           thread.write().declare(&name, value, true);
         }
         thread.write().push(module);
         InterpretResult::Continue
       }
-      OpCode::OpExport => {
+      OpCode::Export => {
         let thread = self.async_thread.read().thread.clone();
         thread.write().read();
         let name = thread.write().read_string();
@@ -99,7 +99,7 @@ impl ModuleThread {
           value.clone(),
           true,
           false,
-          &*self.get_async().read().get_thread().read(),
+          &self.get_async().read().get_thread().read(),
         ) {
           Some(value) => {
             thread.write().push(value);
@@ -215,7 +215,7 @@ impl BlockingThread {
       Self::Lazy(lazy, thread) => {
         let byte = thread.read().get_thread().write().peek();
         match byte {
-          OpCode::OpReturn => {
+          OpCode::Return => {
             let value = thread.read().pop();
             thread.read().push(Value::Never);
             thread.read().run_instruction();
@@ -241,10 +241,7 @@ impl AsyncThread {
   pub fn is_waiting(&self) -> bool {
     let bloking_thread = &*self.await_thread.read();
     match bloking_thread {
-      BlockingThread::Await(p) => match p.get_data() {
-        PromiseData::Pending => true,
-        _ => false,
-      },
+      BlockingThread::Await(p) => matches!(p.get_data(), PromiseData::Pending),
       _ => false,
     }
   }
@@ -293,7 +290,7 @@ impl AsyncThread {
   pub fn simple_run_instruction(&self, contain_error: bool) -> InterpretResult {
     let code = self.thread.write().peek();
     match code {
-      OpCode::OpAwait => {
+      OpCode::Await => {
         self.thread.write().read();
         let value = self.pop();
         if value.is_promise() {
@@ -436,22 +433,19 @@ impl Thread {
     self.stack.pop()
   }
   fn init(&self, value: &Value) {
-    match value {
-      Value::Lazy(lazy) => {
-        let (thread, _) = AsyncThread::new();
-        let once = lazy.get_once();
-        let vars = VarsManager::crate_child(
-          once
-            .read()
-            .get_scope()
-            .unwrap_or_else(|| self.current_vars()),
-        );
-        thread
+    if let Value::Lazy(lazy) = value {
+      let (thread, _) = AsyncThread::new();
+      let once = lazy.get_once();
+      let vars = VarsManager::crate_child(
+        once
           .read()
-          .push_call(CallFrame::new(once, vec![vars.into()]));
-        *self.get_async().read().await_thread.write() = BlockingThread::Lazy(lazy.clone(), thread);
-      }
-      _ => {}
+          .get_scope()
+          .unwrap_or_else(|| self.current_vars()),
+      );
+      thread
+        .read()
+        .push_call(CallFrame::new(once, vec![vars.into()]));
+      *self.get_async().read().await_thread.write() = BlockingThread::Lazy(lazy.clone(), thread);
     };
   }
   fn read(&mut self) -> u8 {
@@ -485,8 +479,8 @@ impl Thread {
     let fun_clone = fun.clone();
     let function = fun_clone.read();
 
-    let (arity, has_rest, is_async) = match &*function {
-      Function::Function {
+    let (arity, has_rest, _) = match &*function {
+      Function::Value {
         arity,
         has_rest,
         is_async,
@@ -510,11 +504,10 @@ impl Thread {
     let locals = vec![VarsManager::crate_child(vars.clone())
       .set_this(this.clone())
       .into()];
-    if is_async {}
     self.call_stack.push(CallFrame::new(fun, locals));
 
     if arity > args.len() {
-      if arity == 1 && args.len() == 0 {
+      if arity == 1 && args.is_empty() {
         return Err("Se esperaba llamar una funcion con un argumento".into());
       }
       return Err(format!(
@@ -525,12 +518,12 @@ impl Thread {
     }
     let mut arguments = vec![];
     let mut rest = vec![];
-    for i in 0..args.len() {
+    for (i, arg) in args.iter().enumerate() {
       if i >= arity {
-        rest.push(args[i].clone());
+        rest.push(arg.clone());
         continue;
       }
-      arguments.push(args[i].clone());
+      arguments.push(arg.clone());
     }
     if has_rest {
       arguments.push(Value::Object(rest.into()));
@@ -555,11 +548,8 @@ impl Thread {
         continue;
       }
       let mut list = value.as_strict_array(self)?;
-      loop {
-        match list.pop() {
-          Some(value) => args.push(value),
-          None => break,
-        }
+      while let Some(value) = list.pop() {
+        args.push(value);
       }
     }
     args.reverse();
@@ -568,7 +558,7 @@ impl Thread {
       if arity != 1 || args.len() != 1 {
         return Err("Solo se puede multiplicar un numero (llamada)".into());
       }
-      let arg = args.get(0).unwrap();
+      let arg = args.first().unwrap();
       if !arg.is_number() {
         return Err("Solo se pueden multiplicar numeros (llamada)".into());
       }
@@ -604,15 +594,15 @@ impl Thread {
     if callee.is_function() {
       return self.call_function(this, callee.as_function(), args);
     }
-    return Err("Se esperaba llamar una funcion".into());
+    Err("Se esperaba llamar una funcion".to_string())
   }
   fn simple_run_instruction(&mut self) -> Result<InterpretResult, String> {
     let byte_instruction = self.read();
     let instruction: OpCode = byte_instruction.into();
 
     let value: Value = match instruction {
-      OpCode::OpThrow => return Err(self.pop().as_string(self)),
-      OpCode::OpTry => {
+      OpCode::Throw => return Err(self.pop().as_string(self)),
+      OpCode::Try => {
         let catch_block = self.pop().as_function();
         let try_block = self.pop().as_function();
 
@@ -638,23 +628,23 @@ impl Thread {
         };
         return Ok(InterpretResult::Continue);
       }
-      OpCode::OpImport | OpCode::OpExport => {
+      OpCode::Import | OpCode::Export => {
         return Err("Solo un modulo puede exportar o importar".to_string())
       }
-      OpCode::OpAwait => return Err("Solo un hilo asincrono puede esperar".to_string()),
-      OpCode::OpUnPromise => {
+      OpCode::Await => return Err("Solo un hilo asincrono puede esperar".to_string()),
+      OpCode::UnPromise => {
         let value = self.pop();
         match value.as_promise().get_data() {
           PromiseData::Err(e) => return Err(e),
           PromiseData::Pending => {
-            return Err(format!(
+            return Err(
               "El programa encontro un error de compilación en tiempo de ejecución (promesa no resuelta)"
-            ))
+            .to_string())
           }
           PromiseData::Ok(v) => v.cloned(),
         }
       }
-      OpCode::OpExtendClass => {
+      OpCode::ExtendClass => {
         let parent_class = match self.pop() {
           Value::Object(Object::Class(class)) => class.cloned(),
           value => {
@@ -668,14 +658,14 @@ impl Thread {
         value.as_class().read().set_parent(parent_class);
         value
       }
-      OpCode::OpInClass => {
+      OpCode::InClass => {
         let class = self.pop().as_class();
         let value = self.pop();
         value.set_in_class(class);
         value
       }
-      OpCode::OpGetInstance => self.pop().as_class().read().make_instance(),
-      OpCode::OpPromised => {
+      OpCode::GetInstance => self.pop().as_class().read().make_instance(),
+      OpCode::Promised => {
         // Debe existir el frame
         let frame = self.call_stack.pop();
         let (async_thread, promise) = AsyncThread::from_frame(frame);
@@ -690,33 +680,33 @@ impl Thread {
           .read()
           .push_sub_thread(async_thread);
         self.push(Value::Promise(promise));
-        return if self.call_stack.len() > 0 {
+        return if !self.call_stack.is_empty() {
           Ok(InterpretResult::Continue)
         } else {
           Ok(InterpretResult::Ok)
         };
       }
-      OpCode::OpSetScope => {
+      OpCode::SetScope => {
         let value = self.pop();
         let vars = self.current_vars();
         value.set_scope(vars);
         value
       }
-      OpCode::OpAt => Value::Iterator(self.pop().into()),
-      OpCode::OpAsRef => Value::Ref(self.pop().into()),
-      OpCode::OpCopy => {
+      OpCode::At => Value::Iterator(self.pop().into()),
+      OpCode::AsRef => Value::Ref(self.pop().into()),
+      OpCode::Copy => {
         let value = self.pop();
         self.push(value.clone());
         value
       }
-      OpCode::OpApproximate => {
+      OpCode::Approximate => {
         let value = self.pop();
         if !value.is_number() {
           return Err(format!("No se pudo operar '~{}'", value.get_type()));
         }
         Value::Number(value.as_number()?.trunc())
       }
-      OpCode::OpSetMember => {
+      OpCode::SetMember => {
         let value = self.pop();
         let key = self.pop();
         let object = self.pop();
@@ -752,20 +742,18 @@ impl Thread {
           let index = match key {
             Number::Basic(n) => n,
             Number::Complex(_, _) => {
-              return Err(format!(
-                "El indice no puede ser un valor complejo (asignar propiedad)"
-              ));
+              return Err(
+                "El indice no puede ser un valor complejo (asignar propiedad)".to_string(),
+              );
             }
             Number::Infinity | Number::NaN | Number::NegativeInfinity => {
-              return Err(format!(
-                "El indice no puede ser NaN o infinito (asignar propiedad)"
-              ));
+              return Err("El indice no puede ser NaN o infinito (asignar propiedad)".to_string());
             }
           };
           if index.is_negative() {
-            return Err(format!(
-              "El indice debe ser un numero entero positivo (asignar propiedad)"
-            ));
+            return Err(
+              "El indice debe ser un numero entero positivo (asignar propiedad)".to_string(),
+            );
           }
           if index.is_int() {
             index.to_string()
@@ -787,7 +775,7 @@ impl Thread {
           }
         }
       }
-      OpCode::OpGetMember => {
+      OpCode::GetMember => {
         let key = self.pop();
         let object = self.pop();
         let is_instance = self.read() == 1u8;
@@ -851,16 +839,16 @@ impl Thread {
           }
         }
       }
-      OpCode::OpConstant => self.read_constant(),
-      OpCode::OpJumpIfFalse => {
+      OpCode::Constant => self.read_constant(),
+      OpCode::JumpIfFalse => {
         let jump = self.read_short() as usize;
         let value = self.pop().as_boolean()?;
-        if value == false {
+        if !value {
           self.with_current_frame_mut(|frame| frame.advance(jump));
         }
         return Ok(InterpretResult::Continue);
       }
-      OpCode::OpArgDecl => {
+      OpCode::ArgDecl => {
         let name = self.read_string();
         let value = self.pop();
         return match self.declare(&name, value.clone(), true) {
@@ -868,33 +856,33 @@ impl Thread {
           _ => Ok(InterpretResult::Continue),
         };
       }
-      OpCode::OpJump => {
+      OpCode::Jump => {
         let jump = self.read_short() as usize;
 
         self.with_current_frame_mut(|frame| frame.advance(jump));
         return Ok(InterpretResult::Continue);
       }
-      OpCode::OpLoop => {
+      OpCode::Loop => {
         let offset = self.read_short() as usize;
 
         self.with_current_frame_mut(|frame| frame.back(offset));
         return Ok(InterpretResult::Continue);
       }
-      OpCode::OpRemoveLocals => {
+      OpCode::RemoveLocals => {
         self.with_current_frame_mut(|frame| frame.pop_vars());
         return Ok(InterpretResult::Continue);
       }
-      OpCode::OpNewLocals => {
+      OpCode::NewLocals => {
         self.with_current_frame_mut(|frame| frame.add_vars());
         return Ok(InterpretResult::Continue);
       }
-      OpCode::OpCall => {
+      OpCode::Call => {
         let arity = self.read() as usize;
         let callee = self.pop();
         let this = self.pop();
         return self.call_value(this, callee, arity);
       }
-      OpCode::OpVarDecl => {
+      OpCode::VarDecl => {
         let name = self.read_string();
         let value = self.pop();
         match self.declare(&name, value.clone(), false) {
@@ -902,7 +890,7 @@ impl Thread {
           _ => value,
         }
       }
-      OpCode::OpConstDecl => {
+      OpCode::ConstDecl => {
         let name = self.read_string();
         let value = self.pop();
         match self.declare(&name, value.clone(), true) {
@@ -910,7 +898,7 @@ impl Thread {
           _ => value,
         }
       }
-      OpCode::OpDelVar => {
+      OpCode::DelVar => {
         let name = self.read_string();
         let vars = self.resolve(&name);
         if !vars.read().has(&name) {
@@ -922,7 +910,7 @@ impl Thread {
           Some(value) => value,
         }
       }
-      OpCode::OpGetVar => {
+      OpCode::GetVar => {
         let name = self.read_string();
         let value = {
           let v = self.get(&name);
@@ -934,7 +922,7 @@ impl Thread {
         self.init(&value);
         value
       }
-      OpCode::OpSetVar => {
+      OpCode::SetVar => {
         let name = self.read_string();
         let value = self.pop();
         match self.assign(&name, value.clone()) {
@@ -942,11 +930,11 @@ impl Thread {
           _ => value,
         }
       }
-      OpCode::OpPop => {
+      OpCode::Pop => {
         self.pop();
         return Ok(InterpretResult::Continue);
       }
-      OpCode::OpAdd => {
+      OpCode::Add => {
         let b = self.pop();
         let a = self.pop();
         if a.is_number() && b.is_number() {
@@ -956,8 +944,8 @@ impl Thread {
           return Ok(InterpretResult::Continue);
         }
         if a.is_iterator() && b.is_iterator() {
-          let a = a.as_strict_array(&self)?;
-          let b = b.as_strict_array(&self)?;
+          let a = a.as_strict_array(self)?;
+          let b = b.as_strict_array(self)?;
           self.push(Value::Object(Object::Array(MultiRefHash::new(
             [a, b].concat(),
           ))));
@@ -975,7 +963,7 @@ impl Thread {
           b.get_type()
         ));
       }
-      OpCode::OpSubtract => {
+      OpCode::Subtract => {
         let b = self.pop();
         let a = self.pop();
         if !a.is_number() || !b.is_number() {
@@ -989,7 +977,7 @@ impl Thread {
         let b = b.as_number()?;
         Value::Number(a - b)
       }
-      OpCode::OpMultiply => {
+      OpCode::Multiply => {
         let b = self.pop();
         let a = self.pop();
         if !a.is_number() || !b.is_number() {
@@ -1003,7 +991,7 @@ impl Thread {
         let b = b.as_number()?;
         Value::Number(a * b)
       }
-      OpCode::OpDivide => {
+      OpCode::Divide => {
         let b = self.pop();
         let a = self.pop();
         if !a.is_number() || !b.is_number() {
@@ -1017,7 +1005,7 @@ impl Thread {
         let b = b.as_number()?;
         Value::Number(a / b)
       }
-      OpCode::OpModulo => {
+      OpCode::Modulo => {
         let b = self.pop();
         let a = self.pop();
         if !a.is_number() || !b.is_number() {
@@ -1031,7 +1019,7 @@ impl Thread {
         let b = b.as_number()?;
         Value::Number(a % b)
       }
-      OpCode::OpOr => {
+      OpCode::Or => {
         let b = self.pop();
         let a = self.pop();
         if a.as_boolean()? {
@@ -1040,7 +1028,7 @@ impl Thread {
           b
         }
       }
-      OpCode::OpAnd => {
+      OpCode::And => {
         let b = self.pop();
         let a = self.pop();
         if !a.as_boolean()? {
@@ -1049,43 +1037,49 @@ impl Thread {
           b
         }
       }
-      OpCode::OpNegate => {
+      OpCode::Negate => {
         let value = self.pop();
         if !value.is_number() {
           return Err(format!("No se pudo operar '-{}'", value.get_type()));
         }
         Value::Number(-value.as_number()?)
       }
-      OpCode::OpNot => {
+      OpCode::Not => {
         let value = self.pop().as_boolean()?;
-        let value = if value { Value::False } else { Value::True };
-        value
+        if value {
+          Value::False
+        } else {
+          Value::True
+        }
       }
-      OpCode::OpAsBoolean => {
+      OpCode::AsBoolean => {
         let value = self.pop().as_boolean()?;
-        let value = if value { Value::True } else { Value::False };
-        value
+        if value {
+          Value::True
+        } else {
+          Value::False
+        }
       }
-      OpCode::OpAsString => {
+      OpCode::AsString => {
         let value = self.pop().as_string(self);
         let value = Value::Object(value.as_str().into());
         value
       }
-      OpCode::OpConsoleOut => {
+      OpCode::ConsoleOut => {
         let value = self.pop().as_string(self);
         print!("{value}");
         use std::io::Write as _;
         let _ = std::io::stdout().flush();
         Value::Never
       }
-      OpCode::OpReturn => {
+      OpCode::Return => {
         self.call_stack.pop();
-        if self.call_stack.len() == 0 {
+        if self.call_stack.is_empty() {
           return Ok(InterpretResult::Ok);
         }
         self.pop()
       }
-      OpCode::OpEquals => {
+      OpCode::Equals => {
         let b = self.pop();
         let a = self.pop();
         if a.is_number() && b.is_number() {
@@ -1104,7 +1098,7 @@ impl Thread {
           Value::False
         }
       }
-      OpCode::OpGreaterThan => {
+      OpCode::GreaterThan => {
         let b = self.pop();
         let a = self.pop();
         if !a.is_number() || !b.is_number() {
@@ -1122,7 +1116,7 @@ impl Thread {
           Value::False
         }
       }
-      OpCode::OpLessThan => {
+      OpCode::LessThan => {
         let b = self.pop();
         let a = self.pop();
         if !a.is_number() || !b.is_number() {
@@ -1134,14 +1128,17 @@ impl Thread {
         }
         let a = a.as_number();
         let b = b.as_number();
-        let value = if a < b { Value::True } else { Value::False };
-        value
+        if a < b {
+          Value::True
+        } else {
+          Value::False
+        }
       }
-      OpCode::OpBreak | OpCode::OpContinue => Value::Null,
-      OpCode::OpNull => return Err(format!("Byte invalido {}", byte_instruction)),
+      OpCode::Break | OpCode::Continue => Value::Null,
+      OpCode::Null => return Err(format!("Byte invalido {}", byte_instruction)),
     };
     self.push(value);
-    return Ok(InterpretResult::Continue);
+    Ok(InterpretResult::Continue)
   }
   fn run_instruction(&mut self) -> InterpretResult {
     match self.simple_run_instruction() {

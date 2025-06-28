@@ -1,4 +1,4 @@
-use std::{collections::HashMap, hash::Hash};
+use std::{collections::HashMap, fmt::Display, hash::Hash};
 
 use crate::{functions_names::STRING, MultiRefHash, StructTag};
 
@@ -94,9 +94,10 @@ impl Object {
     match self {
       Self::Map(_, i) => i
         .on_ok(|t| t.get_instance_property(STRING, thread))
-        .map(|t|t.as_string(thread)),
+        .map(|t| t.as_string(thread)),
       _ => None,
-    }.unwrap_or_else(||self.to_string())
+    }
+    .unwrap_or_else(|| self.to_string())
   }
 }
 impl From<Function> for Object {
@@ -127,26 +128,21 @@ impl From<Vec<u8>> for Object {
 }
 impl From<&str> for Object {
   fn from(value: &str) -> Self {
-    Object::Array(
-      value
-        .chars()
-        .map(|c| Value::Char(c))
-        .collect::<Vec<_>>()
-        .into(),
-    )
+    Object::Array(value.chars().map(Value::Char).collect::<Vec<_>>().into())
   }
 }
-impl ToString for Object {
-  fn to_string(&self) -> String {
+impl Display for Object {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     match self {
-      Self::Function(f) => f.read().to_string(),
+      Self::Function(fun) => write!(f, "{}", fun.read()),
       Self::Map(_, i) => i
-        .map(|t| format!("<Instancia {}>", t.get_type()))
-        .unwrap_or("<objeto>".to_string()),
+        .map(|t| write!(f, "<Instancia {}>", t.get_type()))
+        .unwrap_or(write!(f, "<objeto>")),
       Self::Class(c) => {
         let has_parent = c.read().has_parent();
         let class = c.read().get_type().to_string();
-        format!(
+        write!(
+          f,
           "<clase {}>",
           if has_parent {
             let c_ref = c.read();
@@ -160,13 +156,13 @@ impl ToString for Object {
           }
         )
       }
-      _ => format!("<{}>", self.get_type()),
+      _ => write!(f, "<{}>", self.get_type()),
     }
   }
 }
 impl std::fmt::Debug for Object {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    write!(f, "{}", self.to_string())
+    write!(f, "{self}") // usa Display
   }
 }
 impl crate::Encode for Object {

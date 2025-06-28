@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::MultiRefHash;
 
 use super::Value;
@@ -55,12 +57,12 @@ impl Promise {
     if let Some(v) = self.err.read().clone() {
       return PromiseData::Err(v);
     }
-    return PromiseData::Pending;
+    PromiseData::Pending
   }
 }
-impl ToString for Promise {
-  fn to_string(&self) -> String {
-    format!("{PROMISE_TYPE}<{}>", self.get_value_str())
+impl Display for Promise {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "{PROMISE_TYPE}<{}>", self.get_value_str())
   }
 }
 impl From<Value> for Promise {

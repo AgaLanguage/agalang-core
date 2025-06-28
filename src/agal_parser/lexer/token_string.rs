@@ -3,11 +3,11 @@ use crate::util;
 use super::TokenType;
 
 fn is_hexadecimal(v: Option<&char>) -> bool {
-  if v == None {
+  if v.is_none() {
     return false;
   }
   let c = *v.unwrap();
-  c.is_numeric() || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')
+  c.is_numeric() || ('a'..='f').contains(&c) || ('A'..='F').contains(&c)
 }
 pub fn token_string(
   quote: char,
@@ -30,7 +30,7 @@ pub fn token_string(
     if v == '\\' {
       let next = src.get(str_length);
       str_length += 1;
-      if next == None {
+      if next.is_none() {
         return (
           util::Token {
             token_type: TokenType::Error,

@@ -113,7 +113,7 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
       value: internal::AgalNativeFunction {
         name: format!("{module_name}::leer_archivo"),
         func: Arc::new(|arguments, stack, modules, this| {
-          let path: Option<&values::DefaultRefAgalValue> = arguments.get(0);
+          let path: Option<&values::DefaultRefAgalValue> = arguments.first();
           if !path.is_some() {
             return internal::AgalThrow::Params {
               type_error: parser::ErrorNames::TypeError,
@@ -149,7 +149,7 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
       value: internal::AgalNativeFunction {
         name: format!("{module_name}::leer_carpeta"),
         func: Arc::new(|arguments, stack, modules, this| {
-          let path: Option<&values::DefaultRefAgalValue> = arguments.get(0);
+          let path: Option<&values::DefaultRefAgalValue> = arguments.first();
           if !path.is_some() {
             return AgalValue::Never.to_result();
           }
@@ -188,7 +188,7 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
       value: internal::AgalNativeFunction {
         name: format!("{module_name}::obtener_ruta"),
         func: Arc::new(move |arguments, stack, modules, this| {
-          let p: Option<&values::DefaultRefAgalValue> = arguments.get(0);
+          let p: Option<&values::DefaultRefAgalValue> = arguments.first();
           if !p.is_some() {
             return AgalValue::Never.to_result();
           }
@@ -214,7 +214,7 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
       value: internal::AgalNativeFunction {
         name: format!("{module_name}::escribir_archivo"),
         func: Arc::new(|arguments, stack, modules, this| {
-          let path: Option<&values::DefaultRefAgalValue> = arguments.get(0);
+          let path: Option<&values::DefaultRefAgalValue> = arguments.first();
           if !path.is_some() {
             return AgalValue::Never.to_result();
           }
@@ -277,7 +277,7 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
       value: internal::AgalNativeFunction {
         name: format!("{module_name}::crear_archivo"),
         func: Arc::new(|arguments, stack, modules, this| {
-          let path: Option<&values::DefaultRefAgalValue> = arguments.get(0);
+          let path: Option<&values::DefaultRefAgalValue> = arguments.first();
           if !path.is_some() {
             return AgalValue::Never.to_result();
           }
@@ -315,7 +315,7 @@ pub fn get_module(prefix: &str) -> values::DefaultRefAgalValue {
       value: internal::AgalNativeFunction {
         name: format!("{module_name}::crear_carpeta"),
         func: Arc::new(|arguments, stack, modules, this| {
-          let path: Option<&values::DefaultRefAgalValue> = arguments.get(0);
+          let path: Option<&values::DefaultRefAgalValue> = arguments.first();
           if !path.is_some() {
             return AgalValue::Never.to_result();
           }
