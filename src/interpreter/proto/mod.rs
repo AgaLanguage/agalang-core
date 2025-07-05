@@ -1,4 +1,5 @@
 mod string;
+mod function;
 
 pub fn proto(
   value_type: String,
@@ -8,7 +9,8 @@ pub fn proto(
     return Some(cache.get(&value_type));
   }
   let value = match value_type.as_str() {
-    crate::compiler::STRING_TYPE => string::string_proto(),
+    crate::compiler::FUNCTION_TYPE => function::prototype(),
+    crate::compiler::STRING_TYPE => string::prototype(),
     _ => return None,
   };
   cache.set(value_type, value.clone());

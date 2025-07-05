@@ -1,19 +1,21 @@
 use crate::compiler::{ChunkGroup, Function, Object, Value};
 
+const TYPE: &str = "<cadena>";
+
 const REPLACE: &str = "reemplaza";
 const REPEAT: &str = "repite";
 const SPLIT: &str = "separa";
 const BYTES: &str = "bytes";
 
-pub fn string_proto() -> Value {
-  let hashmap = crate::compiler::Instance::new("<cadena>".to_string());
+pub fn prototype() -> Value {
+  let hashmap = crate::compiler::Instance::new(TYPE.to_string());
 
   hashmap.set_instance_property(
     REPLACE,
     Value::Object(
       Function::Native {
         path: "".to_string(),
-        name: format!("<cadena>::{REPLACE}"),
+        name: format!("{TYPE}::{REPLACE}"),
         func: |this, args, thread, _| {
           let old = args.first();
           if old.is_none() {
@@ -45,7 +47,7 @@ pub fn string_proto() -> Value {
     Value::Object(
       Function::Native {
         path: "".to_string(),
-        name: format!("<cadena>::{REPEAT}"),
+        name: format!("{TYPE}::{REPEAT}"),
         func: |this, args, thread, _| {
           let count = match args.first() {
             None => Err(format!(
@@ -73,7 +75,7 @@ pub fn string_proto() -> Value {
     Value::Object(
       Function::Native {
         path: "".to_string(),
-        name: format!("<cadena>::{BYTES}"),
+        name: format!("{TYPE}::{BYTES}"),
         func: |this, _, thread, _| {
           let string = this.as_string(thread);
           let list = string
@@ -95,7 +97,7 @@ pub fn string_proto() -> Value {
     Value::Object(
       Function::Native {
         path: "".to_string(),
-        name: format!("<cadena>::{SPLIT}"),
+        name: format!("{TYPE}::{SPLIT}"),
         func: |this, args, thread, _| {
           let separator = args.first();
           if separator.is_none() {
