@@ -1,4 +1,4 @@
-
+use std::io::Write;
 
 use crate::compiler::{Class, Value};
 use crate::functions_names::{CONSOLE, CONSTRUCTOR, STRING};
@@ -14,7 +14,13 @@ const PATH_GET_NAME: &str = "obtener_nombre";
 const PATH_GET_EXTENSION: &str = "obtener_extension";
 
 const READ_FILE: &str = "leer_archivo";
+const CREATE_FILE: &str = "crear_archivo";
+const REMOVE_FILE: &str = "borrar_archivo";
+const WRITE_FILE: &str = "escribir_archivo";
+
 const READ_DIR: &str = "leer_carpeta";
+const CREATE_DIR: &str = "crear_carpeta";
+const REMOVE_DIR: &str = "borrar_carpeta";
 
 pub fn absolute_path(path: &str) -> String {
   let path = std::path::Path::new(path);
@@ -210,6 +216,83 @@ pub fn lib_value() -> Value {
     true,
   );
   hashmap.set_instance_property(
+    CREATE_FILE,
+    Value::Object(
+      crate::compiler::Function::Native {
+        name: format!("<{LIB_NAME}>::{CREATE_FILE}"),
+        path: format!("<{LIB_NAME}>"),
+        chunk: crate::compiler::ChunkGroup::default().into(),
+        func: |_, args, thread, _| {
+          let path = args
+            .first()
+            .map(|t| t.as_string(thread))
+            .on_error(|_| format!("{CREATE_FILE}: Se esperaba una ruta"))?;
+          std::fs::File::create(&path)
+            .ok()
+            .map(|_| Value::Never)
+            .on_error(|_| format!("{CREATE_FILE}: No se pudo crear el archivo: {path}"))
+        },
+        custom_data: ().into(),
+      }
+      .into(),
+    ),
+    true,
+  );
+  hashmap.set_instance_property(
+    WRITE_FILE,
+    Value::Object(
+      crate::compiler::Function::Native {
+        name: format!("<{LIB_NAME}>::{WRITE_FILE}"),
+        path: format!("<{LIB_NAME}>"),
+        chunk: crate::compiler::ChunkGroup::default().into(),
+        func: |_, args, thread, _| {
+          let path = args
+            .first()
+            .map(|t| t.as_string(thread))
+            .on_error(|_| format!("{WRITE_FILE}: Se esperaba una ruta"))?;
+          let buffer = args
+            .get(1)
+            .map(|t| t.as_strict_buffer(thread))
+            .on_error(|_| format!("{WRITE_FILE}: Se esperaba un buffer"))??;
+          std::fs::OpenOptions::new()
+            .write(true)
+            .truncate(true)
+            .open(&path)
+            .ok()
+            .on_some_option(|mut file| file.write_all(&buffer).ok().map(|_| Value::Never))
+            .on_error(|_| format!("{WRITE_FILE}: No se pudo escribir el archivo: {path}"))
+        },
+        custom_data: ().into(),
+      }
+      .into(),
+    ),
+    true,
+  );
+  hashmap.set_instance_property(
+    REMOVE_FILE,
+    Value::Object(
+      crate::compiler::Function::Native {
+        name: format!("<{LIB_NAME}>::{REMOVE_FILE}"),
+        path: format!("<{LIB_NAME}>"),
+        chunk: crate::compiler::ChunkGroup::default().into(),
+        func: |_, args, thread, _| {
+          let path = args
+            .first()
+            .map(|t| t.as_string(thread))
+            .on_error(|_| format!("{REMOVE_FILE}: Se esperaba una ruta"))?;
+          std::fs::remove_file(&path)
+            .ok()
+            .map(|_| Value::Never)
+            .on_error(|_| format!("{REMOVE_FILE}: No se pudo eliminar el archivo: {path}"))
+        },
+        custom_data: ().into(),
+      }
+      .into(),
+    ),
+    true,
+  );
+
+  hashmap.set_instance_property(
     READ_DIR,
     Value::Object(
       crate::compiler::Function::Native {
@@ -242,6 +325,53 @@ pub fn lib_value() -> Value {
     ),
     true,
   );
+  hashmap.set_instance_property(
+    REMOVE_DIR,
+    Value::Object(
+      crate::compiler::Function::Native {
+        name: format!("<{LIB_NAME}>::{REMOVE_DIR}"),
+        path: format!("<{LIB_NAME}>"),
+        chunk: crate::compiler::ChunkGroup::default().into(),
+        func: |_, args, thread, _| {
+          let path = args
+            .first()
+            .map(|t| t.as_string(thread))
+            .on_error(|_| format!("{REMOVE_DIR}: Se esperaba una ruta"))?;
+          std::fs::remove_dir(&path)
+            .ok()
+            .map(|_| Value::Never)
+            .on_error(|_| format!("{REMOVE_DIR}: No se pudo eliminar la carpeta: {path}"))
+        },
+        custom_data: ().into(),
+      }
+      .into(),
+    ),
+    true,
+  );
+  hashmap.set_instance_property(
+    CREATE_DIR,
+    Value::Object(
+      crate::compiler::Function::Native {
+        name: format!("<{LIB_NAME}>::{CREATE_DIR}"),
+        path: format!("<{LIB_NAME}>"),
+        chunk: crate::compiler::ChunkGroup::default().into(),
+        func: |_, args, thread, _| {
+          let path = args
+            .first()
+            .map(|t| t.as_string(thread))
+            .on_error(|_| format!("{CREATE_DIR}: Se esperaba una ruta"))?;
+          std::fs::create_dir(&path)
+            .ok()
+            .map(|_| Value::Never)
+            .on_error(|_| format!("{CREATE_DIR}: No se pudo crear la carpeta: {path}"))
+        },
+        custom_data: ().into(),
+      }
+      .into(),
+    ),
+    true,
+  );
+
   hashmap.set_instance_property(
     PATH,
     Value::Object(crate::compiler::Object::Class(path_class)),

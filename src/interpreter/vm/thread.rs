@@ -5,7 +5,7 @@ use crate::compiler::{Function, LazyValue, Number, Object, OpCode, Promise, Prom
 use crate::functions_names::CONSTRUCTOR;
 use crate::interpreter::stack::{CallFrame, InterpretResult};
 use crate::interpreter::VarsManager;
-use crate::MultiRefHash;
+use crate::{MultiRefHash, OnError};
 
 #[derive(Clone, Debug)]
 pub struct ModuleThread {
@@ -40,7 +40,7 @@ impl ModuleThread {
     if !matches!(self.status, InterpretResult::Continue | InterpretResult::Ok) {
       return self.status.clone();
     }
-    let code = self.async_thread.read().thread.write().peek();
+    let code = self.async_thread.read().thread.read().peek();
     match code {
       OpCode::Import => {
         let thread = self.async_thread.read().thread.clone();
@@ -66,8 +66,7 @@ impl ModuleThread {
             .to_string()
         }
         .replace("\\\\?\\", "");
-        let proto = self.get_vm().read().cache.libs.clone();
-        let value = crate::interpreter::libs::libs(lib_name, proto, |path| {
+        let value = crate::interpreter::libs::libs(lib_name, self.get_vm().read().cache.libs.clone(), |path| {
           let module = VM::resolve(self.get_vm(), path, thread.write().globals());
           *self.async_thread.read().await_thread.write() = BlockingThread::Module(module.clone());
           let x = module.read().clone().into_value();
@@ -282,7 +281,7 @@ impl AsyncThread {
   fn push_call(&self, frame: CallFrame) {
     let sub_thread = self.await_thread.read().clone();
     if let BlockingThread::Module(sub_module) = sub_thread {
-      return sub_module.write().push_call(frame);
+      return sub_module.read().push_call(frame);
     }
     self.thread.write().push_call(frame)
   }
@@ -509,11 +508,11 @@ impl Thread {
       if arity == 1 && args.is_empty() {
         Err("Se esperaba llamar una funcion con un argumento".to_string())?
       }
-      return Err(format!(
+      Err(format!(
         "Se esperaban {} argumentos, pero se recibieron {}",
         arity,
         args.len()
-      ));
+      ))?;
     }
     let mut arguments = vec![];
     let mut rest = vec![];
@@ -600,7 +599,7 @@ impl Thread {
     let instruction: OpCode = byte_instruction.into();
 
     let value: Value = match instruction {
-      OpCode::Throw => return Err(self.pop().as_string(self)),
+      OpCode::Throw => Err(self.pop().as_string(self))?,
       OpCode::Try => {
         let catch_block = self.pop().as_function();
         let try_block = self.pop().as_function();
@@ -628,17 +627,17 @@ impl Thread {
         return Ok(InterpretResult::Continue);
       }
       OpCode::Import | OpCode::Export => {
-        return Err("Solo un modulo puede exportar o importar".to_string())
+        Err("Solo un modulo puede exportar o importar".to_string())?
       }
-      OpCode::Await => return Err("Solo un hilo asincrono puede esperar".to_string()),
+      OpCode::Await => Err("Solo un hilo asincrono puede esperar".to_string())?,
       OpCode::UnPromise => {
         let value = self.pop();
         match value.as_promise().get_data() {
-          PromiseData::Err(e) => return Err(e),
+          PromiseData::Err(e) => Err(e)?,
           PromiseData::Pending => {
-            return Err(
+            Err(
               "El programa encontro un error de compilación en tiempo de ejecución (promesa no resuelta)"
-            .to_string())
+            .to_string())?
           }
           PromiseData::Ok(v) => v.cloned(),
         }
@@ -646,12 +645,10 @@ impl Thread {
       OpCode::ExtendClass => {
         let parent_class = match self.pop() {
           Value::Object(Object::Class(class)) => class.cloned(),
-          value => {
-            return Err(format!(
-              "No se puede usar '{}' para extender una clase",
-              value.get_type()
-            ))
-          }
+          value => Err(format!(
+            "No se puede usar '{}' para extender una clase",
+            value.get_type()
+          ))?,
         };
         let value = self.pop();
         value.as_class().read().set_parent(parent_class);
@@ -725,34 +722,30 @@ impl Thread {
           return Ok(InterpretResult::Continue);
         }
         if !object.is_object() {
-          return Err(format!(
+          Err(format!(
             "Se esperaba un objeto para asignar la propiedad '{}' [3]",
             key.as_string(self)
-          ));
+          ))?;
         }
         let key = if object.is_array() {
           if !key.is_number() {
-            return Err(format!(
+            Err(format!(
               "Se esperaba un indice de propiedad, pero se obtuvo '{}'",
               key.get_type()
-            ));
+            ))?;
           }
           let key = key.as_number()?;
           let index = match key {
             Number::Basic(n) => n,
             Number::Complex(_, _) => {
-              return Err(
-                "El indice no puede ser un valor complejo (asignar propiedad)".to_string(),
-              );
+              Err("El indice no puede ser un valor complejo (asignar propiedad)".to_string())?
             }
             Number::Infinity | Number::NaN | Number::NegativeInfinity => {
               Err("El indice no puede ser NaN o infinito (asignar propiedad)".to_string())?
             }
           };
           if index.is_negative() {
-            return Err(
-              "El indice debe ser un numero entero positivo (asignar propiedad)".to_string(),
-            );
+            Err("El indice debe ser un numero entero positivo (asignar propiedad)".to_string())?;
           }
           if index.is_int() {
             index.to_string()
@@ -766,11 +759,11 @@ impl Thread {
           Some(value) => value,
           None => {
             let type_name = object.get_type();
-            return Err(if type_name == crate::compiler::REF_TYPE {
+            Err(if type_name == crate::compiler::REF_TYPE {
               format!("Una referencia no puede ser modificada (asignar propiedad '{key}')",)
             } else {
               format!("No se pudo asignar la propiedad '{key}' a '{type_name}'",)
-            });
+            })?
           }
         }
       }
@@ -829,13 +822,11 @@ impl Thread {
             self.init(&value);
             value
           }
-          None => {
-            let type_name = object.get_type();
-            return Err(format!(
-              "No se pudo obtener la propiedad '{}' de '{}'",
-              key, type_name
-            ));
-          }
+          None => Err(format!(
+            "No se pudo obtener la propiedad '{}' de '{}'",
+            key,
+            object.get_type()
+          ))?,
         }
       }
       OpCode::Constant => self.read_constant(),
@@ -884,18 +875,16 @@ impl Thread {
       OpCode::VarDecl => {
         let name = self.read_string();
         let value = self.pop();
-        match self.declare(&name, value.clone(), false) {
-          None => return Err(format!("No se pudo declarar la variable '{name}'")),
-          _ => value,
-        }
+        self
+          .declare(&name, value.clone(), false)
+          .on_error(|_| format!("No se pudo declarar la variable '{name}'"))?
       }
       OpCode::ConstDecl => {
         let name = self.read_string();
         let value = self.pop();
-        match self.declare(&name, value.clone(), true) {
-          None => return Err(format!("No se pudo declarar la constante '{name}'")),
-          _ => value,
-        }
+        self
+          .declare(&name, value.clone(), true)
+          .on_error(|_| format!("No se pudo declarar la constante '{name}'"))?
       }
       OpCode::DelVar => {
         let name = self.read_string();
@@ -903,31 +892,26 @@ impl Thread {
         if !vars.read().has(&name) {
           Err(format!("No se pudo eliminar la variable '{name}'"))?
         }
-        let value = vars.write().remove(&name);
-        match value {
-          None => return Err(format!("No se pudo eliminar la variable '{name}'")),
-          Some(value) => value,
-        }
+        let x = vars
+          .write()
+          .remove(&name)
+          .on_error(|_| format!("No se pudo eliminar la variable '{name}'"))?;
+        x
       }
       OpCode::GetVar => {
         let name = self.read_string();
-        let value = {
-          let v = self.get(&name);
-          match v {
-            None => return Err(format!("No se pudo obtener la variable '{name}'")),
-            Some(value) => value,
-          }
-        };
+        let value = self
+          .get(&name)
+          .on_error(|_| format!("No se pudo obtener la variable '{name}'"))?;
         self.init(&value);
         value
       }
       OpCode::SetVar => {
         let name = self.read_string();
         let value = self.pop();
-        match self.assign(&name, value.clone()) {
-          None => return Err(format!("No se pudo re-asignar la variable '{name}'")),
-          _ => value,
-        }
+        self
+          .assign(&name, value.clone())
+          .on_error(|_| format!("No se pudo re-asignar la variable '{name}'"))?
       }
       OpCode::Pop => {
         self.pop();
@@ -945,9 +929,9 @@ impl Thread {
         if a.is_iterator() && b.is_iterator() {
           let a = a.as_strict_array(self)?;
           let b = b.as_strict_array(self)?;
-          self.push(Value::Object(Object::Array(MultiRefHash::new(
-            [a, b].concat(),
-          ))));
+          self.push(Value::Iterator(
+            Value::Object(Object::Array(MultiRefHash::new([a, b].concat()))).into(),
+          ));
           return Ok(InterpretResult::Continue);
         }
         if a.is_string() || b.is_string() {
@@ -956,21 +940,21 @@ impl Thread {
           self.push(Value::String(format!("{a}{b}")));
           return Ok(InterpretResult::Continue);
         }
-        return Err(format!(
+        Err(format!(
           "No se pudo operar '{} + {}'",
           a.get_type(),
           b.get_type()
-        ));
+        ))?
       }
       OpCode::Subtract => {
         let b = self.pop();
         let a = self.pop();
         if !a.is_number() || !b.is_number() {
-          return Err(format!(
+          Err(format!(
             "No se pudo operar '{} - {}'",
             a.get_type(),
             b.get_type()
-          ));
+          ))?;
         }
         let a = a.as_number()?;
         let b = b.as_number()?;
@@ -980,11 +964,11 @@ impl Thread {
         let b = self.pop();
         let a = self.pop();
         if !a.is_number() || !b.is_number() {
-          return Err(format!(
+          Err(format!(
             "No se pudo operar '{} * {}'",
             a.get_type(),
             b.get_type()
-          ));
+          ))?;
         }
         let a = a.as_number()?;
         let b = b.as_number()?;
@@ -994,11 +978,11 @@ impl Thread {
         let b = self.pop();
         let a = self.pop();
         if !a.is_number() || !b.is_number() {
-          return Err(format!(
+          Err(format!(
             "No se pudo operar '{} / {}'",
             a.get_type(),
             b.get_type()
-          ));
+          ))?;
         }
         let a = a.as_number()?;
         let b = b.as_number()?;
@@ -1008,11 +992,11 @@ impl Thread {
         let b = self.pop();
         let a = self.pop();
         if !a.is_number() || !b.is_number() {
-          return Err(format!(
+          Err(format!(
             "No se pudo operar '{} % {}'",
             a.get_type(),
             b.get_type()
-          ));
+          ))?;
         }
         let a = a.as_number()?;
         let b = b.as_number()?;
@@ -1097,11 +1081,11 @@ impl Thread {
         let b = self.pop();
         let a = self.pop();
         if !a.is_number() || !b.is_number() {
-          return Err(format!(
+          Err(format!(
             "No se pudo operar '{} > {}'",
             a.get_type(),
             b.get_type()
-          ));
+          ))?;
         }
         let a = a.as_number();
         let b = b.as_number();
@@ -1115,11 +1099,11 @@ impl Thread {
         let b = self.pop();
         let a = self.pop();
         if !a.is_number() || !b.is_number() {
-          return Err(format!(
+          Err(format!(
             "No se pudo operar '{} < {}'",
             a.get_type(),
             b.get_type()
-          ));
+          ))?;
         }
         let a = a.as_number();
         let b = b.as_number();
@@ -1130,7 +1114,7 @@ impl Thread {
         }
       }
       OpCode::Break | OpCode::Continue => Value::Null,
-      OpCode::Null => return Err(format!("Byte invalido {}", byte_instruction)),
+      OpCode::Null => Err(format!("Byte invalido {}", byte_instruction))?,
     };
     self.push(value);
     Ok(InterpretResult::Continue)

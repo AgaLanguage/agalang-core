@@ -21,7 +21,7 @@ pub struct VM {
 
 impl VM {
   pub fn new(compiler: Compiler) -> MultiRefHash<Self> {
-    //let compiler = {let mut compiler = compiler;compiler.function.chunk().print();compiler};
+    //let compiler = {let compiler = compiler;compiler.function.chunk().write()._print();compiler};
     let globals: MultiRefHash<VarsManager> = VarsManager::get_global().into();
 
     let module = ModuleThread::new(&compiler.path);
@@ -43,7 +43,7 @@ impl VM {
   pub fn get_process_manager(&self) -> MultiRefHash<process::ProcessManager> {
     self.process_manager.clone()
   }
-  pub fn run(&mut self) -> InterpretResult {
+  pub fn run(&self) -> InterpretResult {
     loop {
       let data = self.process_manager.read().run_instruction();
       match &data {
@@ -56,7 +56,7 @@ impl VM {
       return data;
     }
   }
-  pub fn interpret(&mut self) -> InterpretResult {
+  pub fn interpret(&self) -> InterpretResult {
     let result = self.run();
     let thread = self.process_manager.read().get_root_thread();
     match &result {

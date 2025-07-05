@@ -104,6 +104,12 @@ impl<T> MultiRefHash<Vec<T>> {
   pub fn is_empty(&self) -> bool {
     self.read().is_empty()
   }
+  pub fn map<V>(&self, cb: impl FnMut(&T) -> V) -> Vec<V> {
+    self.read().iter().map(cb).collect()
+  }
+  pub fn map_err<V,E>(&self, cb: impl FnMut(&T) -> Result<V,E>) -> Result<Vec<V>, E> {
+    self.read().iter().map(cb).collect()
+  }
 }
 impl<T> MultiRefHash<Vec<T>>
 where

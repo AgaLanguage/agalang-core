@@ -36,6 +36,9 @@ impl CallFrame {
       locals,
     }
   }
+  pub fn get_ip(&self) -> usize {
+    self.ip
+  }
   pub fn current_chunk(&self) -> MultiRefHash<crate::compiler::ChunkGroup> {
     self.function.write().chunk()
   }
@@ -49,7 +52,7 @@ impl CallFrame {
     self.current_chunk().read().get_line(instruction)
   }
   pub fn read(&mut self) -> u8 {
-    let byte = self.current_chunk().read().read(self.ip);
+    let byte = self.peek();
     self.ip += 1;
     byte
   }

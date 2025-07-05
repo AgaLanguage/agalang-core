@@ -1,5 +1,3 @@
-
-
 use crate::compiler::{Object, Value};
 use crate::functions_names::CONSOLE;
 use crate::interpreter::Thread;

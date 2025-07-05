@@ -1,5 +1,3 @@
-
-
 use crate::compiler::{ChunkGroup, Function, Number, Value};
 
 pub const LIB_NAME: &str = ":mate";
@@ -11,7 +9,7 @@ const MIN: &str = "min";
 const PI: &str = "PI";
 const EULER: &str = "E";
 const TAU: &str = "TAU";
-const IS_INFINITE: &str = "esInfinito";
+const IS_INFINITE: &str = "es_infinito";
 
 pub fn lib_value() -> Value {
   let hashmap = crate::compiler::Instance::new(format!("<{LIB_NAME}>"));

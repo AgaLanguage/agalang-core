@@ -1,4 +1,3 @@
-
 use std::net::TcpListener;
 use std::sync::Arc;
 
@@ -10,7 +9,7 @@ use crate::util::{OnError, OnSome};
 use crate::MultiRefHash;
 
 pub const LIB_NAME: &str = ":red";
-const TCP_SERVER: &str = "servidorTCP";
+const TCP_SERVER: &str = "ServidorTCP";
 const TCP_SERVER_PROMISE: &str = "promesa";
 
 const TCP_SOCKET: &str = "SocketTCP";
@@ -81,7 +80,7 @@ fn handle_client(
         func: |_, args, thread, stream| {
           let data = args
             .first()
-            .on_some_option(|t| t.as_strict_buffer(thread).ok())
+            .on_some_option(|t|t.as_strict_buffer(thread).ok())
             .on_error(|_| {
               format!("{TCP_SOCKET_WRITE}: Se esperaba un valor buffer como primer argumento")
             })?;

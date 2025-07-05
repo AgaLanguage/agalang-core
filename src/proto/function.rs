@@ -28,29 +28,7 @@ pub fn get_sub_module(
   }
 
   let mut hashmap = std::collections::HashMap::new();
-  hashmap.insert(
-    functions_names::TO_AGAL_STRING.into(),
-    complex::AgalClassProperty {
-      is_public: true,
-      is_static: true,
-      value: internal::AgalNativeFunction {
-        name: format!("{module_name}::{}", functions_names::TO_AGAL_STRING),
-        func: Arc::new(|arguments, stack, modules, this| {
-          arguments
-            .first()
-            .or_else(|| Some(&this))
-            .ok_or_else(|| internal::AgalThrow::Params {
-              type_error: parser::ErrorNames::TypeError,
-              message: "Se esperaba un argumento".to_string(),
-              stack: stack.clone(),
-            })?
-            .to_agal_string(stack, modules)?
-            .to_result()
-        }),
-      }
-      .to_ref_value(),
-    },
-  );
+
   hashmap.insert(
     FUNCTION_CALL.into(),
     complex::AgalClassProperty {

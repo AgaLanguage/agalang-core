@@ -1,5 +1,3 @@
-
-
 pub mod binary;
 mod chunk;
 mod value;
@@ -20,7 +18,16 @@ pub struct Compiler {
 impl Compiler {
   fn parse_function(function: &NodeFunction) -> Result<Function, String> {
     let mut compiler = Self {
-      function: function.into(),
+      function: Function::Value {
+        arity: function.params.len(),
+        chunk: ChunkGroup::new_ref(),
+        name: function.name.clone(),
+        is_async: function.is_async,
+        location: function.location.clone(),
+        scope: None.into(),
+        has_rest: false,
+        in_class: None.into(),
+      },
       path: function.location.file_name.clone(),
     };
     let mut has_rest = false;
@@ -185,10 +192,7 @@ impl Compiler {
         for (i, data) in node_string.value.clone().enumerate() {
           match data {
             crate::agal_parser::StringData::Str(val) => {
-              self.set_constant(
-                Value::String(val),
-                node_string.location.start.line,
-              );
+              self.set_constant(Value::String(val), node_string.location.start.line);
             }
             crate::agal_parser::StringData::Id(id) => {
               self.read_var(id, node_string.location.start.line);
@@ -421,7 +425,10 @@ impl Compiler {
             Node::Identifier(id) => id.name.as_str(),
             _ => return Err("Se esperaba un identificador como propiedad".to_string()),
           };
-          self.set_constant(Value::String(name.to_string()), node_member.location.start.line);
+          self.set_constant(
+            Value::String(name.to_string()),
+            node_member.location.start.line,
+          );
         };
         let is_instance = if node_member.instance {
           INSTANCE_MEMBER
@@ -611,7 +618,11 @@ impl Compiler {
       }
       Node::Try(node_try) => {
         let mut try_block = Self {
-          function: (&node_try.body).into(),
+          function: Function::Script {
+            chunk: ChunkGroup::new_ref(),
+            path: node_try.location.file_name.clone(),
+            scope: Default::default(),
+          },
           path: node_try.location.file_name.clone(),
         };
         if !node_try.body.is_empty() {
@@ -625,7 +636,11 @@ impl Compiler {
           node_try.location.start.line,
         );
         let mut catch_block = Self {
-          function: (&node_try.body).into(),
+          function: Function::Script {
+            chunk: ChunkGroup::new_ref(),
+            path: node_try.location.file_name.clone(),
+            scope: Default::default(),
+          },
           path: node_try.location.file_name.clone(),
         };
         match &node_try.catch {
@@ -657,7 +672,7 @@ impl Compiler {
       Node::Lazy(node_expression) => {
         let mut lazy_block = Self {
           function: Function::Script {
-            chunk: Default::default(),
+            chunk: ChunkGroup::new_ref(),
             path: node.get_file(),
             scope: None.into(),
           },
@@ -681,7 +696,7 @@ impl TryFrom<&Node> for Compiler {
 
   fn try_from(value: &Node) -> Result<Self, Self::Error> {
     let path = value.get_file();
-    let chunk = Default::default();
+    let chunk = ChunkGroup::new_ref();
     let function = Function::Script {
       chunk,
       path: path.clone(),

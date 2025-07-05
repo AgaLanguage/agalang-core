@@ -1,11 +1,10 @@
 use std::fmt::Display;
 
 use super::{Class, Value};
-use crate::agal_parser::NodeBlock;
 use crate::compiler::Promise;
 use crate::interpreter::VarsManager;
 use crate::util::{Color, Location, MutClone};
-use crate::{agal_parser::NodeFunction, compiler::ChunkGroup, Decode, MultiRefHash, StructTag};
+use crate::{compiler::ChunkGroup, Decode, MultiRefHash, StructTag};
 
 pub const FUNCTION_TYPE: &str = "funcion";
 pub const SCRIPT_TYPE: &str = "script";
@@ -189,29 +188,6 @@ impl Display for Function {
       }
       Self::Script { path, .. } => write!(f, "<script '{path}'>"),
       Self::Native { name, .. } => write!(f, "<nativo fn {name}>"),
-    }
-  }
-}
-impl From<&NodeFunction> for Function {
-  fn from(value: &NodeFunction) -> Self {
-    Self::Value {
-      arity: value.params.len(),
-      chunk: Default::default(),
-      name: value.name.clone(),
-      is_async: value.is_async,
-      location: value.location.clone(),
-      scope: None.into(),
-      has_rest: false,
-      in_class: None.into(),
-    }
-  }
-}
-impl From<&NodeBlock> for Function {
-  fn from(value: &NodeBlock) -> Self {
-    Self::Script {
-      chunk: Default::default(),
-      path: value.location.file_name.clone(),
-      scope: None.into(),
     }
   }
 }

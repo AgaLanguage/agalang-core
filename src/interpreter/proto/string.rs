@@ -1,5 +1,3 @@
-
-
 use crate::compiler::{ChunkGroup, Function, Object, Value};
 
 const REPLACE: &str = "reemplaza";
@@ -19,16 +17,16 @@ pub fn string_proto() -> Value {
         func: |this, args, thread, _| {
           let old = args.first();
           if old.is_none() {
-            return Err(format!(
+            Err(format!(
               "{REPLACE}: se esperaban 2 argumentos y se recibieron 0"
-            ));
+            ))?;
           }
           let old = old.unwrap().as_string(thread);
           let new = args.get(1);
           if new.is_none() {
-            return Err(format!(
+            Err(format!(
               "{REPLACE}: se esperaban 2 argumentos y se recibieron 1"
-            ));
+            ))?;
           }
           let new = new.unwrap().as_string(thread);
           let string = this.as_string(thread);
@@ -101,9 +99,9 @@ pub fn string_proto() -> Value {
         func: |this, args, thread, _| {
           let separator = args.first();
           if separator.is_none() {
-            return Err(format!(
+            Err(format!(
               "{SPLIT}: se esperaba 1 argumento y se recibieron 0"
-            ));
+            ))?;
           }
           let separator = separator.unwrap().as_string(thread);
           let string = this.as_string(thread);

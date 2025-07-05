@@ -1,4 +1,3 @@
-
 use std::fmt::Display;
 
 mod class;
@@ -15,7 +14,7 @@ pub use promise::{Promise, PromiseData, PROMISE_TYPE};
 use crate::interpreter::{Thread, VarsManager};
 use crate::util::{MutClone, OnError, Valuable};
 use crate::MultiRefHash;
-use crate::{ Decode, StructTag};
+use crate::{Decode, StructTag};
 
 pub const NULL_NAME: &str = "nulo";
 pub const NEVER_NAME: &str = "nada";
@@ -326,14 +325,15 @@ impl Value {
     match self {
       Self::Byte(b) => Ok(vec![*b]),
       Self::String(string) => Ok(string.as_bytes().to_vec()),
-      Self::Ref(RefValue(l)) => l
-        .read()
-        .as_strict_buffer(thread)
-        .or_else(|_| match self.as_strict_byte() {
-          Ok(byte) => Ok(vec![byte]),
-          Err(e) => Err(e),
-        })
-        .map_err(|_| format!("No se puede convertir a buffer: {}", self.get_type())),
+      Self::Ref(RefValue(l)) | Self::Iterator(l) => {
+        let buffer = l.read().as_strict_buffer(thread);
+        buffer
+          .or_else(|_| match self.as_strict_byte() {
+            Ok(byte) => Ok(vec![byte]),
+            Err(e) => Err(e),
+          })
+          .map_err(|_| format!("No se puede convertir a buffer: {}", self.get_type()))
+      }
       value => {
         let mut result = Vec::new();
 
@@ -480,7 +480,15 @@ impl From<bool> for Value {
 impl std::fmt::Debug for Value {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     if let Self::String(string) = self {
-      write!(f, "'{}'", string.replace("\n", "\\n").replace("\'", "\\\'"))
+      write!(
+        f,
+        "'{}'",
+        string
+          .replace("\t", "\\t")
+          .replace("\r", "\\r")
+          .replace("\n", "\\n")
+          .replace("\'", "\\\'")
+      )
     } else {
       write!(f, "{self}") // usa Display
     }

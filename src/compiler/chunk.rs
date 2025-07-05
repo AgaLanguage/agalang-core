@@ -1,4 +1,4 @@
-use crate::{compiler::ValueArray, Decode, Encode, StructTag};
+use crate::{compiler::ValueArray, Decode, Encode, MultiRefHash, StructTag};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum OpCode {
@@ -393,12 +393,13 @@ pub struct ChunkGroup {
   current: usize,
 }
 impl ChunkGroup {
-  pub fn new() -> Self {
+  pub fn new_ref() -> MultiRefHash<Self> {
     Self {
       chunks: vec![Chunk::new()],
       aggregate_len: vec![0],
       current: 0,
     }
+    .into()
   }
   fn resolve_index(&self, index: usize) -> usize {
     for (i, &agg_len) in self.aggregate_len.iter().enumerate() {
@@ -535,7 +536,11 @@ impl ChunkGroup {
 }
 impl Default for ChunkGroup {
   fn default() -> Self {
-    let mut group = Self::new();
+    let mut group = Self {
+      chunks: vec![Chunk::new()],
+      aggregate_len: vec![0],
+      current: 0,
+    };
     group.write_constant(super::Value::Never, 0);
     group.write(OpCode::Return as u8, 0);
     group
