@@ -428,7 +428,7 @@ impl Value {
       (Self::Object(o), key) => o.get_instance_property(key, thread),
       (Self::String(s), "longitud") => Some(Self::Number(s.len().into())),
       (value, key) => {
-        crate::interpreter::proto::proto(value.get_type().to_string(), proto_cache.clone())?
+        crate::interpreter::proto::proto(value.get_type(), proto_cache.clone())?
           .get_instance_property(key, thread)
       }
     }

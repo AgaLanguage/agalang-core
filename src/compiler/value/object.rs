@@ -85,7 +85,7 @@ impl Object {
           .cache
           .proto
           .clone();
-        crate::interpreter::proto::proto(value.get_type().to_string(), proto_cache.clone())?
+        crate::interpreter::proto::proto(value.get_type(), proto_cache.clone())?
           .get_instance_property(key, thread)
       }
     }
@@ -137,7 +137,7 @@ impl Display for Object {
       Self::Function(fun) => write!(f, "{}", fun.read()),
       Self::Map(_, i) => i
         .map(|t| write!(f, "<Instancia {}>", t.get_type()))
-        .unwrap_or(write!(f, "<objeto>")),
+        .unwrap_or_else(||write!(f, "<objeto>")),
       Self::Class(c) => {
         let has_parent = c.read().has_parent();
         let class = c.read().get_type().to_string();

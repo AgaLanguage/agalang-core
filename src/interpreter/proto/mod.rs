@@ -2,17 +2,20 @@ mod function;
 mod string;
 
 pub fn proto(
-  value_type: String,
+  value_type: &str,
   mut cache: super::cache::DataCache,
 ) -> Option<crate::compiler::Value> {
-  if cache.has(&value_type) {
-    return Some(cache.get(&value_type));
+  let string = value_type.to_string();
+  if cache.has(&string) {
+    return Some(cache.get(&string));
   }
-  let value = match value_type.as_str() {
-    crate::compiler::FUNCTION_TYPE => function::prototype(),
+  let value = match value_type {
+    crate::compiler::FUNCTION_TYPE | crate::compiler::NATIVE_FUNCTION_TYPE => function::prototype(),
     crate::compiler::STRING_TYPE => string::prototype(),
-    _ => return None,
+    _ => {
+      return None;
+    }
   };
-  cache.set(value_type, value.clone());
+  cache.set(string, value.clone());
   Some(value)
 }

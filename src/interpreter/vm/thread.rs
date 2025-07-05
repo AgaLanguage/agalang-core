@@ -4,6 +4,7 @@ use super::VM;
 use crate::compiler::{Function, LazyValue, Number, Object, OpCode, Promise, PromiseData, Value};
 use crate::functions_names::CONSTRUCTOR;
 use crate::interpreter::stack::{CallFrame, InterpretResult};
+use crate::interpreter::vm::process::ProcessManager;
 use crate::interpreter::VarsManager;
 use crate::{MultiRefHash, OnError};
 
@@ -344,6 +345,12 @@ impl AsyncThread {
   pub fn get_thread(&self) -> MultiRefHash<Thread> {
     self.thread.clone()
   }
+  pub fn get_vm(&self) -> MultiRefHash<VM> {
+    self.get_module().read().get_vm()
+  }
+  pub fn get_process_manager(&self) -> MultiRefHash<ProcessManager> {
+    self.get_vm().read().get_process_manager()
+  }
 }
 
 #[derive(Clone, Debug)]
@@ -428,10 +435,10 @@ impl Thread {
   fn reset_stack(&mut self) {
     self.stack.clear();
   }
-  fn push(&mut self, value: Value) {
+  pub fn push(&mut self, value: Value) {
     self.stack.push(value);
   }
-  fn pop(&mut self) -> Value {
+  pub fn pop(&mut self) -> Value {
     self.stack.pop()
   }
   fn init(&self, value: &Value) {
@@ -498,7 +505,11 @@ impl Thread {
       } => {
         let value = func(this, args, self, custom_data.clone());
         self.push(value?);
-        return Ok(InterpretResult::Continue);
+        return Ok(if self.call_stack.is_empty() {
+          InterpretResult::Ok
+        } else {
+          InterpretResult::Continue
+        });
       }
     };
     // En el caso de que la funcion no tenga un scope definido, se usa el scope actual (esto deberia de pasar)
@@ -601,6 +612,8 @@ impl Thread {
   fn simple_run_instruction(&mut self) -> Result<InterpretResult, String> {
     let byte_instruction = self.read();
     let instruction: OpCode = byte_instruction.into();
+
+    println!("{:?} | {:?}", instruction, self.stack.read());
 
     let value: Value = match instruction {
       OpCode::Throw => Err(self.pop().as_string(self))?,
