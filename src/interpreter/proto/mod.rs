@@ -1,5 +1,5 @@
-mod string;
 mod function;
+mod string;
 
 pub fn proto(
   value_type: String,

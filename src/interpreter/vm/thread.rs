@@ -66,12 +66,16 @@ impl ModuleThread {
             .to_string()
         }
         .replace("\\\\?\\", "");
-        let value = crate::interpreter::libs::libs(lib_name, self.get_vm().read().cache.libs.clone(), |path| {
-          let module = VM::resolve(self.get_vm(), path, thread.write().globals());
-          *self.async_thread.read().await_thread.write() = BlockingThread::Module(module.clone());
-          let x = module.read().clone().into_value();
-          x
-        });
+        let value = crate::interpreter::libs::libs(
+          lib_name,
+          self.get_vm().read().cache.libs.clone(),
+          |path| {
+            let module = VM::resolve(self.get_vm(), path, thread.write().globals());
+            *self.async_thread.read().await_thread.write() = BlockingThread::Module(module.clone());
+            let x = module.read().clone().into_value();
+            x
+          },
+        );
         if alias {
           let name = thread
             .read()

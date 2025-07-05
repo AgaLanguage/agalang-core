@@ -80,7 +80,7 @@ fn handle_client(
         func: |_, args, thread, stream| {
           let data = args
             .first()
-            .on_some_option(|t|t.as_strict_buffer(thread).ok())
+            .on_some_option(|t| t.as_strict_buffer(thread).ok())
             .on_error(|_| {
               format!("{TCP_SOCKET_WRITE}: Se esperaba un valor buffer como primer argumento")
             })?;

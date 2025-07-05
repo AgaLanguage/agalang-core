@@ -17,16 +17,17 @@ pub fn prototype() -> Value {
         path: "".to_string(),
         name: format!("{TYPE}::{CALL}"),
         func: |funtion, mut args, thread, _| {
-          let this = args.first().on_error(|_|format!(
-            "{CALL}: se esperaba minimo 1 argumento y se recibieron 0"
-          ))?.clone();
+          let this = args
+            .first()
+            .on_error(|_| format!("{CALL}: se esperaba minimo 1 argumento y se recibieron 0"))?
+            .clone();
           args.remove(0);
           let fun = match funtion {
             Value::Object(Object::Function(fun)) => fun,
             _ => unreachable!(),
           };
           thread.call_function(this, fun, args)?;
-          
+
           Ok(Value::Never)
         },
         chunk: ChunkGroup::default().into(),
