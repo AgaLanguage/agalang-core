@@ -3,4 +3,38 @@ importa ':red' como Red;
 importa ':consola' como Consola;
 importa ':constructores' como CONSTRUCTORES;
 
-Consola::pinta('Hola Mundo'::separa::llama('Adios Mundo', ' '));
+const ruta = SA::Ruta('./icon.ico');
+Consola::pinta(ruta, ruta::obtener_nombre());
+
+const img = SA::leer_archivo(ruta);
+const longitud = img::longitud;
+const img_header = (
+  'HTTP/1.1 200 OK\r\n' +
+  'Content-Type: image/ico\r\n' +
+  "Content-Length: {longitud}\r\n" +
+  '\r\n')::bytes();
+const img_response = CONSTRUCTORES::Lista(@img_header + @img);
+
+fn servidorHTTP(llamar, puerto) {
+  const servidor = Red::ServidorTCP("127.0.0.1:{puerto}", fn s(socket) {
+    def data = socket::lee();
+    def res = llamar(data);
+    socket::escribe(res);
+    socket::cierra();
+  });
+  csl << ('Servidor iniciado en el puerto ' + servidor::puerto + '\n');
+  ret servidor::promesa;
+}
+
+espera servidorHTTP(fn (req) {
+  const peticion_cruda = CONSTRUCTORES::Cadena(req);
+  const r = peticion_cruda::reemplaza('\r', '')::separa('\n');
+  def data = r[0];
+  def algo = r[4];
+  si data == 'GET /favicon.ico HTTP/1.1'
+    ret img_response;
+  'HTTP/1.1 200 OK\r\n' +
+  'Content-Type: text/html\r\n' +
+  '\r\n' +
+  '<h1 style="font-size: 20rem">Pagina 1</h1>';
+}, 80);

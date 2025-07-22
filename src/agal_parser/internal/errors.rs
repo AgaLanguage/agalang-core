@@ -60,5 +60,5 @@ pub fn show_multiple_errors(type_err: &ErrorNames, errors: Vec<ErrorTypes>) {
 }
 
 pub fn print_error(data: String) {
-  println!("{RED_ERROR} {}", data);
+  eprintln!("{RED_ERROR} {}", data);
 }

@@ -1,4 +1,7 @@
-use crate::{agal_parser, util};
+use crate::{
+  agal_parser,
+  util::{self, Location, Position},
+};
 
 fn is_alpha(c: char) -> bool {
   c.is_alphabetic() || c == '_' || c == '$' || c.is_numeric()
@@ -39,7 +42,21 @@ pub fn complex_string(
     }
     if is_id {
       if c == '}' {
-        result.push(super::StringData::Id(current.clone()));
+        result.push(super::StringData::Id(super::NodeIdentifier {
+          name: current.clone(),
+          location: Location {
+            start: Position {
+              column: token_string.location.start.column + i - current.len(),
+              line: token_string.location.start.line,
+            },
+            end: Position {
+              column: token_string.location.start.column + i,
+              line: token_string.location.start.line,
+            },
+            file_name: token_string.location.file_name.clone(),
+            length: current.len(),
+          },
+        }));
         current.clear();
         is_id = false;
         continue;

@@ -156,12 +156,12 @@ impl Node {
 
 impl NodeBlock {
   pub fn join(&self, separator: &str) -> String {
-    self.body.map(|node| node.to_string()).join(separator)
+    self.body.map_ref(|node| node.to_string()).join(separator)
   }
 }
 impl std::fmt::Display for NodeBlock {
   fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-    let str_body = self.body.map(|node| node.to_string()).join("\n");
+    let str_body = self.body.map_ref(|node| node.to_string()).join("\n");
     write!(f, "{}", data_format(str_body))
   }
 }
@@ -174,16 +174,16 @@ impl std::fmt::Display for Node {
       Node::Block(node, _) => node.body.to_string(),
       Node::Program(node) => format!("NodeProgram:\n{}", data_format(node.body.to_string())),
       Node::String(node) => {
-        let str_value = node.value.map(|data| match data {
+        let str_value = node.value.map_ref(|data| match data {
           StringData::Str(str) => format!("\"{}\"", str).replace("\n", "\\n"),
-          StringData::Id(id) => id.to_string(),
+          StringData::Id(id) => id.name.clone(),
         });
         format!("NodeString: {}", str_value)
       }
       Node::Number(node) => format!("NodeNumber: {} en base {}", node.value, node.base),
       Node::Object(node) => {
-        let str_properties = node.properties.map(|property| match property {
-          NodeProperty::Property(name, value) => format!("  {}:\n  {}", name, value),
+        let str_properties = node.properties.map_ref(|property| match property {
+          NodeProperty::Property(id, value) => format!("  {}:\n  {}", id.name, value),
           NodeProperty::Iterable(object) => {
             format!("  ...({})", object)
           }
@@ -196,8 +196,8 @@ impl std::fmt::Display for Node {
         )
       }
       Node::Array(node) => {
-        let str_elements = node.elements.map(|element| match element {
-          NodeProperty::Property(name, value) => format!("  {}:\n  {}", name, value),
+        let str_elements = node.elements.map_ref(|element| match element {
+          NodeProperty::Property(id, value) => format!("  {}:\n  {}", id.name, value),
           NodeProperty::Iterable(object) => {
             format!("  ...({})", object)
           }
@@ -218,10 +218,10 @@ impl std::fmt::Display for Node {
         match &node.value {
           Some(value) => format!(
             "NodeVarDecl: {keyword} {}\n{}",
-            node.name,
+            node.name.name,
             data_format(value.to_string())
           ),
-          None => format!("NodeVarDecl: {keyword} {}", node.name),
+          None => format!("NodeVarDecl: {keyword} {}", node.name.name),
         }
       }
       Node::Assignment(node) => format!(
@@ -231,7 +231,7 @@ impl std::fmt::Display for Node {
       ),
       Node::Name(node) => format!("NodeName: {}", node.name),
       Node::Class(node) => {
-        let str_body = node.body.map(|p| {
+        let str_body = node.body.map_ref(|p| {
           let is_static = p.meta & 1 << 0 != 0;
           let str_static = format!("static: {is_static}");
           let is_const = p.meta & 1 << 1 != 0;
@@ -239,12 +239,12 @@ impl std::fmt::Display for Node {
           let is_public = p.meta & 1 << 2 != 0;
           let str_public = format!("public: {is_public}");
           let str_info = format!("{str_static}\n{str_const}\n{str_public}");
-          let str_info = format!("{}:\n{}", p.name, data_format(str_info));
+          let str_info = format!("{}:\n{}", p.name.name, data_format(str_info));
           format!("{str_info}\n{}", data_format(p.value.to_string()))
         });
         format!(
           "NodeClass: {}\n{}",
-          node.name,
+          node.name.name,
           data_format(str_body.join("\n"))
         )
       }
@@ -272,11 +272,11 @@ impl std::fmt::Display for Node {
       Node::Function(node) => {
         let str_params = node
           .params
-          .map(|arg| format!("{}", Node::Identifier(arg.clone())))
+          .map_ref(|arg| format!("{}", Node::Identifier(arg.clone())))
           .join(", ");
         format!(
           "NodeFunction: {} ({})\n{}",
-          node.name,
+          node.name.name,
           str_params,
           data_format(node.body.join("\n"))
         )
@@ -294,7 +294,7 @@ impl std::fmt::Display for Node {
         )
       }
       Node::Import(node) => match &node.name {
-        Some(name) => format!("NodeImport: {} como {}", node.path, name),
+        Some(identifier) => format!("NodeImport: {} como {}", node.path, identifier.name),
         None => format!("NodeImport: {}", node.path),
       },
       Node::Export(node) | Node::Throw(node) => {
@@ -326,7 +326,7 @@ impl std::fmt::Display for Node {
       Node::Call(node) => {
         let str_arguments = node
           .arguments
-          .map(|argument| format!("  {}", argument))
+          .map_ref(|argument| format!("  {}", argument))
           .join("\n");
         format!(
           "NodeCall:\n{}\n  ({})",
@@ -347,7 +347,7 @@ impl std::fmt::Display for Node {
       ),
       Node::None => "NodeNone".to_string(),
       Node::Console(NodeConsole::Input { identifier, .. }) => {
-        format!("NodeConsole: Input ({})", identifier)
+        format!("NodeConsole: Input ({})", identifier.name)
       }
       Node::Console(NodeConsole::Output { value, .. }) => {
         format!("NodeConsole: Output\n{}", data_format(value.to_string()))
@@ -357,7 +357,7 @@ impl std::fmt::Display for Node {
       }) => format!(
         "NodeConsole: Output\n{}\nInput ({})",
         data_format(value.to_string()),
-        identifier
+        identifier.name
       ),
     };
     write!(f, "{}", str)
@@ -427,12 +427,12 @@ pub enum NodeConsole {
   },
   Input {
     location: util::Location,
-    identifier: String,
+    identifier: NodeIdentifier,
   },
   Full {
     value: BNode,
     location: util::Location,
-    identifier: String,
+    identifier: NodeIdentifier,
   },
 }
 #[derive(Clone, PartialEq, Debug, Eq, Hash)]
@@ -454,6 +454,12 @@ impl NodeBlock {
     let is_async = self.clone().is_async;
     Node::Block(self, is_async)
   }
+  pub fn to_node(&self) -> Node {
+    Node::Block(self.clone(), self.is_async)
+  }
+  pub fn iter(&self) -> std::slice::Iter<Node> {
+    self.body.iter()
+  }
 }
 impl IntoIterator for NodeBlock {
   type Item = Node;
@@ -471,7 +477,7 @@ pub struct NodeProgram {
 #[derive(Clone, PartialEq, Debug, Eq, Hash)]
 pub enum StringData {
   Str(String),
-  Id(String),
+  Id(NodeIdentifier),
 }
 #[derive(Clone, PartialEq, Debug, Eq, Hash)]
 pub struct NodeString {
@@ -491,7 +497,7 @@ pub struct NodeByte {
 }
 #[derive(Clone, PartialEq, Debug, Eq, Hash)]
 pub enum NodeProperty {
-  Property(String, Box<Node>),
+  Property(NodeIdentifier, Box<Node>),
   Dynamic(Box<Node>, Box<Node>),
   Iterable(Box<Node>),
   Indexable(Box<Node>),
@@ -508,7 +514,7 @@ pub struct NodeArray {
 }
 #[derive(Clone, PartialEq, Debug, Eq, Hash)]
 pub struct NodeVarDecl {
-  pub name: String,
+  pub name: NodeIdentifier,
   pub value: Option<BNode>,
   pub is_const: bool,
   pub location: util::Location,
@@ -671,7 +677,7 @@ pub struct NodeIf {
 #[derive(Clone, PartialEq, Debug, Eq, Hash)]
 pub struct NodeFunction {
   pub is_async: bool,
-  pub name: String,
+  pub name: NodeIdentifier,
   pub params: util::List<NodeIdentifier>,
   pub body: NodeBlock,
   pub location: util::Location,
@@ -700,7 +706,7 @@ pub struct NodeTry {
 }
 #[derive(Clone, PartialEq, Debug, Eq, Hash)]
 pub struct NodeClassProperty {
-  pub name: String,
+  pub name: NodeIdentifier,
   pub value: BNode,
   /** bits
   1: is_static
@@ -709,7 +715,7 @@ pub struct NodeClassProperty {
 }
 #[derive(Clone, PartialEq, Debug, Eq, Hash)]
 pub struct NodeClass {
-  pub name: String,
+  pub name: NodeIdentifier,
   pub extend_of: Option<NodeIdentifier>,
   pub body: util::List<NodeClassProperty>,
   pub location: util::Location,
@@ -718,7 +724,7 @@ pub struct NodeClass {
 pub struct NodeImport {
   pub path: String,
   pub is_lazy: bool,
-  pub name: Option<String>,
+  pub name: Option<NodeIdentifier>,
   pub location: util::Location,
 }
 #[derive(Clone, PartialEq, Debug, Eq, Hash)]

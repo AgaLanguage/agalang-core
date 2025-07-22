@@ -21,7 +21,7 @@ impl Compiler {
       function: Function::Value {
         arity: function.params.len(),
         chunk: ChunkGroup::new_ref(),
-        name: function.name.clone(),
+        name: function.name.name.clone(),
         is_async: function.is_async,
         location: function.location.clone(),
         scope: None.into(),
@@ -192,10 +192,10 @@ impl Compiler {
         for (i, data) in node_string.value.clone().enumerate() {
           match data {
             crate::agal_parser::StringData::Str(val) => {
-              self.set_constant(Value::String(val), node_string.location.start.line);
+              self.set_constant(Value::String(val.to_string()), node_string.location.start.line);
             }
-            crate::agal_parser::StringData::Id(id) => {
-              self.read_var(id, node_string.location.start.line);
+            crate::agal_parser::StringData::Id(value) => {
+              self.read_var(value.name.to_string(), value.location.start.line);
             }
           }
           if i != 0 {
@@ -228,7 +228,7 @@ impl Compiler {
           };
           OpCode::VarDecl as u8
         };
-        let name = self.set_value(Value::String(node_var_decl.name.clone()));
+        let name = self.set_value(Value::String(node_var_decl.name.name.clone()));
         self.write_buffer(vec![op, name], node_var_decl.location.start.line);
       }
       Node::Assignment(node_assignament) => {
@@ -331,7 +331,7 @@ impl Compiler {
         let function = Value::Object(Self::parse_function(node_function)?.into());
         self.set_constant(function.clone(), node_function.location.start.line);
 
-        let name = self.set_value(Value::String(node_function.name.clone()));
+        let name = self.set_value(Value::String(node_function.name.name.clone()));
         self.write_buffer(
           vec![OpCode::SetScope as u8, OpCode::ConstDecl as u8, name],
           node_function.location.start.line,
@@ -404,7 +404,7 @@ impl Compiler {
               );
             }
             crate::agal_parser::NodeProperty::Property(key, value) => {
-              self.set_constant(Value::String(key), node_object.location.start.line);
+              self.set_constant(Value::String(key.name), node_object.location.start.line);
               self.node_value_to_bytes(&value)?;
               self.write_buffer(
                 vec![OpCode::SetMember as u8, OBJECT_MEMBER, OpCode::Pop as u8],
@@ -475,8 +475,8 @@ impl Compiler {
           0b00
         };
         let meta_byte = lazy_bit | alias_bit;
-        let name_byte = if let Some(name) = &node_import.name {
-          self.set_value(Value::String(name.to_string()))
+        let name_byte = if let Some(identifier) = &node_import.name {
+          self.set_value(Value::String(identifier.name.to_string()))
         } else {
           0
         };
@@ -503,9 +503,9 @@ impl Compiler {
               f.location.start.line,
             );
 
-            let name = self.set_value(Value::String(f.name.clone()));
+            let name = self.set_value(Value::String(f.name.name.clone()));
             self.write_buffer(vec![OpCode::ConstDecl as u8, name], f.location.start.line);
-            &f.name
+            &f.name.name
           }
           Node::VarDecl(v) => {
             let op = if v.is_const {
@@ -532,9 +532,9 @@ impl Compiler {
               };
               OpCode::VarDecl as u8
             };
-            let name = self.set_value(Value::String(v.name.clone()));
+            let name = self.set_value(Value::String(v.name.name.clone()));
             self.write_buffer(vec![op, name], v.location.start.line);
-            &v.name
+            &v.name.name
           }
 
           _ => {
@@ -565,7 +565,7 @@ impl Compiler {
         );
       }
       Node::Class(node_class) => {
-        let class = Object::Class(Class::new(node_class.name.clone()));
+        let class = Object::Class(Class::new(node_class.name.name.clone()));
 
         for prop in &node_class.body {
           let is_static = prop.meta & 0b01 != 0;
@@ -580,7 +580,7 @@ impl Compiler {
           };
 
           self.set_constant(
-            Value::String(prop.name),
+            Value::String(prop.name.name),
             prop.value.get_location().start.line,
           );
           self.node_value_to_bytes(&prop.value)?;
@@ -606,7 +606,7 @@ impl Compiler {
           );
           self.write(OpCode::ExtendClass as u8, node_identifier.location.end.line);
         }
-        let name = self.set_value(Value::String(node_class.name.clone()));
+        let name = self.set_value(Value::String(node_class.name.name.clone()));
         self.write_buffer(
           vec![OpCode::ConstDecl as u8, name],
           node_class.location.start.line,

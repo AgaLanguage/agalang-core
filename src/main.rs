@@ -11,6 +11,7 @@ mod agal_parser;
 mod compiler;
 mod functions_names;
 mod interpreter;
+mod tokens;
 mod util;
 
 use crate::compiler::binary::{Decode, Encode, StructTag};
@@ -27,18 +28,48 @@ fn main() -> ExitCode {
     return ExitCode::SUCCESS;
   }
   if let Action::Unknown(action) = args.action {
-    println!("Acción '{action}' desconocida");
+    eprintln!("Acción '{action}' desconocida");
     return ExitCode::FAILURE;
   }
 
   let file_name = if args.file.is_empty() {
     let blue_usage = "\x1b[94m\x1b[1mUsage\x1b[39m:\x1b[0m";
-    println!("{} {} <filename>", blue_usage, args.binary);
+    eprintln!("{} {} <filename>", blue_usage, args.binary);
     return ExitCode::FAILURE;
   } else {
     args.file.clone()
   };
   let path = Path::new(&file_name);
+  if args.action == Action::SyntaxisTokens
+    && path
+      .extension()
+      .unwrap_or_default()
+      .to_str()
+      .unwrap_or_default()
+      == EXTENSION
+  {
+    let code = read_code(path).on_some_option(|file| {
+      agal_parser::Parser::new(&file, path.file_name().unwrap().to_str().unwrap())
+        .produce_ast()
+        .on_error(|e| {
+          if !e.message.is_empty() {
+            agal_parser::print_error(agal_parser::error_to_string(
+              &agal_parser::ErrorNames::SyntaxError,
+              agal_parser::node_error(&e, &file),
+            ));
+          }
+          ""
+        })
+        .ok()
+    });
+    return match code {
+      Some(node) => {
+        tokens::print_tokens(node);
+        ExitCode::SUCCESS
+      }
+      None => ExitCode::FAILURE,
+    };
+  }
   let (compiler, extension) = match compile(path) {
     Err(e) => {
       if !e.is_empty() {
@@ -135,10 +166,12 @@ fn compile(path: &Path) -> Result<(Compiler, &str), String> {
       let ast = agal_parser::Parser::new(&file, path.file_name().unwrap().to_str().unwrap())
         .produce_ast()
         .on_error(|e| {
-          agal_parser::print_error(agal_parser::error_to_string(
-            &agal_parser::ErrorNames::SyntaxError,
-            agal_parser::node_error(&e, &file),
-          ));
+          if !e.message.is_empty() {
+            agal_parser::print_error(agal_parser::error_to_string(
+              &agal_parser::ErrorNames::SyntaxError,
+              agal_parser::node_error(&e, &file),
+            ));
+          }
           ""
         })?;
       Ok(((&ast).try_into()?, EXTENSION))
@@ -187,6 +220,7 @@ enum Action {
   Compile,
   Run,
   Help,
+  SyntaxisTokens,
   Unknown(String),
 }
 impl Action {
@@ -200,6 +234,7 @@ impl From<String> for Action {
       "ejecutar" | "run" | "e" | "r" => Action::Run,
       "compilar" | "compile" | "c" => Action::Compile,
       "ayuda" | "help" | "a" | "h" => Action::Help,
+      "tokens" => Action::SyntaxisTokens,
       _ => Action::Unknown(value),
     }
   }
@@ -212,6 +247,13 @@ struct Arguments {
   _args: Vec<String>,
 }
 
+fn remove_first_and_last(s: &str) -> String {
+  let mut chars = s.chars();
+  chars.next();
+  chars.next_back();
+  chars.collect()
+}
+
 impl Arguments {
   fn init() -> Self {
     let mut cmd_args = std::env::args().skip(1).peekable(); // skip the binary name
@@ -222,12 +264,31 @@ impl Arguments {
     let mut file = String::new();
     let mut args = vec![];
 
+    let mut on_string_arg = false;
+    let mut string_arg = String::new();
+
     while let Some(arg) = cmd_args.next() {
       if !file.is_empty() {
         args.push(arg);
         continue;
       }
-      if arg.starts_with("--") {
+      if on_string_arg {
+        if string_arg.ends_with('"') {
+          on_string_arg = false;
+        }
+        string_arg.push_str(&arg);
+      }
+      let arg = if string_arg.is_empty() {
+        arg
+      } else {
+        let data = remove_first_and_last(&string_arg);
+        string_arg.clear();
+        data
+      };
+      if arg.starts_with('"') {
+        string_arg.push_str(&arg);
+        on_string_arg = true;
+      } else if arg.starts_with("--") {
         let key: FlagName = arg.trim_start_matches("--").to_string().into();
         let next = cmd_args.peek(); // peek
         if let Some(v) = next {
@@ -275,5 +336,63 @@ impl Arguments {
       Some(FlagValue::String(s)) => s,
       _ => "",
     }
+  }
+}
+
+pub trait ToJSON {
+  fn to_json(&self) -> String;
+}
+impl ToJSON for String {
+  fn to_json(&self) -> String {
+    format!("\"{}\"", self.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n")).replace('\r', "\\r").replace('\t', "\\t").replace('\0', "\\0")
+  }
+}
+impl<T> ToJSON for Option<T>
+where
+  T: ToJSON,
+{
+  fn to_json(&self) -> String {
+    match self {
+      None => "null".to_string(),
+      Some(t) => t.to_json(),
+    }
+  }
+}
+impl<T> ToJSON for Vec<T>
+where
+  T: ToJSON,
+{
+  fn to_json(&self) -> String {
+    let mut data = String::new();
+    data.push('[');
+    let mut is_first = true;
+    for item in self {
+      if !is_first {
+        data.push(',');
+      }
+      data.push_str(&item.to_json());
+      is_first = false;
+    }
+    data.push(']');
+    data
+  }
+}
+impl<K, T> ToJSON for HashMap<K,T> where T: ToJSON, K: ToString {
+  fn to_json(&self) -> String {
+    let mut json = String::new();
+    json.push('{');
+    let mut is_first = true;
+    for (key, value) in self.iter() {
+      if is_first {
+        is_first = false;
+      }else {
+        json.push(',');
+      }
+      json.push_str(&key.to_string().to_json());
+      json.push(':');
+      json.push_str(&value.to_json());
+    }
+    json.push('}');
+    json
   }
 }

@@ -2,10 +2,10 @@ use std::cmp::Ordering;
 
 use crate::{
   util::{OnError, OnSome},
-  Decode, Encode, StructTag,
+  Decode, Encode, StructTag, ToJSON,
 };
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash, Default)]
 pub struct Position {
   pub line: usize,
   pub column: usize,
@@ -54,6 +54,11 @@ impl Decode for Position {
       line: usize::decode(vec)?,
       column: usize::decode(vec)?,
     })
+  }
+}
+impl ToJSON for Position {
+  fn to_json(&self) -> String {
+    format!("{{\"line\":{},\"column\":{}}}", self.line, self.column)
   }
 }
 
@@ -115,6 +120,15 @@ impl Decode for Location {
     })
   }
 }
+impl ToJSON for Location {
+  fn to_json(&self) -> String {
+    format!(
+      "{{\"start\":{},\"end\":{}}}",
+      self.start.to_json(),
+      self.end.to_json()
+    )
+  }
+}
 
 #[derive(Clone, Debug)]
 pub struct Token<TokenKind> {
@@ -145,7 +159,7 @@ pub fn tokenize<TK>(
   input: &str,
   options: Vec<TokenOption<TK>>,
   file_name: &str,
-) -> Result<Vec<Token<TK>>, Box<dyn std::error::Error>> {
+) -> Result<Vec<Token<TK>>, (String, Location)> {
   let lines = input.lines();
   let mut tokens = Vec::new();
   for (line_number, line) in lines.enumerate() {
@@ -217,7 +231,21 @@ pub fn tokenize<TK>(
       if let Some(token) = token {
         tokens.push(token);
       } else {
-        Err(format!("'{}'", c).to_string())?
+        Err((
+          format!("Caracter invalido: '{c}'"),
+          Location {
+            start: Position {
+              line: line_number,
+              column,
+            },
+            end: Position {
+              line: line_number,
+              column: column + 1,
+            },
+            length: 1,
+            file_name: file_name.to_string(),
+          },
+        ))?
       }
       column += 1;
     }

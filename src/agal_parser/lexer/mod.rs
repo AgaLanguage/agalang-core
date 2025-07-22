@@ -5,9 +5,12 @@ use token_number::token_number;
 mod token_string;
 use token_string::token_string;
 mod token_identifier;
-use crate::util;
+use crate::{
+  agal_parser::show_multiple_errors,
+  util::{self, Token},
+};
 
-use super::internal::{show_error, show_multiple_errors, ErrorNames, ErrorTypes};
+use super::internal::ErrorTypes;
 use token_identifier::token_identifier;
 
 const NUMBERS: &str = "0123456789";
@@ -33,7 +36,6 @@ fn token_error(token: &util::Token<TokenType>, source: &str) -> ErrorTypes {
     .collect::<String>();
 
   let line = token.location.start.line + 1;
-  let column_token = token.location.start.column + 1;
   let column = token.location.end.column;
   let str_line = line.to_string();
   let str_init = " ".repeat(str_line.len());
@@ -42,7 +44,7 @@ fn token_error(token: &util::Token<TokenType>, source: &str) -> ErrorTypes {
   let cyan_arrow = COLOR.apply("-->");
 
   let indicator = if !token_value.is_empty() {
-    format!("{}^", "-".repeat(token_value.len()))
+    format!("{}^", "-".repeat(token.location.length))
   } else {
     "^".to_string()
   };
@@ -57,7 +59,7 @@ fn token_error(token: &util::Token<TokenType>, source: &str) -> ErrorTypes {
     format!(
       "{} {cyan_line} {}{}",
       str_init,
-      " ".repeat(column_token - 1),
+      " ".repeat(token.location.start.column),
       COLOR.apply(&indicator)
     ),
     format!("{} {cyan_line}", str_init),
@@ -90,7 +92,7 @@ fn comment(
   (token, length + 1)
 }
 
-pub fn tokenizer(source: &str, file_name: &str) -> Vec<util::Token<TokenType>> {
+pub fn tokenizer(source: &str, file_name: &str) -> (Vec<util::Token<TokenType>>, bool) {
   let tokens = util::tokenize::<TokenType>(
     source,
     vec![
@@ -127,11 +129,13 @@ pub fn tokenizer(source: &str, file_name: &str) -> Vec<util::Token<TokenType>> {
   );
   let tokens = match tokens {
     Ok(mut t) => {
-      let end_token = t.last().unwrap();
-      let pos = util::Position {
-        line: end_token.location.end.line,
-        column: end_token.location.end.column + 1,
-      };
+      let pos = t.last().map_or_else(
+        || Default::default(),
+        |end_token| util::Position {
+          line: end_token.location.end.line,
+          column: end_token.location.end.column + 1,
+        },
+      );
       t.push(util::Token {
         token_type: TokenType::EndOfFile,
         location: util::Location {
@@ -145,9 +149,12 @@ pub fn tokenizer(source: &str, file_name: &str) -> Vec<util::Token<TokenType>> {
       t.retain(|x| x.token_type != TokenType::None);
       t
     }
-    Err(e) => {
-      show_error(&ErrorNames::LexerError, ErrorTypes::Error(e));
-      return Vec::new();
+    Err((value, location)) => {
+      vec![Token {
+        location,
+        value,
+        token_type: TokenType::Error,
+      }]
     }
   };
   let errors = tokens
@@ -156,8 +163,8 @@ pub fn tokenizer(source: &str, file_name: &str) -> Vec<util::Token<TokenType>> {
     .map(|x| token_error(x, source))
     .collect::<Vec<ErrorTypes>>();
   if !errors.is_empty() {
-    show_multiple_errors(&ErrorNames::LexerError, errors);
-    return Vec::new();
+    show_multiple_errors(&crate::agal_parser::ErrorNames::LexerError, errors);
+    return (vec![], true);
   }
-  tokens
+  (tokens, false)
 }

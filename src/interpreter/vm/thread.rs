@@ -613,8 +613,6 @@ impl Thread {
     let byte_instruction = self.read();
     let instruction: OpCode = byte_instruction.into();
 
-    println!("{:?} | {:?}", instruction, self.stack.read());
-
     let value: Value = match instruction {
       OpCode::Throw => Err(self.pop().as_string(self))?,
       OpCode::Try => {

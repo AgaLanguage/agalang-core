@@ -13,12 +13,20 @@ impl<Item> List<Item> {
   pub fn push(&mut self, item: Item) {
     self.0.push(item);
   }
-  pub fn map<R, F>(&self, f: F) -> List<R>
+  pub fn map_ref<R, F>(&self, f: F) -> List<R>
   where
     F: FnMut(&Item) -> R,
     R: Clone,
   {
     List(self.0.iter().map(f).collect())
+  }
+  
+  pub fn map<R, F>(self, f: F) -> List<R>
+  where
+    F: FnMut(Item) -> R,
+    R: Clone,
+  {
+    List(self.0.into_iter().map(f).collect())
   }
   pub fn len(&self) -> usize {
     self.0.len()
@@ -41,13 +49,23 @@ impl<Item> List<Item> {
   pub unsafe fn get_unchecked_mut(&mut self, index: usize) -> &mut Item {
     self.0.get_unchecked_mut(index)
   }
-  pub fn enumerate(self) -> std::iter::Enumerate<std::vec::IntoIter<Item>> {
-    self.into_iter().enumerate()
+  pub fn enumerate(&self) -> List<(usize, &Item)> {
+    List(self.0.iter().enumerate().collect())
+  }
+  pub fn collect<B>(self) -> B
+  where
+    B: FromIterator<Item>,
+    Self: Sized,
+  {
+    self.0.into_iter().collect()
+  }
+  pub fn iter(&self) -> std::slice::Iter<Item> {
+    self.0.iter()
   }
 }
 impl<Item: std::fmt::Display> List<Item> {
   pub fn join(&self, sep: &str) -> String {
-    self.map(|item| item.to_string()).0.join(sep)
+    self.map_ref(|item| item.to_string()).0.join(sep)
   }
 }
 impl<Item: Clone> Clone for List<Item> {

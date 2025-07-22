@@ -1,5 +1,3 @@
-importa ':mate' como Mate;
-
 fn ordenar(lista) {
   def fin_c = lista::longitud;
   si fin_c <= 1 {

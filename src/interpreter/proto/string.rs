@@ -51,7 +51,7 @@ pub fn prototype() -> Value {
         func: |this, args, thread, _| {
           let count = match args.first() {
             None => Err(format!(
-              "{REPEAT}: se esperaban 2 argumentos y se recibieron 0"
+              "{REPEAT}: se esperaba 1 argumento y se recibieron 0"
             )),
             Some(count) => count.as_number()?.floor().into(),
           }?;

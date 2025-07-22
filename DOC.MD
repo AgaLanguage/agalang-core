@@ -6,7 +6,6 @@
 - `+(value)` convierte el valor a número.
 - `-(value)` convierte el valor a número negativo.
 - `~(value)` convierte el valor a número entero.
-- `(value)?` si el valor es un error (lanzado), se convierte en nulo. Ejemplo: `1/{}?` es nulo.
 - `(value1) && (value2)` retorna el primer valor falso o el último verdadero.
 - `(value1) || (value2)` retorna el primer valor verdadero o el último falso.
 - `(value1) ?? (value2)` si `value1` es nulo, retorna `value2`.

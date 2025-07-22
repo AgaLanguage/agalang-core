@@ -2,7 +2,9 @@ pub mod ast;
 pub mod string;
 pub use ast::*;
 
-use crate::util;
+use crate::{
+  util::{self, Location},
+};
 
 use super::KeywordsType;
 
@@ -40,8 +42,7 @@ pub fn node_error(error: &ast::NodeError, source: &str) -> super::ErrorTypes {
   .unwrap();
   let lines = binding.lines().collect::<Vec<&str>>();
   let data_line = *lines.first().unwrap_or(&"");
-  let node_value_len = error.location.end.column - error.location.start.column;
-  let column = column_node + node_value_len;
+  let node_value_len = error.location.length;
 
   let str_line = line.to_string();
   let str_init = " ".repeat(str_line.len());
@@ -59,7 +60,7 @@ pub fn node_error(error: &ast::NodeError, source: &str) -> super::ErrorTypes {
     message.to_string(),
     format!(
       "{}{cyan_arrow} {}:{}:{}",
-      str_init, error.location.file_name, line, column
+      str_init, error.location.file_name, line, column_node
     ),
     format!("{} {cyan_line}", str_init),
     format!("{} {cyan_line} {}", COLOR.apply(&str_line), data_line),
@@ -79,13 +80,15 @@ pub struct Parser {
   tokens: Vec<util::Token<super::TokenType>>,
   index: usize,
   file_name: String,
+  token_error: bool,
 }
 impl Parser {
   pub fn new(source: &str, file_name: &str) -> Parser {
-    let tokens = super::tokenizer(source, file_name);
+    let (tokens, token_error) = super::tokenizer(source, file_name);
     Parser {
-      source: source.to_string(),
       tokens,
+      token_error,
+      source: source.to_string(),
       index: 0,
       file_name: file_name.to_string(),
     }
@@ -94,7 +97,11 @@ impl Parser {
     self.index >= self.tokens.len()
   }
   fn prev(&self) -> util::Token<super::TokenType> {
-    let token = self.tokens.get(self.index - 1);
+    let token = if self.index > 0 {
+      self.tokens.get(self.index - 1)
+    } else {
+      None
+    };
     if token.is_none() {
       return util::Token::<super::TokenType> {
         token_type: super::TokenType::Error,
@@ -207,6 +214,17 @@ impl Parser {
     }
   }
   pub fn produce_ast(&mut self) -> Result<ast::Node, NodeError> {
+    if self.token_error {
+      Err(NodeError {
+        message: "".to_string(),
+        location: Location {
+          start: Default::default(),
+          end: Default::default(),
+          length: Default::default(),
+          file_name: self.file_name.clone(),
+        },
+      })?
+    }
     let body = self.parse_block(true, false, false, true, super::TokenType::EndOfFile)?;
     let location = body.clone().location;
     ast::Node::Program(ast::NodeProgram { body, location }).into()
@@ -280,8 +298,8 @@ impl Parser {
         }
         super::KeywordsType::Delete => {
           self.eat();
-          if self.match_token(super::TokenType::Identifier) {
-            let name = self.prev().value;
+          if self.check_token(super::TokenType::Identifier) {
+            let name = self.eat().value;
             self.expect(
               super::TokenType::Punctuation(super::PunctuationType::SemiColon),
               &format!(
@@ -343,7 +361,10 @@ impl Parser {
         is_lazy = true;
       }
       let alias = self.expect(super::TokenType::Identifier, "Se esperaba un identificador")?;
-      name = Some(alias.value.clone());
+      name = Some(NodeIdentifier {
+        name: alias.value,
+        location: alias.location,
+      });
     }
     self.expect(
       super::TokenType::Punctuation(super::PunctuationType::SemiColon),
@@ -409,7 +430,7 @@ impl Parser {
     }
   }
   fn parse_name_decl(&mut self) -> Result<ast::Node, NodeError> {
-    let token = self.eat(); // nombre
+    self.eat(); // nombre
     let name = self.expect(super::TokenType::Identifier, "Se esperaba un identificador")?;
     self.expect(
       super::TokenType::Punctuation(super::PunctuationType::SemiColon),
@@ -420,7 +441,7 @@ impl Parser {
     )?;
     ast::Node::Name(ast::NodeIdentifier {
       name: name.value.clone(),
-      location: token.location,
+      location: name.location,
     })
     .into()
   }
@@ -437,6 +458,10 @@ impl Parser {
       false
     };
     let name = self.expect(super::TokenType::Identifier, "Se esperaba un identificador")?;
+    let identifier = NodeIdentifier {
+      name: name.value,
+      location: name.location,
+    };
     let token = self.at();
     if token.token_type == super::TokenType::Error {
       self.eat();
@@ -455,7 +480,7 @@ impl Parser {
       let body = self.parse_block_expr(true, false, is_async)?;
       ast::Node::Function(ast::NodeFunction {
         is_async,
-        name: name.value.clone(),
+        name: identifier.clone(),
         params,
         body,
         location: token.location,
@@ -471,10 +496,10 @@ impl Parser {
     };
     self.expect(
       super::TokenType::Punctuation(super::PunctuationType::SemiColon),
-      &format!("Se esperaba un punto y coma ({})", name.value),
+      &format!("Se esperaba un punto y coma ({})", identifier.name.clone()),
     )?;
     Ok(ast::NodeClassProperty {
-      name: name.value.clone(),
+      name: identifier,
       value: value.into_box(),
       meta,
     })
@@ -515,7 +540,10 @@ impl Parser {
       body.push(prop);
     }
     ast::Node::Class(ast::NodeClass {
-      name: name.value.clone(),
+      name: NodeIdentifier {
+        name: name.value,
+        location: name.location,
+      },
       extend_of,
       body,
       location: token.location,
@@ -676,11 +704,13 @@ impl Parser {
           })
           .into()
         } else if operator == ast::NodeOperator::BitMoveRight {
-          let identifier =
-            self.expect(super::TokenType::Identifier, "Se esperaba un identificador")?;
+          let name = self.expect(super::TokenType::Identifier, "Se esperaba un identificador")?;
           ast::Node::Console(ast::NodeConsole::Input {
             location: token.location,
-            identifier: identifier.value,
+            identifier: NodeIdentifier {
+              name: name.value,
+              location: name.location,
+            },
           })
           .into()
         } else {
@@ -792,14 +822,28 @@ impl Parser {
     let token = self.eat(); // fn
     let name = if is_expr {
       if self.check_token(super::TokenType::Identifier) {
-        self.prev().value
+        let name = self.eat();
+        NodeIdentifier {
+          name: name.value,
+          location: name.location,
+        }
       } else {
-        "".to_string()
+        NodeIdentifier {
+          name: "".to_string(),
+          location: Location {
+            end: Default::default(),
+            start: Default::default(),
+            length: 0,
+            file_name: token.location.file_name.clone(),
+          },
+        }
       }
     } else {
-      self
-        .expect(super::TokenType::Identifier, "Se esperaba un identificador")?
-        .value
+      let name = self.expect(super::TokenType::Identifier, "Se esperaba un identificador")?;
+      NodeIdentifier {
+        name: name.value,
+        location: name.location,
+      }
     };
     let params = self.parse_arguments_expr()?;
     let body = self.parse_block_expr(true, false, is_async)?;
@@ -825,11 +869,16 @@ impl Parser {
     {
       let param = if let super::TokenType::Operator(super::OperatorType::At) = self.at().token_type
       {
-        self.eat(); // @
+        let at_char = self.eat(); // @
         let param = self.expect(super::TokenType::Identifier, "Se esperaba un identificador")?;
         ast::NodeIdentifier {
           name: format!("@{}", param.value),
-          location: param.location,
+          location: Location{
+            start: at_char.location.start.clone(),
+            end: param.location.end.clone(),
+            length: at_char.location.length + param.location.length,
+            file_name: at_char.location.file_name.clone(),
+          },
         }
       } else {
         let param = self.expect(super::TokenType::Identifier, "Se esperaba un identificador")?;
@@ -1044,7 +1093,10 @@ impl Parser {
       == super::TokenType::Punctuation(super::PunctuationType::SemiColon)
     {
       return ast::Node::VarDecl(ast::NodeVarDecl {
-        name: identifier.value.clone(),
+        name: NodeIdentifier {
+          name: identifier.value,
+          location: identifier.location.clone(),
+        },
         value: None,
         is_const,
         location: identifier.location,
@@ -1081,7 +1133,10 @@ impl Parser {
     };
     semi_token.location.start.column += 1;
     ast::Node::VarDecl(ast::NodeVarDecl {
-      name: identifier.value.clone(),
+      name: NodeIdentifier {
+        name: identifier.value,
+        location: identifier.location.clone(),
+      },
       value: Some(value.into_box()),
       is_const,
       location: token.location,
@@ -1653,7 +1708,14 @@ impl Parser {
         if self.match_token(super::TokenType::Operator(super::OperatorType::GreaterThan)) {
           if self.match_join_token(super::TokenType::Operator(super::OperatorType::GreaterThan)) {
             if self.match_token(super::TokenType::Identifier) {
-              (left.into(), Some(self.prev().value))
+              let name = self.prev();
+              (
+                left.into(),
+                Some(NodeIdentifier {
+                  name: name.value,
+                  location: name.location.clone(),
+                }),
+              )
             } else {
               let token = self.eat();
 
@@ -1939,7 +2001,7 @@ impl Parser {
         | super::OperatorType::At,
       ) => {
         self.eat();
-        let operand = self.parse_literal_expr(message)?.into_box();
+        let operand = self.parse_literal_member_expr()?.into_box();
         let operator = if let super::TokenType::Operator(op) = token.token_type {
           op
         } else {
@@ -2030,7 +2092,10 @@ impl Parser {
     let token = self.eat();
     match token.token_type {
       super::TokenType::StringLiteral => {
-        let key = token.value;
+        let key = ast::NodeIdentifier {
+          name: token.value,
+          location: token.location,
+        };
         self.expect(
           super::TokenType::Punctuation(super::PunctuationType::DoubleDot),
           "Se esperaba dos puntos",
@@ -2039,7 +2104,10 @@ impl Parser {
         Ok(ast::NodeProperty::Property(key, value.into_box()))
       }
       super::TokenType::Identifier | super::TokenType::Keyword(_) => {
-        let key = &token.value;
+        let key = ast::NodeIdentifier {
+          name: token.value,
+          location: token.location,
+        };
         let colon = self.eat();
         if colon.token_type == super::TokenType::Error {
           return Err(ast::NodeError {
@@ -2055,11 +2123,7 @@ impl Parser {
           self.index -= 1;
           return Ok(ast::NodeProperty::Property(
             key.clone(),
-            ast::Node::Identifier(ast::NodeIdentifier {
-              name: token.value,
-              location: token.location,
-            })
-            .into_box(),
+            ast::Node::Identifier(key).into_box(),
           ));
         }
         if colon.token_type != super::TokenType::Punctuation(super::PunctuationType::DoubleDot) {
