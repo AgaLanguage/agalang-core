@@ -129,13 +129,12 @@ pub fn tokenizer(source: &str, file_name: &str) -> (Vec<util::Token<TokenType>>,
   );
   let tokens = match tokens {
     Ok(mut t) => {
-      let pos = t.last().map_or_else(
-        || Default::default(),
-        |end_token| util::Position {
+      let pos = t
+        .last()
+        .map_or_else(Default::default, |end_token| util::Position {
           line: end_token.location.end.line,
           column: end_token.location.end.column + 1,
-        },
-      );
+        });
       t.push(util::Token {
         token_type: TokenType::EndOfFile,
         location: util::Location {

@@ -457,7 +457,7 @@ impl NodeBlock {
   pub fn to_node(&self) -> Node {
     Node::Block(self.clone(), self.is_async)
   }
-  pub fn iter(&self) -> std::slice::Iter<Node> {
+  pub fn iter(&'_ self) -> std::slice::Iter<'_, Node> {
     self.body.iter()
   }
 }

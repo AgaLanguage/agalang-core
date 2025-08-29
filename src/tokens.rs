@@ -10,13 +10,13 @@ use std::{
 };
 
 trait Resolvable {
-  fn resolve(self, tokens: &Vec<SyntaxTokenData>) -> Self;
+  fn resolve(self, tokens: &[SyntaxTokenData]) -> Self;
 }
 impl<T> Resolvable for Vec<T>
 where
   T: Resolvable,
 {
-  fn resolve(self, tokens: &Vec<SyntaxTokenData>) -> Self {
+  fn resolve(self, tokens: &[SyntaxTokenData]) -> Self {
     self.into_iter().map(|v| v.resolve(tokens)).collect()
   }
 }
@@ -72,7 +72,7 @@ impl ToJSON for SyntaxTokenData {
   }
 }
 impl Resolvable for SyntaxTokenData {
-  fn resolve(self, tokens: &Vec<SyntaxTokenData>) -> Self {
+  fn resolve(self, tokens: &[SyntaxTokenData]) -> Self {
     let data_type = self.data_type.resolve(tokens);
     Self {
       definition: self.definition,
@@ -279,7 +279,7 @@ impl DataType {
         for data in vec {
           set.insert(data);
         }
-        let mut vec = set.drain().into_iter().collect::<Vec<_>>();
+        let mut vec = set.drain().collect::<Vec<_>>();
         if vec.len() <= 1 {
           vec.pop().unwrap_or_default()
         } else {
@@ -293,12 +293,11 @@ impl DataType {
     match self {
       Self::Multiple(vals) => {
         let mut unique: HashSet<DataType> = vals
-          .into_iter()
-          .map(|d| match d {
-            Self::Multiple(inner) => inner.into_iter().map(|d| d.simplify()).collect(),
+          .iter()
+          .flat_map(|d| match d {
+            Self::Multiple(inner) => inner.iter().map(|d| d.simplify()).collect(),
             _ => vec![d.simplify()],
           })
-          .flatten()
           .collect();
         let mut unique_vec: Vec<DataType> = unique.drain().collect();
         if unique_vec.len() <= 1 {
@@ -337,7 +336,7 @@ impl DataType {
           (Self::Instance { props, .. } | Self::Class { props, .. }, Self::StringLiteral(prop)) => {
             props.get(prop).cloned()
           }
-          (val, Self::StringLiteral(prop)) => proto_types(&val).get(prop.as_str()).cloned(),
+          (val, Self::StringLiteral(prop)) => proto_types(val).get(prop.as_str()).cloned(),
           _ => None,
         }
         .unwrap_or_else(|| Self::Member {
@@ -357,7 +356,7 @@ impl DataType {
   fn infer(&self, params: &Vec<(&Self, Self)>) -> Self {
     match self {
       Self::Multiple(values) => {
-        Self::Multiple(values.into_iter().map(|v| v.infer(params)).collect()).into_no_repeat()
+        Self::Multiple(values.iter().map(|v| v.infer(params)).collect()).into_no_repeat()
       }
       Self::Param(_, _) | Self::Params(_) => {
         for (param, data_type) in params {
@@ -371,14 +370,14 @@ impl DataType {
         params: values,
         ret,
       } => Self::Fn {
-        params: values.into_iter().map(|v| v.infer(params)).collect(),
+        params: values.iter().map(|v| v.infer(params)).collect(),
         ret: Box::new(ret.infer(params).into_no_ret()),
       },
       Self::ConstructorFn {
         params: values,
         ret,
       } => Self::ConstructorFn {
-        params: values.into_iter().map(|v| v.infer(params)).collect(),
+        params: values.iter().map(|v| v.infer(params)).collect(),
         ret: Box::new(ret.infer(params).into_no_ret()),
       },
       Self::List(val) => Self::List(Box::new(val.infer(params))),
@@ -629,7 +628,7 @@ impl ToJSON for DataType {
   }
 }
 impl Resolvable for DataType {
-  fn resolve(self, tokens: &Vec<SyntaxTokenData>) -> Self {
+  fn resolve(self, tokens: &[SyntaxTokenData]) -> Self {
     match self.simplify() {
       Self::Identifier(location) => tokens
         .iter()
@@ -677,7 +676,7 @@ impl Resolvable for DataType {
             .map(|(k, v)| (k, v.resolve(tokens)))
             .collect(),
         ),
-        name: name,
+        name,
       },
       Self::Instance { props, name } => Self::Instance {
         props: RefHash::new(
@@ -688,7 +687,7 @@ impl Resolvable for DataType {
             .map(|(k, v)| (k, v.resolve(tokens)))
             .collect(),
         ),
-        name: name,
+        name,
       },
       Self::Reference(data_type) => Self::Reference(Box::new(data_type.resolve(tokens))),
       Self::Iterable(data_type) => Self::Iterable(Box::new(data_type.resolve(tokens))),
@@ -750,9 +749,8 @@ fn type_scope(locals: &Rc<Scope>, node: Option<&Node>) -> DataType {
           }
           crate::agal_parser::NodeProperty::Indexable(value)
           | crate::agal_parser::NodeProperty::Iterable(value) => {
-            match type_scope(locals, Some(&value)) {
-              List(value) => data_types.push(*value),
-              _ => {}
+            if let List(value) = type_scope(locals, Some(&value)) {
+              data_types.push(*value)
             }
           }
         }
@@ -769,9 +767,8 @@ fn type_scope(locals: &Rc<Scope>, node: Option<&Node>) -> DataType {
             data_types.push(type_scope(locals, Some(&value)))
           }
           crate::agal_parser::NodeProperty::Iterable(value) => {
-            match type_scope(locals, Some(&value)) {
-              List(value) => data_types.push(*value),
-              _ => {}
+            if let List(value) = type_scope(locals, Some(&value)) {
+              data_types.push(*value)
             }
           }
         }
@@ -933,7 +930,7 @@ fn type_scope(locals: &Rc<Scope>, node: Option<&Node>) -> DataType {
     Node::Call(node_call) => type_scope(locals, Some(&node_call.callee)).on_call(
       node_call
         .arguments
-        .map_ref(|n| type_scope(locals, Some(&n)))
+        .map_ref(|n| type_scope(locals, Some(n)))
         .into_iter()
         .collect(),
     ),
@@ -999,7 +996,7 @@ fn node_callback(
 
       (tokens, nodes)
     }
-    (node, _) => node_scope(locals, &node),
+    (node, _) => node_scope(locals, node),
   }
 }
 
@@ -1009,7 +1006,7 @@ fn node_scope(locals: &Rc<Scope>, node: &Node) -> (Vec<SyntaxTokenData>, Vec<(Rc
   match node {
     Node::Program(node_program) => {
       for node in node_program.body.iter() {
-        let (scope_tokens, scope_nodes) = node_scope(locals, &node);
+        let (scope_tokens, scope_nodes) = node_scope(locals, node);
         tokens.extend(scope_tokens);
         nodes.extend(scope_nodes);
       }
@@ -1090,25 +1087,25 @@ fn node_scope(locals: &Rc<Scope>, node: &Node) -> (Vec<SyntaxTokenData>, Vec<(Rc
       for element in node_array.elements.iter() {
         match element {
           crate::agal_parser::NodeProperty::Dynamic(key, value) => {
-            let (scope_tokens, scope_nodes) = node_scope(locals, &key);
+            let (scope_tokens, scope_nodes) = node_scope(locals, key);
             tokens.extend(scope_tokens);
             nodes.extend(scope_nodes);
-            let (scope_tokens, scope_nodes) = node_scope(locals, &value);
+            let (scope_tokens, scope_nodes) = node_scope(locals, value);
             tokens.extend(scope_tokens);
             nodes.extend(scope_nodes);
           }
           crate::agal_parser::NodeProperty::Indexable(item) => {
-            let (scope_tokens, scope_nodes) = node_scope(locals, &item);
+            let (scope_tokens, scope_nodes) = node_scope(locals, item);
             tokens.extend(scope_tokens);
             nodes.extend(scope_nodes);
           }
           crate::agal_parser::NodeProperty::Iterable(iter) => {
-            let (scope_tokens, scope_nodes) = node_scope(locals, &iter);
+            let (scope_tokens, scope_nodes) = node_scope(locals, iter);
             tokens.extend(scope_tokens);
             nodes.extend(scope_nodes);
           }
           crate::agal_parser::NodeProperty::Property(node_identifier, value) => {
-            let (scope_tokens, scope_nodes) = node_scope(locals, &value);
+            let (scope_tokens, scope_nodes) = node_scope(locals, value);
             tokens.extend(scope_tokens);
             nodes.extend(scope_nodes);
             tokens.push(match locals.get(&node_identifier.name) {
@@ -1154,7 +1151,7 @@ fn node_scope(locals: &Rc<Scope>, node: &Node) -> (Vec<SyntaxTokenData>, Vec<(Rc
     Node::VarDecl(node_var_decl) => {
       let mut token_modifier = vec![];
       if let Some(value) = &node_var_decl.value {
-        let (scope_tokens, scope_nodes) = node_scope(locals, &value);
+        let (scope_tokens, scope_nodes) = node_scope(locals, value);
         tokens.extend(scope_tokens);
         nodes.extend(scope_nodes);
       }
@@ -1292,14 +1289,14 @@ fn node_scope(locals: &Rc<Scope>, node: &Node) -> (Vec<SyntaxTokenData>, Vec<(Rc
       nodes.extend(scope_nodes);
       let scope_if = locals.child();
       for node in node_if.body.iter() {
-        let (scope_tokens, scope_nodes) = node_scope(&scope_if, &node);
+        let (scope_tokens, scope_nodes) = node_scope(&scope_if, node);
         tokens.extend(scope_tokens);
         nodes.extend(scope_nodes);
       }
       if let Some(body) = &node_if.else_body {
         let scope_else = locals.child();
         for node in body.iter() {
-          let (scope_tokens, scope_nodes) = node_scope(&scope_else, &node);
+          let (scope_tokens, scope_nodes) = node_scope(&scope_else, node);
           tokens.extend(scope_tokens);
           nodes.extend(scope_nodes);
         }
@@ -1336,7 +1333,7 @@ fn node_scope(locals: &Rc<Scope>, node: &Node) -> (Vec<SyntaxTokenData>, Vec<(Rc
       nodes.extend(scope_nodes);
       let for_locals = locals.child();
       for node in node_for.body.iter() {
-        let (scope_tokens, scope_nodes) = node_scope(&for_locals, &node);
+        let (scope_tokens, scope_nodes) = node_scope(&for_locals, node);
         tokens.extend(scope_tokens);
         nodes.extend(scope_nodes);
       }
@@ -1347,7 +1344,7 @@ fn node_scope(locals: &Rc<Scope>, node: &Node) -> (Vec<SyntaxTokenData>, Vec<(Rc
       nodes.extend(scope_nodes);
       let while_locals = locals.child();
       for node in node_while.body.iter() {
-        let (scope_tokens, scope_nodes) = node_scope(&while_locals, &node);
+        let (scope_tokens, scope_nodes) = node_scope(&while_locals, node);
         tokens.extend(scope_tokens);
         nodes.extend(scope_nodes);
       }
@@ -1355,14 +1352,14 @@ fn node_scope(locals: &Rc<Scope>, node: &Node) -> (Vec<SyntaxTokenData>, Vec<(Rc
     Node::Try(node_try) => {
       let try_locals = locals.child();
       for node in node_try.body.iter() {
-        let (scope_tokens, scope_nodes) = node_scope(&try_locals, &node);
+        let (scope_tokens, scope_nodes) = node_scope(&try_locals, node);
         tokens.extend(scope_tokens);
         nodes.extend(scope_nodes);
       }
       if let Some((_, body)) = &node_try.catch {
         let catch_locals = locals.child();
         for node in body.iter() {
-          let (scope_tokens, scope_nodes) = node_scope(&catch_locals, &node);
+          let (scope_tokens, scope_nodes) = node_scope(&catch_locals, node);
           tokens.extend(scope_tokens);
           nodes.extend(scope_nodes);
         }
@@ -1370,7 +1367,7 @@ fn node_scope(locals: &Rc<Scope>, node: &Node) -> (Vec<SyntaxTokenData>, Vec<(Rc
       if let Some(body) = &node_try.finally {
         let finally_locals = locals.child();
         for node in body.iter() {
-          let (scope_tokens, scope_nodes) = node_scope(&finally_locals, &node);
+          let (scope_tokens, scope_nodes) = node_scope(&finally_locals, node);
           tokens.extend(scope_tokens);
           nodes.extend(scope_nodes);
         }
@@ -1383,7 +1380,7 @@ fn node_scope(locals: &Rc<Scope>, node: &Node) -> (Vec<SyntaxTokenData>, Vec<(Rc
     }
     Node::Block(node_block, _) => {
       for node in node_block.body.iter() {
-        let (scope_tokens, scope_nodes) = node_scope(locals, &node);
+        let (scope_tokens, scope_nodes) = node_scope(locals, node);
         tokens.extend(scope_tokens);
         nodes.extend(scope_nodes);
       }
@@ -1400,7 +1397,7 @@ fn node_scope(locals: &Rc<Scope>, node: &Node) -> (Vec<SyntaxTokenData>, Vec<(Rc
     }
     Node::Console(node_console) => match node_console {
       crate::agal_parser::NodeConsole::Output { value, .. } => {
-        let (scope_tokens, scope_nodes) = node_scope(locals, &value);
+        let (scope_tokens, scope_nodes) = node_scope(locals, value);
         tokens.extend(scope_tokens);
         nodes.extend(scope_nodes);
       }
@@ -1434,7 +1431,7 @@ fn node_scope(locals: &Rc<Scope>, node: &Node) -> (Vec<SyntaxTokenData>, Vec<(Rc
         location,
         identifier,
       } => {
-        let (scope_tokens, scope_nodes) = node_scope(locals, &value);
+        let (scope_tokens, scope_nodes) = node_scope(locals, value);
         tokens.extend(scope_tokens);
         nodes.extend(scope_nodes);
         let token = match locals.get(&identifier.name) {
@@ -1475,25 +1472,20 @@ fn node_scope(locals: &Rc<Scope>, node: &Node) -> (Vec<SyntaxTokenData>, Vec<(Rc
         let (scope_tokens, scope_nodes) = node_scope(locals, &node_member.member);
         tokens.extend(scope_tokens);
         nodes.extend(scope_nodes);
-      } else {
-        match &*node_member.member {
-          Node::Identifier(id) => {
-            let data_type = DataType::Member {
-              object: Box::new(type_scope(locals, Some(&node_member.object))),
-              member: Box::new(DataType::StringLiteral(id.name.clone())),
-              is_instance: node_member.instance,
-            };
-            tokens.push(SyntaxTokenData {
-              definition: id.location.end,
-              token_type: data_type.prop_type(),
-              token_modifier: vec![SyntaxTokenModifier::Constant],
-              location: id.location.clone(),
-              data_type,
-              is_original_decl: false,
-            })
-          }
-          _ => {}
-        }
+      } else if let Node::Identifier(id) = &*node_member.member {
+        let data_type = DataType::Member {
+          object: Box::new(type_scope(locals, Some(&node_member.object))),
+          member: Box::new(DataType::StringLiteral(id.name.clone())),
+          is_instance: node_member.instance,
+        };
+        tokens.push(SyntaxTokenData {
+          definition: id.location.end,
+          token_type: data_type.prop_type(),
+          token_modifier: vec![SyntaxTokenModifier::Constant],
+          location: id.location.clone(),
+          data_type,
+          is_original_decl: false,
+        })
       };
     }
     Node::Call(node_call) => {
@@ -1556,7 +1548,7 @@ fn node_scope(locals: &Rc<Scope>, node: &Node) -> (Vec<SyntaxTokenData>, Vec<(Rc
           (vec![token], vec![], args)
         }
         callee => {
-          let (scope_tokens, scope_nodes) = node_scope(locals, &callee);
+          let (scope_tokens, scope_nodes) = node_scope(locals, callee);
           (scope_tokens, scope_nodes, vec![])
         }
       };
@@ -1589,47 +1581,44 @@ fn node_scope(locals: &Rc<Scope>, node: &Node) -> (Vec<SyntaxTokenData>, Vec<(Rc
     }
     Node::UnaryFront(ref node_unary) => {
       if node_unary.operator == NodeOperator::At {
-        match &*node_unary.operand {
-          Node::Identifier(node_identifier) => {
-            let location = Location {
-              start: node_unary.location.start,
-              end: node_identifier.location.end,
-              file_name: node_identifier.location.file_name.clone(),
-              length: node_identifier.location.length,
-            };
-            let syntax = match locals.get(&node_identifier.name) {
-              Some(definition) => SyntaxTokenData {
-                definition: definition.definition,
-                token_type: definition.token_type,
-                token_modifier: definition.token_modifier,
-                location: node_identifier.location.clone(),
-                data_type: definition.data_type,
-                is_original_decl: false,
-              },
-              None => SyntaxTokenData {
-                definition: node_identifier.location.start,
-                token_type: SyntaxTokenType::Variable,
-                token_modifier: vec![],
-                location: node_identifier.location.clone(),
-                data_type: type_scope(locals, Some(node)),
-                is_original_decl: false,
-              },
-            };
-            let mut token_modifier = syntax.token_modifier;
-            token_modifier.push(SyntaxTokenModifier::Iterable);
-            tokens.push(SyntaxTokenData {
-              definition: syntax.definition,
-              token_type: syntax.token_type,
-              token_modifier,
-              location,
-              data_type: DataType::Iterable(Box::new(syntax.data_type)),
+        if let Node::Identifier(node_identifier) = &*node_unary.operand {
+          let location = Location {
+            start: node_unary.location.start,
+            end: node_identifier.location.end,
+            file_name: node_identifier.location.file_name.clone(),
+            length: node_identifier.location.length,
+          };
+          let syntax = match locals.get(&node_identifier.name) {
+            Some(definition) => SyntaxTokenData {
+              definition: definition.definition,
+              token_type: definition.token_type,
+              token_modifier: definition.token_modifier,
+              location: node_identifier.location.clone(),
+              data_type: definition.data_type,
               is_original_decl: false,
-            });
-          }
-          _ => {}
+            },
+            None => SyntaxTokenData {
+              definition: node_identifier.location.start,
+              token_type: SyntaxTokenType::Variable,
+              token_modifier: vec![],
+              location: node_identifier.location.clone(),
+              data_type: type_scope(locals, Some(node)),
+              is_original_decl: false,
+            },
+          };
+          let mut token_modifier = syntax.token_modifier;
+          token_modifier.push(SyntaxTokenModifier::Iterable);
+          tokens.push(SyntaxTokenData {
+            definition: syntax.definition,
+            token_type: syntax.token_type,
+            token_modifier,
+            location,
+            data_type: DataType::Iterable(Box::new(syntax.data_type)),
+            is_original_decl: false,
+          });
         }
       } else {
-        let (scope_tokens, scope_nodes) = node_scope(locals, &*node_unary.operand);
+        let (scope_tokens, scope_nodes) = node_scope(locals, &node_unary.operand);
         tokens.extend(scope_tokens);
         nodes.extend(scope_nodes);
       }
@@ -1643,7 +1632,7 @@ fn node_export(locals: &Rc<Scope>, node: &Node) -> Vec<(String, DataType)> {
   match node {
     Node::Program(node_program) => {
       for node in node_program.body.iter() {
-        exports.extend(node_export(locals, &node));
+        exports.extend(node_export(locals, node));
       }
     }
     Node::VarDecl(node_var_decl) => {
@@ -1674,7 +1663,7 @@ fn node_export(locals: &Rc<Scope>, node: &Node) -> Vec<(String, DataType)> {
     }
     Node::Block(node_block, _) => {
       for node in node_block.body.iter() {
-        exports.extend(node_export(locals, &node));
+        exports.extend(node_export(locals, node));
       }
     }
     _ => {}

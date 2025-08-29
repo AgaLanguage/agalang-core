@@ -63,7 +63,8 @@ type NativeFn = fn(
   &mut crate::interpreter::Thread,
   MultiRefHash<NativeValue>,
 ) -> Result<Value, String>;
-#[derive(Clone, PartialEq, Eq, Hash)]
+
+#[derive(Clone, Eq)]
 pub enum Function {
   Value {
     arity: usize,
@@ -87,6 +88,72 @@ pub enum Function {
     func: NativeFn,
     custom_data: MultiRefHash<NativeValue>,
   },
+}
+impl PartialEq for Function {
+  fn eq(&self, other: &Self) -> bool {
+    match (self, other) {
+      (
+        Function::Native {
+          func: a,
+          name: na,
+          path: pa,
+          chunk: ca,
+          custom_data: da,
+        },
+        Function::Native {
+          func: b,
+          name: nb,
+          path: pb,
+          chunk: cb,
+          custom_data: db,
+        },
+      ) => na == nb && pa == pb && std::ptr::fn_addr_eq(*a, *b) && ca == cb && da == db,
+      (
+        Function::Value {
+          arity: aa,
+          name: na,
+          chunk: ca,
+          has_rest: ra,
+          in_class: cla,
+          is_async: asa,
+          location: la,
+          scope: sa,
+        },
+        Function::Value {
+          arity: ab,
+          name: nb,
+          chunk: cb,
+          has_rest: rb,
+          in_class: clb,
+          is_async: asb,
+          location: lb,
+          scope: sb,
+        },
+      ) => {
+        aa == ab
+          && na == nb
+          && ca == cb
+          && ra == rb
+          && cla == clb
+          && asa == asb
+          && la == lb
+          && sa == sb
+      }
+      (
+        Function::Script {
+          path: pa,
+          chunk: ca,
+          scope: sa,
+        },
+        Function::Script {
+          path: pb,
+          chunk: cb,
+          scope: sb,
+        },
+      ) => pa == pb && ca == cb && sa == sb,
+      _ => false,
+    }
+  }
 }
 impl Function {
   pub fn set_rest(&mut self, rest: bool) {
@@ -191,6 +258,49 @@ impl Display for Function {
     }
   }
 }
+impl std::hash::Hash for Function {
+  fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+    match self {
+      Function::Value {
+        arity,
+        chunk,
+        name,
+        is_async,
+        in_class,
+        location,
+        scope,
+        has_rest,
+      } => {
+        arity.hash(state);
+        chunk.hash(state);
+        name.hash(state);
+        is_async.hash(state);
+        in_class.hash(state);
+        location.hash(state);
+        scope.hash(state);
+        has_rest.hash(state);
+      }
+      Function::Script { chunk, path, scope } => {
+        chunk.hash(state);
+        path.hash(state);
+        scope.hash(state);
+      }
+      Function::Native {
+        name,
+        path,
+        chunk,
+        func,
+        custom_data,
+      } => {
+        name.hash(state);
+        path.hash(state);
+        chunk.hash(state);
+        state.write_usize(*func as usize);
+        custom_data.hash(state);
+      }
+    }
+  }
+}
 impl std::fmt::Debug for Function {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     write!(f, "{self}") // usa Display
@@ -207,7 +317,7 @@ impl crate::Encode for Function {
         is_async,
         location,
         has_rest,
-        ..
+        .. /* El resto se calcula de forma dinamica */
       } => {
         encode.push(0);
         encode.extend(arity.encode()?);
@@ -222,6 +332,7 @@ impl crate::Encode for Function {
         encode.extend(path.encode()?);
         encode.extend(chunk.read().encode()?);
       }
+      // Tecnicamente no se deberia llegar a este punto
       Function::Native { .. } => return Err("No se puede compilar una funcion nativa".to_string()),
     };
 

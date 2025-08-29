@@ -19,11 +19,11 @@ impl<T> MultiRefHash<T> {
   pub fn new(value: T) -> Self {
     Self(Arc::new(RwLock::new(value)))
   }
-  pub fn read(&self) -> std::sync::RwLockReadGuard<T> {
+  pub fn read(&'_ self) -> std::sync::RwLockReadGuard<'_, T> {
     self.0.read().unwrap()
   }
 
-  pub fn write(&self) -> std::sync::RwLockWriteGuard<T> {
+  pub fn write(&'_ self) -> std::sync::RwLockWriteGuard<'_, T> {
     self.0.write().unwrap()
   }
 }

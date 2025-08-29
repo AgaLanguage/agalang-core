@@ -2,9 +2,7 @@ pub mod ast;
 pub mod string;
 pub use ast::*;
 
-use crate::{
-  util::{self, Location},
-};
+use crate::util::{self, Location};
 
 use super::KeywordsType;
 
@@ -873,9 +871,9 @@ impl Parser {
         let param = self.expect(super::TokenType::Identifier, "Se esperaba un identificador")?;
         ast::NodeIdentifier {
           name: format!("@{}", param.value),
-          location: Location{
-            start: at_char.location.start.clone(),
-            end: param.location.end.clone(),
+          location: Location {
+            start: at_char.location.start,
+            end: param.location.end,
             length: at_char.location.length + param.location.length,
             file_name: at_char.location.file_name.clone(),
           },

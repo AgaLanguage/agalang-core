@@ -375,10 +375,10 @@ impl Thread {
   pub fn get_async(&self) -> MultiRefHash<AsyncThread> {
     self.async_thread.unwrap()
   }
-  pub fn get_stack(&self) -> std::sync::RwLockReadGuard<Vec<Value>> {
+  pub fn get_stack(&'_ self) -> std::sync::RwLockReadGuard<'_, Vec<Value>> {
     self.stack.read()
   }
-  pub fn get_calls(&self) -> std::sync::RwLockReadGuard<Vec<CallFrame>> {
+  pub fn get_calls(&'_ self) -> std::sync::RwLockReadGuard<'_, Vec<CallFrame>> {
     self.call_stack.read()
   }
   pub fn clear_stack(&mut self) {

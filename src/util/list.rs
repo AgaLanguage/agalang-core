@@ -20,7 +20,7 @@ impl<Item> List<Item> {
   {
     List(self.0.iter().map(f).collect())
   }
-  
+
   pub fn map<R, F>(self, f: F) -> List<R>
   where
     F: FnMut(Item) -> R,
@@ -59,7 +59,7 @@ impl<Item> List<Item> {
   {
     self.0.into_iter().collect()
   }
-  pub fn iter(&self) -> std::slice::Iter<Item> {
+  pub fn iter(&'_ self) -> std::slice::Iter<'_, Item> {
     self.0.iter()
   }
 }

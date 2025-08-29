@@ -344,7 +344,16 @@ pub trait ToJSON {
 }
 impl ToJSON for String {
   fn to_json(&self) -> String {
-    format!("\"{}\"", self.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n")).replace('\r', "\\r").replace('\t', "\\t").replace('\0', "\\0")
+    format!(
+      "\"{}\"",
+      self
+        .replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('\n', "\\n")
+    )
+    .replace('\r', "\\r")
+    .replace('\t', "\\t")
+    .replace('\0', "\\0")
   }
 }
 impl<T> ToJSON for Option<T>
@@ -377,7 +386,11 @@ where
     data
   }
 }
-impl<K, T> ToJSON for HashMap<K,T> where T: ToJSON, K: ToString {
+impl<K, T> ToJSON for HashMap<K, T>
+where
+  T: ToJSON,
+  K: ToString,
+{
   fn to_json(&self) -> String {
     let mut json = String::new();
     json.push('{');
@@ -385,7 +398,7 @@ impl<K, T> ToJSON for HashMap<K,T> where T: ToJSON, K: ToString {
     for (key, value) in self.iter() {
       if is_first {
         is_first = false;
-      }else {
+      } else {
         json.push(',');
       }
       json.push_str(&key.to_string().to_json());

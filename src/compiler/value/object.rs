@@ -137,7 +137,7 @@ impl Display for Object {
       Self::Function(fun) => write!(f, "{}", fun.read()),
       Self::Map(_, i) => i
         .map(|t| write!(f, "<Instancia {}>", t.get_type()))
-        .unwrap_or_else(||write!(f, "<objeto>")),
+        .unwrap_or_else(|| write!(f, "<objeto>")),
       Self::Class(c) => {
         let has_parent = c.read().has_parent();
         let class = c.read().get_type().to_string();

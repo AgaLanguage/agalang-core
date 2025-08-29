@@ -152,7 +152,7 @@ impl Compiler {
         self.write(OpCode::NewLocals as u8, node_block.location.start.line);
         let code_len = node_block.body.len();
         for (index, node) in node_block.body.clone().enumerate() {
-          self.node_to_bytes(&node)?;
+          self.node_to_bytes(node)?;
           if index < (code_len - 1) {
             self.write(OpCode::Pop as u8, node.get_location().end.line);
           }
@@ -192,7 +192,10 @@ impl Compiler {
         for (i, data) in node_string.value.clone().enumerate() {
           match data {
             crate::agal_parser::StringData::Str(val) => {
-              self.set_constant(Value::String(val.to_string()), node_string.location.start.line);
+              self.set_constant(
+                Value::String(val.to_string()),
+                node_string.location.start.line,
+              );
             }
             crate::agal_parser::StringData::Id(value) => {
               self.read_var(value.name.to_string(), value.location.start.line);

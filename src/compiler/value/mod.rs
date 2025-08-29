@@ -33,7 +33,7 @@ pub const LAZY_TYPE: &str = "vago";
 #[derive(Clone, PartialEq, Eq, Hash, Default)]
 pub struct RefValue(MultiRefHash<Value>);
 impl RefValue {
-  pub fn borrow(&self) -> std::sync::RwLockReadGuard<Value> {
+  pub fn borrow(&'_ self) -> std::sync::RwLockReadGuard<'_, Value> {
     self.0.read()
   }
 }
@@ -48,7 +48,7 @@ pub struct LazyValue {
   once: MultiRefHash<Function>,
 }
 impl LazyValue {
-  pub fn get(&self) -> std::sync::RwLockReadGuard<Option<Value>> {
+  pub fn get(&'_ self) -> std::sync::RwLockReadGuard<'_, Option<Value>> {
     self.value.read()
   }
   pub fn set(&self, value: Value) {
@@ -427,10 +427,8 @@ impl Value {
       (Self::Ref(RefValue(r)), key) => r.read().get_instance_property(key, thread),
       (Self::Object(o), key) => o.get_instance_property(key, thread),
       (Self::String(s), "longitud") => Some(Self::Number(s.len().into())),
-      (value, key) => {
-        crate::interpreter::proto::proto(value.get_type(), proto_cache.clone())?
-          .get_instance_property(key, thread)
-      }
+      (value, key) => crate::interpreter::proto::proto(value.get_type(), proto_cache.clone())?
+        .get_instance_property(key, thread),
     }
   }
 }

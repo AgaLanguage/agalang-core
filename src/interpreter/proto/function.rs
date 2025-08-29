@@ -1,5 +1,6 @@
 use crate::{
-  compiler::{ChunkGroup, Function, Object, Value}, OnError
+  compiler::{ChunkGroup, Function, Object, Value},
+  OnError,
 };
 
 const TYPE: &str = "<function>";
@@ -23,7 +24,7 @@ pub fn prototype() -> Value {
           args.remove(0);
           let fun = match funtion {
             Value::Object(Object::Function(fun)) => fun,
-            // Para llegar a este punto debes haber llamado esta funcion desde un tipo diferente a 
+            // Para llegar a este punto debes haber llamado esta funcion desde un tipo diferente a
             _ => unreachable!(),
           };
           // Nos abstenemos de dar un valor propio haciendo que el valor que se da es el de la funcion llamada
