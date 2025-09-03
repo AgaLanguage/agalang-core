@@ -5,16 +5,46 @@ pub const LIB_NAME: &str = ":tmp";
 const NOW: &str = "ahora";
 const ZONE: &str = "ZONA";
 
-#[cfg(target_os = "windows")]
+mod c_time {
+  pub use std::os::raw::{c_int};
+  #[cfg(all(target_arch = "x86", target_env = "gnu"))]
+  pub type TimeT = i32;
+  #[cfg(not(all(target_arch = "x86", target_env = "gnu")))]
+  pub type TimeT = i64;
+
+
+  #[repr(C)]
+  pub struct Tm {
+    pub tm_sec: c_int,
+    pub tm_min: c_int,
+    pub tm_hour: c_int,
+    pub tm_mday: c_int,
+    pub tm_mon: c_int,
+    pub tm_year: c_int,
+    pub tm_wday: c_int,
+    pub tm_yday: c_int,
+    pub tm_isdst: c_int,
+  }
+
+  unsafe extern "C" {
+    #[link_name = "_time64"]
+    pub unsafe fn time(t: *mut TimeT) -> TimeT;
+    #[link_name = "_localtime64_s"]
+    pub unsafe fn localtime_s(tmDest: *mut Tm, sourceTime: *const TimeT) -> c_int;
+    #[link_name = "_gmtime64_s"]
+    pub unsafe fn gmtime_s(destTime: *mut Tm, srcTime: *const TimeT) -> c_int;
+  }
+}
+
 mod native_time {
-  use libc::{gmtime_s, localtime_s, time, time_t, tm};
-  const SECONDS_IN_DAY: i32 = 86400; // 24 * 60 * 60
+  const SECONDS_IN_DAY: i32 = 86400;
+  pub use super::c_time::{TimeT, time, Tm, localtime_s, gmtime_s};
 
-  pub unsafe fn get_utc_in_secs() -> i32 {
-    let now: time_t = time(std::ptr::null_mut());
+  pub unsafe fn get_utc_offset_secs() -> i32 {
+    let now: TimeT = time(std::ptr::null_mut());
 
-    let mut gmt_tm: tm = std::mem::zeroed();
-    let mut local_tm: tm = std::mem::zeroed();
+    let mut gmt_tm: Tm = std::mem::zeroed();
+    let mut local_tm: Tm = std::mem::zeroed();
     gmtime_s(&mut gmt_tm, &now);
     localtime_s(&mut local_tm, &now);
 
@@ -30,16 +60,8 @@ mod native_time {
         -SECONDS_IN_DAY
       };
     }
-    offset
-  }
-}
 
-#[cfg(target_arch = "wasm32")]
-mod wasm_time {
-  // Para wasm, aquí puedes usar wasm-bindgen para obtener la zona horaria
-  // Pero para ejemplo sencillo, solo devolveremos 0
-  pub fn get_utc_in_secs() -> i32 {
-    0
+    offset
   }
 }
 
@@ -71,11 +93,7 @@ pub fn lib_value() -> Value {
     ZONE,
     Value::Object(
       {
-        #[cfg(not(target_arch = "wasm32"))]
-        let offset = unsafe { native_time::get_utc_in_secs() };
-
-        #[cfg(target_arch = "wasm32")]
-        let offset = wasm_time::get_utc_in_secs();
+        let offset = unsafe {native_time::get_utc_offset_secs()};
 
         // Convertir a horas y minutos
         let hours = offset / 3600;

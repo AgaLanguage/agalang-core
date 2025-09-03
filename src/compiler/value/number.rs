@@ -1272,7 +1272,7 @@ impl std::fmt::Debug for Number {
 }
 impl Encode for Number {
   fn encode(&self) -> Result<Vec<u8>, String> {
-    let mut encode = vec![StructTag::Number as u8, StructTag::StartOfBlock as u8];
+    let mut encode = vec![StructTag::Number as u8];
 
     encode.extend(
       self
@@ -1299,7 +1299,6 @@ impl crate::Decode for Number {
         }
       })
       .on_error(|_| "Se esperaba un numero")?;
-    vec.pop_front(); // SOB
     let mut bytes = vec![];
     loop {
       let byte = vec.pop_front().on_error(|_| "Binario corrupto")?;

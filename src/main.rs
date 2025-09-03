@@ -2,8 +2,6 @@ use std::collections::VecDeque;
 use std::path::Path;
 use std::{collections::HashMap, process::ExitCode};
 
-use flate2::{read::GzDecoder, write::GzEncoder, Compression};
-
 pub use crate::util::{MultiRefHash, OnError, OnSome};
 use crate::{compiler::Compiler, interpreter::interpret};
 
@@ -16,7 +14,6 @@ mod util;
 
 use crate::compiler::binary::{Decode, Encode, StructTag};
 
-const EXTENSION_COMPRESS: &str = "agac";
 const EXTENSION_BYTECODE: &str = "agab";
 const EXTENSION: &str = "aga";
 
@@ -85,26 +82,14 @@ fn main() -> ExitCode {
     let default_name = path.file_stem().on_some_option(|v| v.to_str()).unwrap();
     let name = args.get_string(&FlagName::Name);
     let name = if name.is_empty() { default_name } else { name };
-    let (bin, bin_extension) = match code {
-      Ok(code) => {
-        if args.get_bool(&FlagName::Compress) {
-          match compress_bytes(&code) {
-            Err(e) => {
-              eprintln!("{e}");
-              return ExitCode::FAILURE;
-            }
-            Ok(bin) => (bin, EXTENSION_COMPRESS),
-          }
-        } else {
-          (code, EXTENSION_BYTECODE)
-        }
-      }
+    let code = match code {
+      Ok(code) => code,
       Err(e) => {
         eprintln!("{e}");
         return ExitCode::FAILURE;
       }
     };
-    let _ = std::fs::write(format!("{name}.{bin_extension}"), &bin);
+    let _ = std::fs::write(format!("{name}.{EXTENSION_BYTECODE}"), &code);
   }
   if args.action == Action::Run || args.get_bool(&FlagName::Name) {
     return match interpret(compiler) {
@@ -113,23 +98,6 @@ fn main() -> ExitCode {
     };
   }
   ExitCode::SUCCESS
-}
-
-fn compress_bytes(data: &[u8]) -> std::io::Result<Vec<u8>> {
-  use std::io::Write as _;
-  let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
-  encoder.write_all(data)?; // Escribe los bytes al encoder
-  let compressed_data = encoder.finish()?; // Termina la compresión y obtiene el Vec<u8>
-  Ok(compressed_data)
-}
-
-// Descomprime bytes gzip y devuelve un Vec<u8>
-fn decompress_bytes(data: &[u8]) -> std::io::Result<Vec<u8>> {
-  use std::io::Read as _;
-  let mut decoder = GzDecoder::new(data);
-  let mut decompressed = Vec::new();
-  decoder.read_to_end(&mut decompressed)?; // Lee todo el contenido descomprimido
-  Ok(decompressed)
 }
 
 fn read_code(path: &Path) -> Option<String> {
@@ -175,13 +143,6 @@ fn compile(path: &Path) -> Result<(Compiler, &str), String> {
           ""
         })?;
       Ok(((&ast).try_into()?, EXTENSION))
-    }
-    Some(EXTENSION_COMPRESS) => {
-      let bin = read_bin(path).on_error(|_| "")?;
-      match decompress_bytes(&bin) {
-        Err(_) => Err("Error de descompresion".to_string()),
-        Ok(uncompress) => Ok((compile_bytecode(uncompress)?, EXTENSION_COMPRESS)),
-      }
     }
     Some(EXTENSION_BYTECODE) => Ok((
       compile_bytecode(read_bin(path).on_error(|_| "")?)?,
@@ -246,14 +207,12 @@ struct Arguments {
   file: String,
   _args: Vec<String>,
 }
-
 fn remove_first_and_last(s: &str) -> String {
   let mut chars = s.chars();
   chars.next();
   chars.next_back();
   chars.collect()
 }
-
 impl Arguments {
   fn init() -> Self {
     let mut cmd_args = std::env::args().skip(1).peekable(); // skip the binary name

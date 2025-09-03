@@ -269,7 +269,6 @@ impl Encode for Chunk {
       encode.push(StructTag::Code as u8);
       for byte in &self.code {
         let use_byte = match *byte {
-          x if x == StructTag::StartOfBlock as u8 => true,
           x if x == StructTag::EndOfBlock as u8 => true,
           x if x == StructTag::Byte as u8 => true,
           _ => false,

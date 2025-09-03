@@ -63,33 +63,33 @@ impl ProcessManager {
       .push_back(thread.clone());
   }
   fn poll_waiting_threads(&self) {
-    if self.waiting_threads.read().unwrap().is_empty() {
-      return; // No hay hilos en espera
-    }
-    // Clonamos los hilos en espera para no modificar la cola mientras iteramos
-    let mut old_waiting_threads = self.waiting_threads.read().unwrap().clone();
-    self.waiting_threads.write().unwrap().clear();
-    while let Some(thread) = old_waiting_threads.pop_front() {
+    let mut waiting = self.waiting_threads.write().unwrap();
+    let mut sub_threads = self.sub_threads.write().unwrap();
+
+    let mut still_waiting = VecDeque::new();
+
+    for thread in waiting.drain(..) {
       if thread.read().is_waiting() {
-        self.waiting_threads.write().unwrap().push_back(thread);
+        still_waiting.push_back(thread);
       } else {
-        self.sub_threads.write().unwrap().push_back(thread);
+        sub_threads.push_back(thread);
       }
     }
+
+    waiting.extend(still_waiting);
   }
+
   fn run_interrupt_threads(&self) {
-    if self.interrupt_threads.read().unwrap().is_empty() {
-      return; // No hay hilos de interrupcion
-    }
-    // Clonamos los hilos de interrupcion para no modificar la cola mientras iteramos
-    let mut old_interrupt_threads = self.interrupt_threads.read().unwrap().clone();
-    self.interrupt_threads.write().unwrap().clear();
-    while let Some(thread) = old_interrupt_threads.pop_front() {
+    let mut interrupts = self.interrupt_threads.write().unwrap();
+    let mut remaining = VecDeque::new();
+
+    while let Some(thread) = interrupts.pop_front() {
       let response = thread.read().simple_run_instruction(false);
       if matches!(response, InterpretResult::Continue) {
-        // Si el hilo continua, lo volvemos a meter en la cola de interrupcion
-        self.interrupt_threads.write().unwrap().push_back(thread);
+        remaining.push_back(thread);
       }
     }
+
+    interrupts.extend(remaining);
   }
 }

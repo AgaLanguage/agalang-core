@@ -97,13 +97,14 @@ impl ModuleThread {
         if !self.value.is_object() {
           return InterpretResult::RuntimeError("Se esperaba un objeto como modulo".to_string());
         }
-        match self.value.set_instance_property(
+        let exported_value = self.value.set_instance_property(
           &name,
           value.clone(),
           true,
           false,
-          &self.get_async().read().get_thread().read(),
-        ) {
+          &thread.read(),
+        );
+        match exported_value {
           Some(value) => {
             thread.write().push(value);
             InterpretResult::Continue

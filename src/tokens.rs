@@ -1960,14 +1960,14 @@ pub fn print_tokens(node: Node) {
       }
     }
   }
-  let mut module: HashMap<&str, DataType> = Default::default();
+  let mut module: HashMap<String, DataType> = Default::default();
   let exports = node_export(&scope, &node);
-  for (key, data) in &exports {
-    module.insert(key, data.clone());
+  for (key, data) in exports {
+    module.insert(key, data);
   }
   println!(
     "{{\"file\":{},\"mod\":{}}}",
     tokens.clone().resolve(&tokens).to_json(),
-    module.to_json()
+    DataType::Class { props: RefHash::new(module), instance_props: Default::default(), name: node.get_file() }.to_json()
   )
 }

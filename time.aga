@@ -10,8 +10,7 @@ const SEGUNDOS_POR_DIA = SEGUNDOS_POR_HORA * HORAS_POR_DIA;
 fn esBisiesto(año) {
   ret ((año % 4 == 0) && (año % 100 != 0)) || (año % 400 == 0);
 }
-
-fn diasEnYear(año){
+fn diasEnAño(año){
   ret si esBisiesto(año) {366;} ent {365;};
 }
 fn diasEnMeses(bisiesto){
@@ -20,10 +19,8 @@ fn diasEnMeses(bisiesto){
     31, 31, 30, 31, 30, 31
   ];
 }
-
 fn nanosegundosToUTC(nanos) {
   const segundosTotales = nanos // NS_POR_SEGUNDO;
-  const restoDeNanos = nanos % NS_POR_SEGUNDO;
 
   def dias = segundosTotales // SEGUNDOS_POR_DIA;
   def segundosEnDia = segundosTotales % SEGUNDOS_POR_DIA;
@@ -36,8 +33,8 @@ fn nanosegundosToUTC(nanos) {
 
   def año = 1970;
 
-  mien dias >= diasEnYear(año) {
-    dias -= diasEnYear(año);
+  mien dias >= diasEnAño(año) {
+    dias -= diasEnAño(año);
     año+=1;
   }
 
@@ -60,7 +57,6 @@ fn nanosegundosToUTC(nanos) {
     nanos: nanos % 1000,
   };
 }
-
 fn nanosegundosToLocal(nanos) {
   const h = TMP::ZONA[0] * SEGUNDOS_POR_HORA;
   const m = TMP::ZONA[1] * SEGUNDOS_POR_MINUTO;
@@ -68,7 +64,6 @@ fn nanosegundosToLocal(nanos) {
   const n = s * NS_POR_SEGUNDO;
   ret nanosegundosToUTC(nanos + n);
 }
-
 exporta fn ahoraUTC(){
   const nanos = TMP::ahora();
   ret nanosegundosToUTC(nanos);
@@ -77,3 +72,15 @@ exporta fn ahoraLocal(){
   const nanos = TMP::ahora();
   ret nanosegundosToLocal(nanos);
 }
+
+const ahora = ahoraLocal();
+const año = ahora.año;
+const mes = ahora.mes;
+const dia = ahora.dia;
+const hora = ahora.hora;
+const minutos = ahora.minutos;
+const segundo = ahora.segundo;
+const milis = ahora.milis;
+const micros = ahora.micros;
+const nanos = ahora.nanos;
+csl << "Ahora: {año}-{mes}-{dia} {hora}:{minutos}:{segundo}.{milis} {micros} {nanos}";

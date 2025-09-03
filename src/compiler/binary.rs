@@ -2,7 +2,6 @@ use crate::util::{OnError, OnSome};
 
 #[derive(PartialEq, Eq)]
 pub(crate) enum StructTag {
-  StartOfBlock,
   EndOfBlock,
   Byte,
   Compile,
@@ -33,7 +32,6 @@ pub(crate) enum StructTag {
 impl From<u8> for StructTag {
   fn from(value: u8) -> Self {
     match value {
-      x if x == StructTag::StartOfBlock as u8 => StructTag::StartOfBlock,
       x if x == StructTag::EndOfBlock as u8 => StructTag::EndOfBlock,
       x if x == StructTag::Byte as u8 => StructTag::Byte,
       x if x == StructTag::Compile as u8 => StructTag::Compile,
@@ -88,7 +86,7 @@ impl Encode for bool {
 }
 impl Encode for String {
   fn encode(&self) -> Result<Vec<u8>, String> {
-    let mut encode = vec![StructTag::String as u8, StructTag::StartOfBlock as u8];
+    let mut encode = vec![StructTag::String as u8];
 
     encode.extend(
       self
@@ -130,7 +128,6 @@ impl Decode for String {
       })
       .on_error(|_| "Se esperaba un texto".to_string())?;
 
-    vec.pop_front(); // SOB
     let mut bytes = vec![];
     loop {
       let byte = vec
