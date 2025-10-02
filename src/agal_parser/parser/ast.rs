@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use crate::{
   agal_parser::{KeywordsType, TokenType},
   util,
@@ -109,12 +111,12 @@ impl Node {
         start: util::Position { line: 0, column: 0 },
         end: util::Position { line: 0, column: 0 },
         length: 0,
-        file_name: "<Modulo Nativo>".to_string(),
+        file_name: PathBuf::from("<Modulo Nativo>").into_boxed_path(),
       },
     }
   }
-  pub fn get_file(&self) -> String {
-    self.get_location().file_name
+  pub fn get_file(&self) -> PathBuf {
+    self.get_location().file_name.to_path_buf()
   }
   pub fn get_type(&self) -> &str {
     match self {

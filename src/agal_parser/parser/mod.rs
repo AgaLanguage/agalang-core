@@ -1,5 +1,7 @@
 pub mod ast;
 pub mod string;
+use std::path::Path;
+
 pub use ast::*;
 
 use crate::util::{self, Location};
@@ -58,7 +60,7 @@ pub fn node_error(error: &ast::NodeError, source: &str) -> super::ErrorTypes {
     message.to_string(),
     format!(
       "{}{cyan_arrow} {}:{}:{}",
-      str_init, error.location.file_name, line, column_node
+      str_init, error.location.file_name.to_string_lossy().to_string(), line, column_node
     ),
     format!("{} {cyan_line}", str_init),
     format!("{} {cyan_line} {}", COLOR.apply(&str_line), data_line),
@@ -77,18 +79,18 @@ pub struct Parser {
   source: String,
   tokens: Vec<util::Token<super::TokenType>>,
   index: usize,
-  file_name: String,
+  file_name: Box<Path>,
   token_error: bool,
 }
 impl Parser {
-  pub fn new(source: &str, file_name: &str) -> Parser {
+  pub fn new(source: &str, file_name: &Path) -> Parser {
     let (tokens, token_error) = super::tokenizer(source, file_name);
     Parser {
       tokens,
       token_error,
       source: source.to_string(),
       index: 0,
-      file_name: file_name.to_string(),
+      file_name: file_name.to_path_buf().into_boxed_path(),
     }
   }
   fn is_eof(&mut self) -> bool {

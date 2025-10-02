@@ -4,9 +4,7 @@ use crate::{
   MultiRefHash, ToJSON,
 };
 use std::{
-  collections::{HashMap, HashSet},
-  ops::Deref,
-  rc::Rc,
+  collections::{HashMap, HashSet}, ops::Deref, path::PathBuf, rc::Rc
 };
 
 trait Resolvable {
@@ -1711,7 +1709,7 @@ fn proto_types(data: &DataType) -> RefHash<HashMap<&'static str, DataType>> {
           start: Default::default(),
           end: Default::default(),
           length: 0,
-          file_name: "llama".to_string(),
+          file_name: PathBuf::from("llama").into_boxed_path(),
         },
         0,
       );
@@ -1719,7 +1717,7 @@ fn proto_types(data: &DataType) -> RefHash<HashMap<&'static str, DataType>> {
         start: Default::default(),
         end: Default::default(),
         length: 0,
-        file_name: "llama".to_string(),
+        file_name: PathBuf::from("llama").into_boxed_path(),
       });
       proto_props.insert(
         "llama",
@@ -1750,13 +1748,13 @@ fn mod_types(module: &str) -> RefHash<HashMap<&str, DataType>> {
             start: Default::default(),
             end: Default::default(),
             length: Default::default(),
-            file_name: module.to_string(),
+            file_name: PathBuf::from(module).into_boxed_path(),
           })],
           ret: Box::new(List(Box::new(Item(Box::new(Params(Location {
             start: Default::default(),
             end: Default::default(),
             length: Default::default(),
-            file_name: module.to_string(),
+            file_name: PathBuf::from(module).into_boxed_path(),
           })))))),
         },
       );
@@ -1863,7 +1861,7 @@ fn mod_types(module: &str) -> RefHash<HashMap<&str, DataType>> {
             start: Default::default(),
             end: Default::default(),
             length: Default::default(),
-            file_name: module.to_string(),
+            file_name: PathBuf::from(module).into_boxed_path(),
           })],
           ret: Box::new(Never),
         },
@@ -1876,7 +1874,7 @@ fn mod_types(module: &str) -> RefHash<HashMap<&str, DataType>> {
               start: Default::default(),
               end: Default::default(),
               length: Default::default(),
-              file_name: module.to_string(),
+              file_name: PathBuf::from(module).into_boxed_path(),
             },
             0,
           )],
@@ -1968,6 +1966,6 @@ pub fn print_tokens(node: Node) {
   println!(
     "{{\"file\":{},\"mod\":{}}}",
     tokens.clone().resolve(&tokens).to_json(),
-    DataType::Class { props: RefHash::new(module), instance_props: Default::default(), name: node.get_file() }.to_json()
+    DataType::Class { props: RefHash::new(module), instance_props: Default::default(), name: node.get_file().to_string_lossy().to_string() }.to_json()
   )
 }

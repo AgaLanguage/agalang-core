@@ -46,7 +46,7 @@ fn main() -> ExitCode {
       == EXTENSION
   {
     let code = read_code(path).on_some_option(|file| {
-      agal_parser::Parser::new(&file, path.file_name().unwrap().to_str().unwrap())
+      agal_parser::Parser::new(&file, path)
         .produce_ast()
         .on_error(|e| {
           if !e.message.is_empty() {
@@ -131,7 +131,7 @@ fn compile(path: &Path) -> Result<(Compiler, &str), String> {
   match path.extension().on_some_option(|v| v.to_str()) {
     Some(EXTENSION) => {
       let file = read_code(path).on_error(|_| "No se pudo leer el archivo")?;
-      let ast = agal_parser::Parser::new(&file, path.file_name().unwrap().to_str().unwrap())
+      let ast = agal_parser::Parser::new(&file, path)
         .produce_ast()
         .on_error(|e| {
           if !e.message.is_empty() {

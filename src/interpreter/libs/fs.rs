@@ -64,7 +64,7 @@ pub fn lib_value() -> Value {
         func: |this, args, thread, _| {
           let path = args
             .first()
-            .map(|path| absolute_path(&path.as_string(thread)))
+            .map(|path| absolute_path(&path.to_aga_string(thread)))
             .on_error(|_| format!("{PATH}: Se esperaba una ruta"))?;
           this.set_instance_property(
             CONSOLE,
@@ -91,7 +91,7 @@ pub fn lib_value() -> Value {
           chunk: Default::default(),
           func: |this, _, thread, _| {
             Ok(
-              match std::path::Path::new(&this.as_string(thread)).is_file() {
+              match std::path::Path::new(&this.to_aga_string(thread)).is_file() {
                 true => Value::True,
                 false => Value::False,
               },
@@ -112,7 +112,7 @@ pub fn lib_value() -> Value {
           chunk: Default::default(),
           func: |this, _, thread, _| {
             Ok(
-              match std::path::Path::new(&this.as_string(thread)).is_dir() {
+              match std::path::Path::new(&this.to_aga_string(thread)).is_dir() {
                 true => Value::True,
                 false => Value::False,
               },
@@ -132,7 +132,7 @@ pub fn lib_value() -> Value {
           path: format!("<{LIB_NAME}>::{PATH}"),
           chunk: Default::default(),
           func: |this, _, thread, _| {
-            std::path::Path::new(&this.as_string(thread))
+            std::path::Path::new(&this.to_aga_string(thread))
               .parent()
               .map(|p| Value::String(p.to_string_lossy().to_string()))
               .on_error(|_| format!("{PATH_GET_PARENT}: La ruta no tiene padre"))
@@ -151,7 +151,7 @@ pub fn lib_value() -> Value {
           path: format!("<{LIB_NAME}>::{PATH}"),
           chunk: Default::default(),
           func: |this, _, thread, _| {
-            std::path::Path::new(&this.as_string(thread))
+            std::path::Path::new(&this.to_aga_string(thread))
               .file_name()
               .map(|p| Value::String(p.to_string_lossy().to_string()))
               .on_error(|_| format!("{PATH_GET_NAME}: La ruta no es un archivo"))
@@ -170,7 +170,7 @@ pub fn lib_value() -> Value {
           path: format!("<{LIB_NAME}>::{PATH}"),
           chunk: Default::default(),
           func: |this, _, thread, _| {
-            std::path::Path::new(&this.as_string(thread))
+            std::path::Path::new(&this.to_aga_string(thread))
               .extension()
               .map(|p| Value::String(p.to_string_lossy().to_string()))
               .on_error(|_| format!("{PATH_GET_EXTENSION}: La ruta no es un archivo"))
@@ -195,7 +195,7 @@ pub fn lib_value() -> Value {
         func: |_, args, thread, _| {
           let path = args
             .first()
-            .map(|t| t.as_string(thread))
+            .map(|t| t.to_aga_string(thread))
             .on_error(|_| format!("{READ_FILE}: Se esperaba una ruta"))?;
           std::fs::File::open(&path)
             .ok()
@@ -225,7 +225,7 @@ pub fn lib_value() -> Value {
         func: |_, args, thread, _| {
           let path = args
             .first()
-            .map(|t| t.as_string(thread))
+            .map(|t| t.to_aga_string(thread))
             .on_error(|_| format!("{CREATE_FILE}: Se esperaba una ruta"))?;
           std::fs::File::create(&path)
             .ok()
@@ -248,7 +248,7 @@ pub fn lib_value() -> Value {
         func: |_, args, thread, _| {
           let path = args
             .first()
-            .map(|t| t.as_string(thread))
+            .map(|t| t.to_aga_string(thread))
             .on_error(|_| format!("{WRITE_FILE}: Se esperaba una ruta"))?;
           let buffer = args
             .get(1)
@@ -278,7 +278,7 @@ pub fn lib_value() -> Value {
         func: |_, args, thread, _| {
           let path = args
             .first()
-            .map(|t| t.as_string(thread))
+            .map(|t| t.to_aga_string(thread))
             .on_error(|_| format!("{REMOVE_FILE}: Se esperaba una ruta"))?;
           std::fs::remove_file(&path)
             .ok()
@@ -302,7 +302,7 @@ pub fn lib_value() -> Value {
         func: |_, args, thread, _| {
           let path = args
             .first()
-            .map(|t| t.as_string(thread))
+            .map(|t| t.to_aga_string(thread))
             .on_error(|_| format!("{READ_DIR}: Se esperaba una ruta"))?;
           std::fs::read_dir(&path)
             .ok()
@@ -335,7 +335,7 @@ pub fn lib_value() -> Value {
         func: |_, args, thread, _| {
           let path = args
             .first()
-            .map(|t| t.as_string(thread))
+            .map(|t| t.to_aga_string(thread))
             .on_error(|_| format!("{REMOVE_DIR}: Se esperaba una ruta"))?;
           std::fs::remove_dir(&path)
             .ok()
@@ -358,7 +358,7 @@ pub fn lib_value() -> Value {
         func: |_, args, thread, _| {
           let path = args
             .first()
-            .map(|t| t.as_string(thread))
+            .map(|t| t.to_aga_string(thread))
             .on_error(|_| format!("{CREATE_DIR}: Se esperaba una ruta"))?;
           std::fs::create_dir(&path)
             .ok()

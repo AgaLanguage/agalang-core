@@ -94,7 +94,7 @@ impl Object {
     match self {
       Self::Map(_, i) => i
         .on_ok(|t| t.get_instance_property(STRING, thread))
-        .map(|t| t.as_string(thread)),
+        .map(|t| t.to_aga_string(thread)),
       _ => None,
     }
     .unwrap_or_else(|| self.to_string())

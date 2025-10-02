@@ -12,7 +12,7 @@ fn is_number(c: char, use_dot: bool) -> bool {
 fn number_literal(
   position: util::Position,
   line: &str,
-  file_name: &str,
+  file_name: &std::path::Path,
 ) -> (util::Token<TokenType>, usize) {
   let col = position.column;
   let mut i = col;
@@ -46,7 +46,7 @@ fn number_literal(
         line: position.line,
       },
       length: i - col,
-      file_name: file_name.to_string(),
+      file_name: file_name.to_path_buf().into_boxed_path(),
     },
     value,
   };
@@ -57,7 +57,7 @@ fn number_base(
   c: char,
   pos: util::Position,
   line: &str,
-  file_name: &str,
+  file_name: &std::path::Path,
 ) -> (util::Token<TokenType>, usize) {
   let col = pos.column;
   let mut i = col + 1;
@@ -75,7 +75,7 @@ fn number_base(
               line: pos.line,
             },
             length: i - col,
-            file_name: file_name.to_string(),
+            file_name: file_name.to_path_buf().into_boxed_path(),
           },
           value: "0".to_string(),
         },
@@ -115,7 +115,7 @@ fn number_base(
                   line: pos.line,
                 },
                 length: i - col,
-                file_name: file_name.to_string(),
+                file_name: file_name.to_path_buf().into_boxed_path(),
               },
               value: "No se pudo analizar el byte".to_string(),
             },
@@ -132,7 +132,7 @@ fn number_base(
                   line: pos.line,
                 },
                 length: i - col,
-                file_name: file_name.to_string(),
+                file_name: file_name.to_path_buf().into_boxed_path(),
               },
               value,
             },
@@ -163,7 +163,7 @@ fn number_base(
                 line: pos.line,
               },
               length: 1,
-              file_name: file_name.to_string(),
+              file_name: file_name.to_path_buf().into_boxed_path(),
             },
             value: "Se esperaba un número base".to_string(),
           },
@@ -193,7 +193,7 @@ fn number_base(
                 line: pos.line,
               },
               length: i - col,
-              file_name: file_name.to_string(),
+              file_name: file_name.to_path_buf().into_boxed_path(),
             },
             value: "Se esperaba un número base".to_string(),
           },
@@ -212,7 +212,7 @@ fn number_base(
                 line: pos.line,
               },
               length: i - col,
-              file_name: file_name.to_string(),
+              file_name: file_name.to_path_buf().into_boxed_path(),
             },
             value: "Se esperaba un número en base 10".to_string(),
           },
@@ -231,7 +231,7 @@ fn number_base(
                 line: pos.line,
               },
               length: i - col,
-              file_name: file_name.to_string(),
+              file_name: file_name.to_path_buf().into_boxed_path(),
             },
             value: "La base debe estar entre 2 y 36".to_string(),
           },
@@ -251,7 +251,7 @@ fn number_base(
                 line: pos.line,
               },
               length: i - col,
-              file_name: file_name.to_string(),
+              file_name: file_name.to_path_buf().into_boxed_path(),
             },
             value: "Se esperaba un \"|\" para el valor".to_string(),
           },
@@ -292,7 +292,7 @@ fn number_base(
             line: pos.line,
           },
           length: i - col,
-          file_name: file_name.to_string(),
+          file_name: file_name.to_path_buf().into_boxed_path(),
         },
         value: "Se esperaba un número".to_string(),
       },
@@ -312,7 +312,7 @@ fn number_base(
               line: pos.line,
             },
             length: i - col,
-            file_name: file_name.to_string(),
+            file_name: file_name.to_path_buf().into_boxed_path(),
           },
           value: "Se esperaba un número".to_string(),
         },
@@ -329,7 +329,7 @@ fn number_base(
         line: pos.line,
       },
       length: i - col,
-      file_name: file_name.to_string(),
+      file_name: file_name.to_path_buf().into_boxed_path(),
     },
     value: format!("0n{}|{}", base, value),
   };
@@ -340,7 +340,7 @@ pub fn token_number(
   c: char,
   pos: util::Position,
   line: &str,
-  file_name: &str,
+  file_name: &std::path::Path,
 ) -> (util::Token<TokenType>, usize) {
   if c == '0' {
     let next = line.chars().nth(pos.column + 1);

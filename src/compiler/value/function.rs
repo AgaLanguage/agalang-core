@@ -1,4 +1,5 @@
 use std::fmt::Display;
+use std::path::PathBuf;
 
 use super::{Class, Value};
 use crate::compiler::Promise;
@@ -78,7 +79,7 @@ pub enum Function {
   },
   Script {
     chunk: MultiRefHash<ChunkGroup>,
-    path: String,
+    path: PathBuf,
     scope: MultiRefHash<Option<MultiRefHash<VarsManager>>>,
   },
   Native {
@@ -216,7 +217,7 @@ impl Function {
         } else {
           name.to_string()
         },
-        location.file_name.set_color(Color::Cyan),
+        location.file_name.to_string_lossy().to_string().set_color(Color::Cyan),
         (location.start.line + 1)
           .to_string()
           .set_color(Color::Yellow),
@@ -227,7 +228,7 @@ impl Function {
       Self::Script { path, .. } => {
         format!(
           "en <{}:{}>",
-          path.set_color(Color::Cyan),
+          path.to_string_lossy().to_string().set_color(Color::Cyan),
           "script".to_string().set_color(Color::Gray)
         )
       }
@@ -253,7 +254,7 @@ impl Display for Function {
       Self::Value { name, is_async, .. } => {
         write!(f, "<{} {name}>", if *is_async { "asinc fn" } else { "fn" })
       }
-      Self::Script { path, .. } => write!(f, "<script '{path}'>"),
+      Self::Script { path, .. } => write!(f, "<script '{path}'>", path = path.display()),
       Self::Native { name, .. } => write!(f, "<nativo fn {name}>"),
     }
   }
@@ -368,7 +369,7 @@ impl Decode for Function {
       }),
       1 => Ok(Self::Script {
         scope: Default::default(),
-        path: String::decode(vec)?,
+        path: PathBuf::decode(vec)?,
         chunk: ChunkGroup::decode(vec)?.into(),
       }),
       _ => Err("Se esperaba una funcion".to_string()),

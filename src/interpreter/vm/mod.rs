@@ -83,7 +83,7 @@ impl VM {
   }
   pub fn resolve(
     this: MultiRefHash<Self>,
-    path: &str,
+    path: &Path,
     vars: MultiRefHash<VarsManager>,
   ) -> MultiRefHash<ModuleThread> {
     let result = ModuleThread::new(path);

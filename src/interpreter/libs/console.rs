@@ -20,7 +20,7 @@ fn inspect_value(value: &Value, thread: &Thread) -> String {
     Value::Promise(_) => Color::DarkRed,
     Value::Lazy(l) => return inspect_value(&l.get().clone().unwrap_or_default(), thread),
   }
-  .apply(&value.as_string(thread))
+  .apply(&value.to_aga_string(thread))
 }
 fn inspect(value: &Value, thread: &Thread) -> String {
   match value {
@@ -28,7 +28,7 @@ fn inspect(value: &Value, thread: &Thread) -> String {
       .read()
       .as_ref()
       .on_some_option(|i| i.get_instance_property(CONSOLE, thread))
-      .map(|p| p.as_string(thread))
+      .map(|p| p.to_aga_string(thread))
       .unwrap_or_else(|| inspect_value(value, thread)),
     Value::Object(Object::Array(arr)) => {
       let mut result = String::new();

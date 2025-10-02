@@ -27,7 +27,7 @@ pub fn token_identifier(
   ch: char,
   position: util::Position,
   line: &str,
-  file_name: &str,
+  file_name: &std::path::Path,
 ) -> (util::Token<TokenType>, usize) {
   let col = position.column;
   let mut i = col;
@@ -55,7 +55,7 @@ pub fn token_identifier(
             line: position.line,
           },
           length: 1,
-          file_name: file_name.to_string(),
+          file_name: file_name.to_path_buf().into_boxed_path(),
         },
         value: ch.to_string(),
       },
@@ -71,7 +71,7 @@ pub fn token_identifier(
         line: position.line,
       },
       length: i - col,
-      file_name: file_name.to_string(),
+      file_name: file_name.to_path_buf().into_boxed_path(),
     },
     value,
   };

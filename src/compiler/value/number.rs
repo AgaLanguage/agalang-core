@@ -926,7 +926,7 @@ impl Number {
   pub const fn is_infinite(&self) -> bool {
     matches!(self, Self::Infinity | Self::NegativeInfinity)
   }
-  pub fn _is_zero(&self) -> bool {
+  pub fn is_zero(&self) -> bool {
     match self {
       Self::NaN | Self::Infinity | Self::NegativeInfinity => false,
       Self::Basic(x) => x.is_zero(),
@@ -937,9 +937,73 @@ impl Number {
     if !(2..=36).contains(&radix) {
       return Self::NaN;
     }
+    // TODO: Independizar de i32
     i32::from_str_radix(value, radix as u32)
       .map(|v| v.to_string().parse::<Self>().unwrap_or_default())
       .unwrap_or_default()
+    }
+    pub fn pow(&self, exp: Self) -> Self {
+    // TODO: implementar correctamente las potencias. Esta implementacion es muy basica.
+    match (self, exp) {
+      (Self::NaN, _) | (_, Self::NaN) => Self::NaN,
+      (Self::Infinity, Self::Basic(e)) | (Self::NegativeInfinity, Self::Basic(e)) => {
+        if e.is_negative() || e.is_zero() {
+          return Self::Basic(BasicNumber::Int(false, BCDUInt::from(0)));
+        }
+        if e.is_int() {
+          if let BasicNumber::Int(_, e) = e {
+            if e.0.last().unwrap_or(&0) % 2 == 0 {
+              return Self::Infinity;
+            } else if matches!(self, Self::NegativeInfinity) {
+              return Self::NegativeInfinity;
+            } else {
+              return Self::Infinity;
+            }
+          }
+        }
+        Self::Infinity
+      }
+      (Self::Infinity, _) | (Self::NegativeInfinity, _) => Self::NaN,
+      (Self::Basic(x), Self::Basic(e)) => {
+        if x.is_zero() && e.is_negative() {
+          return Self::Infinity;
+        }
+        if x.is_zero() && e.is_zero() {
+          return Self::NaN;
+        }
+        if x.is_zero() {
+          return Self::Basic(BasicNumber::Int(false, BCDUInt::from(0)));
+        }
+        if e.is_zero() {
+          return Self::Basic(BasicNumber::Int(false, BCDUInt::from(1)));
+        }
+        if !e.is_int() {
+          return Self::NaN;
+        }
+        if let BasicNumber::Int(e_neg, e) = e {
+          let mut result = BasicNumber::Int(false, BCDUInt::from(1));
+          let mut base = x.clone();
+          let mut exponent = e;
+          while !exponent.is_zero() {
+            if exponent.0.last().unwrap_or(&0) % 2 == 1 {
+              result = result * base.clone();
+            }
+            base = base.clone() * base;
+            exponent = exponent.clone() / BCDUInt::from(2);
+          }
+          if e_neg {
+            return Self::Basic(BasicNumber::Float(
+              false,
+              BCDUInt::from(0),
+              result.to_string().into(),
+            ));
+          }
+          return Self::Basic(result);
+        }
+        Self::NaN
+      }
+      (_, _) => Self::NaN,
+    }
   }
 }
 impl From<&char> for Number {
@@ -959,7 +1023,8 @@ impl FromStr for Number {
     if s == "NeN" {
       return Ok(Self::NaN);
     }
-    if s.contains("i") {
+    // TODO: Verificar la validez, no estoy seguro de haberlo implementado bien. Algo me dice que no.
+    if s.ends_with("i") {
       let parts: Vec<&str> = s.split("i").collect();
       let i_exp = parts.len() - 1;
       let number = parts.join("").into();

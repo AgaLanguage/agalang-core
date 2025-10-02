@@ -1,3 +1,5 @@
+use std::path::{Path, PathBuf};
+
 use crate::util::{OnError, OnSome};
 
 #[derive(PartialEq, Eq)]
@@ -107,6 +109,23 @@ impl Encode for char {
     Ok(encode)
   }
 }
+impl Encode for PathBuf {
+  fn encode(&self) -> Result<Vec<u8>, String> {
+    self
+      .to_string_lossy()
+      .to_string()
+      .encode()
+      .on_error(|e| format!("No se pudo codificar la ruta: {e}"))
+  }
+}impl Encode for Box<Path> {
+  fn encode(&self) -> Result<Vec<u8>, String> {
+    self
+      .to_string_lossy()
+      .to_string()
+      .encode()
+      .on_error(|e| format!("No se pudo codificar la ruta: {e}"))
+  }
+}
 pub(crate) trait Decode
 where
   Self: Encode,
@@ -206,5 +225,17 @@ impl Decode for char {
     }
     let u32 = u32::from_be_bytes(raw);
     char::from_u32(u32).on_error(|_| "Se esperaba un char".to_string())
+  }
+}
+impl Decode for PathBuf {
+  fn decode(vec: &mut std::collections::VecDeque<u8>) -> Result<Self, String> {
+    let s = String::decode(vec)?;
+    Ok(PathBuf::from(s))
+  }
+}
+impl Decode for Box<Path> {
+  fn decode(vec: &mut std::collections::VecDeque<u8>) -> Result<Self, String> {
+    let s = PathBuf::decode(vec)?;
+    Ok(s.into_boxed_path())
   }
 }

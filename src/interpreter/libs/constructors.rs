@@ -32,7 +32,7 @@ pub fn lib_value() -> Value {
           };
           value
             .get_instance_property(functions_names::STRING, thread)
-            .or_else(|| Some(Value::String(value.as_string(thread))))
+            .or_else(|| Some(Value::String(value.to_aga_string(thread))))
             .on_error(|_| format!("{CADENA}: se esperaba un valor bufeable"))
         },
         custom_data: ().into(),

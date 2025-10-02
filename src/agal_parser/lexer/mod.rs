@@ -1,4 +1,6 @@
 mod token_type;
+use std::path::Path;
+
 pub use token_type::*;
 mod token_number;
 use token_number::token_number;
@@ -52,7 +54,7 @@ fn token_error(token: &util::Token<TokenType>, source: &str) -> ErrorTypes {
     token.value.to_string(),
     format!(
       "{}{cyan_arrow} {}:{}:{}",
-      str_init, token.location.file_name, line, column
+      str_init, token.location.file_name.display(), line, column
     ),
     format!("{} {cyan_line}", str_init),
     format!("{} {cyan_line} {}", COLOR.apply(&str_line), data_line),
@@ -72,7 +74,7 @@ fn comment(
   _: char,
   position: util::Position,
   line: &str,
-  file_name: &str,
+  file_name: &Path,
 ) -> (util::Token<TokenType>, usize) {
   let line_len = line.len();
   let length = line_len - position.column;
@@ -86,13 +88,13 @@ fn comment(
         column: length,
       },
       length,
-      file_name: file_name.to_string(),
+      file_name: file_name.to_path_buf().into_boxed_path(),
     },
   };
   (token, length + 1)
 }
 
-pub fn tokenizer(source: &str, file_name: &str) -> (Vec<util::Token<TokenType>>, bool) {
+pub fn tokenizer(source: &str, file_name: &Path) -> (Vec<util::Token<TokenType>>, bool) {
   let tokens = util::tokenize::<TokenType>(
     source,
     vec![
@@ -141,7 +143,7 @@ pub fn tokenizer(source: &str, file_name: &str) -> (Vec<util::Token<TokenType>>,
           start: pos,
           end: pos,
           length: 0,
-          file_name: file_name.to_string(),
+          file_name: file_name.to_path_buf().into_boxed_path(),
         },
         value: "".to_string(),
       });

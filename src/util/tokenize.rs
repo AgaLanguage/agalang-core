@@ -1,4 +1,4 @@
-use std::cmp::Ordering;
+use std::{cmp::Ordering};
 
 use crate::{
   util::{OnError, OnSome},
@@ -67,7 +67,7 @@ pub struct Location {
   pub start: Position,
   pub end: Position,
   pub length: usize,
-  pub file_name: String,
+  pub file_name: Box<std::path::Path>,
 }
 
 impl Ord for Location {
@@ -113,7 +113,7 @@ impl Decode for Location {
       })
       .on_error(|_| "Se esperaba una locacion".to_string())?;
     Ok(Self {
-      file_name: String::decode(vec)?,
+      file_name: Box::decode(vec)?,
       start: Position::decode(vec)?,
       end: Position::decode(vec)?,
       length: usize::decode(vec)?,
@@ -138,7 +138,7 @@ pub struct Token<TokenKind> {
 }
 
 pub type TokenOptionsCallbackFull<TK> =
-  fn(ch: char, start_pos: Position, line: &str, file_name: &str) -> (Token<TK>, usize);
+  fn(ch: char, start_pos: Position, line: &str, file_name: &std::path::Path) -> (Token<TK>, usize);
 pub type TokenOptionsCallbackChar<TK> = fn(char: char) -> TK;
 pub type TokenOptionsCallbackMin<TK> = fn() -> TK;
 
@@ -158,7 +158,7 @@ pub type TokenOption<'a, TK> = (TokenOptionCondition, TokenOptionResult<TK>);
 pub fn tokenize<TK>(
   input: &str,
   options: Vec<TokenOption<TK>>,
-  file_name: &str,
+  file_name: &std::path::Path,
 ) -> Result<Vec<Token<TK>>, (String, Location)> {
   let lines = input.lines();
   let mut tokens = Vec::new();
@@ -198,7 +198,7 @@ pub fn tokenize<TK>(
                     column: column + 1,
                   },
                   length: 1,
-                  file_name: file_name.to_string(),
+                  file_name: file_name.to_path_buf().into_boxed_path(),
                 },
               },
               0,
@@ -217,7 +217,7 @@ pub fn tokenize<TK>(
                     column: column + 1,
                   },
                   length: 1,
-                  file_name: file_name.to_string(),
+                  file_name: file_name.to_path_buf().into_boxed_path(),
                 },
               },
               0,
@@ -243,7 +243,7 @@ pub fn tokenize<TK>(
               column: column + 1,
             },
             length: 1,
-            file_name: file_name.to_string(),
+            file_name: file_name.to_path_buf().into_boxed_path(),
           },
         ))?
       }

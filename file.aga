@@ -3,6 +3,10 @@ importa ':red' como Red;
 importa ':consola' como Consola;
 importa ':constructores' como CONSTRUCTORES;
 
+const t = 2 ^ 4;
+const t2 = 0 ?? 34;
+Consola::pinta(?t, ?t2);
+
 const ruta = SA::Ruta('./icon.ico');
 Consola::pinta(ruta, ruta::obtener_nombre());
 

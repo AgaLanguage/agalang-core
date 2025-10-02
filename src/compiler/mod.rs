@@ -1,6 +1,8 @@
 pub mod binary;
 mod chunk;
 mod value;
+use std::path::PathBuf;
+
 pub use chunk::{ChunkGroup, OpCode};
 pub use value::*;
 
@@ -13,7 +15,7 @@ const CLASS_DECLARATION: u8 = 0b100;
 
 pub struct Compiler {
   pub function: Function,
-  pub path: String,
+  pub path: PathBuf,
 }
 impl Compiler {
   fn parse_function(function: &NodeFunction) -> Result<Function, String> {
@@ -28,7 +30,7 @@ impl Compiler {
         has_rest: false,
         in_class: None.into(),
       },
-      path: function.location.file_name.clone(),
+      path: function.location.file_name.to_path_buf(),
     };
     let mut has_rest = false;
     let mut rest_param = None;
@@ -132,6 +134,7 @@ impl Compiler {
           crate::agal_parser::NodeOperator::Modulo => vec![OpCode::Modulo as u8],
           crate::agal_parser::NodeOperator::And => vec![OpCode::And as u8],
           crate::agal_parser::NodeOperator::Or => vec![OpCode::Or as u8],
+          crate::agal_parser::NodeOperator::Nullish => vec![OpCode::Nullish as u8],
           a => {
             return Err(format!(
               "NodeOperator::{a:?}: No es un nodo valido en bytecode"
@@ -163,7 +166,7 @@ impl Compiler {
         self.node_to_bytes(&node_unary.operand)?;
         let operator = match &node_unary.operator {
           crate::agal_parser::NodeOperator::Approximate => OpCode::Approximate,
-          crate::agal_parser::NodeOperator::QuestionMark => OpCode::AsBoolean,
+          crate::agal_parser::NodeOperator::QuestionMark => OpCode::ToBoolean,
           crate::agal_parser::NodeOperator::Minus => OpCode::Negate,
           crate::agal_parser::NodeOperator::BitAnd => OpCode::AsRef,
           crate::agal_parser::NodeOperator::Not => OpCode::Not,
@@ -623,10 +626,10 @@ impl Compiler {
         let mut try_block = Self {
           function: Function::Script {
             chunk: ChunkGroup::new_ref(),
-            path: node_try.location.file_name.clone(),
+            path: node_try.location.file_name.to_path_buf(),
             scope: Default::default(),
           },
-          path: node_try.location.file_name.clone(),
+          path: node_try.location.file_name.to_path_buf(),
         };
         if !node_try.body.is_empty() {
           try_block.node_to_bytes(&node_try.body.clone().into_node())?;
@@ -641,10 +644,10 @@ impl Compiler {
         let mut catch_block = Self {
           function: Function::Script {
             chunk: ChunkGroup::new_ref(),
-            path: node_try.location.file_name.clone(),
+            path: node_try.location.file_name.to_path_buf(),
             scope: Default::default(),
           },
-          path: node_try.location.file_name.clone(),
+          path: node_try.location.file_name.to_path_buf(),
         };
         match &node_try.catch {
           Some((error, block)) => {
@@ -676,10 +679,10 @@ impl Compiler {
         let mut lazy_block = Self {
           function: Function::Script {
             chunk: ChunkGroup::new_ref(),
-            path: node.get_file(),
+            path: node.get_file().into(),
             scope: None.into(),
           },
-          path: node_expression.location.file_name.clone(),
+          path: node_expression.location.file_name.to_path_buf(),
         };
         lazy_block.node_to_bytes(&node_expression.expression)?;
         lazy_block.write(OpCode::Return as u8, node_expression.location.end.line);
@@ -735,7 +738,7 @@ impl Decode for Compiler {
       })
       .on_error(|_| "Se esperaba un compilador".to_string())?;
     Ok(Self {
-      path: String::decode(vec)?,
+      path: PathBuf::decode(vec)?,
       function: Function::decode(vec)?,
     })
   }

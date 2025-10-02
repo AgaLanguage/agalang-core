@@ -1,4 +1,5 @@
 use std::fmt::Display;
+use std::path::PathBuf;
 
 mod class;
 mod function;
@@ -133,6 +134,13 @@ impl Value {
       f.write().set_in_class(class);
     }
   }
+  pub fn is_nullish(&self) -> bool {
+    match self {
+      Self::Never | Self::Null => true,
+      Self::Ref(RefValue(r)) | Self::Iterator(r) => r.read().is_number(),
+      _ => false,
+    }
+  }
   pub fn is_number(&self) -> bool {
     match self {
       Self::Number(_) => true,
@@ -197,6 +205,25 @@ impl Value {
       )),
     }
   }
+  pub fn to_boolean(&self) -> Result<bool, String> {
+    match self {
+      Self::True => Ok(true),
+      Self::Null | Self::Never | Self::False => Ok(false),
+      Self::Lazy(l) => l.get().clone().unwrap_or_default().as_boolean(),
+      Self::Byte(b) => Ok(*b != 0),
+      Self::Number(n) => Ok(!n.is_zero()),
+      Self::String(s) => Ok(!s.is_empty()),
+      Self::Object(Object::Array(a)) => Ok(!a.read().is_empty()),
+      Self::Object(Object::Map(m, _)) => Ok(!m.read().is_empty()),
+      Self::Object(Object::Function { .. }) => Ok(true),
+      Self::Object(Object::Class { .. }) => Ok(true),
+      Self::Iterator(r) | Self::Ref(RefValue(r)) => r.read().to_boolean(),
+      val => Err(format!(
+        "Se esperaba un '{BOOLEAN_TYPE}' pero se recibio un {}",
+        val.get_type()
+      )),
+    }
+  }
 
   pub fn is_function(&self) -> bool {
     match self {
@@ -220,7 +247,7 @@ impl Value {
     }
   }
 
-  pub fn as_string(&self, thread: &Thread) -> String {
+  pub fn to_aga_string(&self, thread: &Thread) -> String {
     match self {
       Self::String(s) => s.clone(),
       Self::Promise(p) => p.to_string(),
@@ -228,13 +255,13 @@ impl Value {
       Self::True => TRUE_NAME.to_string(),
       Self::Null => NULL_NAME.to_string(),
       Self::Never => NEVER_NAME.to_string(),
-      Self::Iterator(v) => format!("@{}", v.read().as_string(thread)),
-      Self::Ref(v) => format!("&{}", v.borrow().as_string(thread)),
+      Self::Iterator(v) => format!("@{}", v.read().to_aga_string(thread)),
+      Self::Ref(v) => format!("&{}", v.borrow().to_aga_string(thread)),
       Self::Byte(b) => format!("0x{b:02X}"),
       Self::Number(x) => x.to_string(),
       Self::Char(c) => c.to_string(),
       Self::Object(x) => x.as_string(thread),
-      Self::Lazy(l) => l.get().clone().unwrap_or_default().as_string(thread),
+      Self::Lazy(l) => l.get().clone().unwrap_or_default().to_aga_string(thread),
     }
   }
   pub fn as_function(&self) -> MultiRefHash<Function> {
@@ -244,7 +271,7 @@ impl Value {
       _ => Function::Script {
         chunk: Default::default(),
         scope: None.into(),
-        path: "<nulo>".to_string(),
+        path: PathBuf::from("<nulo>".to_string()),
       }
       .into(),
     }

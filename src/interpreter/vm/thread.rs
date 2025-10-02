@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use super::VM;
 use crate::compiler::{Function, LazyValue, Number, Object, OpCode, Promise, PromiseData, Value};
@@ -10,22 +10,22 @@ use crate::{MultiRefHash, OnError};
 
 #[derive(Clone, Debug)]
 pub struct ModuleThread {
-  path: String,
+  path: PathBuf,
   value: Value,
   async_thread: MultiRefHash<AsyncThread>,
   status: InterpretResult,
   vm: Option<MultiRefHash<VM>>,
 }
 impl ModuleThread {
-  pub fn new(path: &str) -> MultiRefHash<Self> {
+  pub fn new(path: &Path) -> MultiRefHash<Self> {
     let (async_thread, _) = AsyncThread::new();
 
     let module: MultiRefHash<ModuleThread> = Self {
-      path: path.to_string(),
+      path: path.to_path_buf(),
       async_thread: async_thread.clone(),
       value: Value::Object(Object::Map(
         Default::default(),
-        crate::compiler::Instance::new(format!("<{path}>")).into(),
+        crate::compiler::Instance::new(format!("<{path}>", path = path.display())).into(),
       )),
       status: InterpretResult::Continue,
       vm: None,
@@ -47,7 +47,7 @@ impl ModuleThread {
         let thread = self.async_thread.read().thread.clone();
         thread.write().read();
         let module = thread.write().pop();
-        let path = module.as_string(&thread.read());
+        let path = module.to_aga_string(&thread.read());
         let meta_byte = thread.write().read();
         let name_byte = thread.write().read();
         let _is_lazy = (meta_byte & 0b10) == 0b10;
@@ -71,6 +71,13 @@ impl ModuleThread {
           lib_name,
           self.get_vm().read().cache.libs.clone(),
           |path| {
+            let binding = Path::new(&self.path)
+              .parent()
+              .unwrap()
+              .join(path)
+              .canonicalize()
+              .unwrap_or_else(|_| PathBuf::from(path));
+            let path = binding.as_path();
             let module = VM::resolve(self.get_vm(), path, thread.write().globals());
             *self.async_thread.read().await_thread.write() = BlockingThread::Module(module.clone());
             let x = module.read().clone().into_value();
@@ -83,7 +90,7 @@ impl ModuleThread {
             .current_chunk()
             .read()
             .read_constant(name_byte)
-            .as_string(&thread.read());
+            .to_aga_string(&thread.read());
           thread.write().declare(&name, value, true);
         }
         thread.write().push(module);
@@ -97,13 +104,10 @@ impl ModuleThread {
         if !self.value.is_object() {
           return InterpretResult::RuntimeError("Se esperaba un objeto como modulo".to_string());
         }
-        let exported_value = self.value.set_instance_property(
-          &name,
-          value.clone(),
-          true,
-          false,
-          &thread.read(),
-        );
+        let exported_value =
+          self
+            .value
+            .set_instance_property(&name, value.clone(), true, false, &thread.read());
         match exported_value {
           Some(value) => {
             thread.write().push(value);
@@ -473,7 +477,7 @@ impl Thread {
       .clone()
   }
   fn read_string(&mut self) -> String {
-    self.read_constant().as_string(self)
+    self.read_constant().to_aga_string(self)
   }
   fn read_short(&mut self) -> u16 {
     let a = self.read() as u16;
@@ -615,7 +619,7 @@ impl Thread {
     let instruction: OpCode = byte_instruction.into();
 
     let value: Value = match instruction {
-      OpCode::Throw => Err(self.pop().as_string(self))?,
+      OpCode::Throw => Err(self.pop().to_aga_string(self))?,
       OpCode::Try => {
         let catch_block = self.pop().as_function();
         let try_block = self.pop().as_function();
@@ -727,7 +731,7 @@ impl Thread {
         let is_public = (meta & 0b010) != 0;
         let is_class_decl = (meta & 0b100) != 0;
         if is_instance {
-          let key = key.as_string(self);
+          let key = key.to_aga_string(self);
           use crate::util::OnError;
           let value = object
             .set_instance_property(&key, value.clone(), is_public, is_class_decl, self)
@@ -740,7 +744,7 @@ impl Thread {
         if !object.is_object() {
           Err(format!(
             "Se esperaba un objeto para asignar la propiedad '{}' [3]",
-            key.as_string(self)
+            key.to_aga_string(self)
           ))?;
         }
         let key = if object.is_array() {
@@ -769,7 +773,7 @@ impl Thread {
             Err("El indice debe ser entero (asignar propiedad)".to_string())?
           }
         } else {
-          key.as_string(self)
+          key.to_aga_string(self)
         };
         match object.set_object_property(&key, value) {
           Some(value) => value,
@@ -788,7 +792,7 @@ impl Thread {
         let object = self.pop();
         let is_instance = self.read() == 1u8;
         if is_instance {
-          let key = key.as_string(self);
+          let key = key.to_aga_string(self);
           if let Some(value) = object.get_instance_property(&key, self) {
             self.init(&value);
             self.push(value);
@@ -802,7 +806,7 @@ impl Thread {
         if !object.is_object() {
           Err(format!(
             "Se esperaba un objeto para obtener la propiedad '{}' [3]",
-            key.as_string(self)
+            key.to_aga_string(self)
           ))?
         }
         let key = if object.is_array() {
@@ -831,7 +835,7 @@ impl Thread {
             Err("El indice debe ser entero (obtener propiedad)".to_string())?
           }
         } else {
-          key.as_string(self)
+          key.to_aga_string(self)
         };
         match object.get_object_property(&key) {
           Some(value) => {
@@ -951,8 +955,8 @@ impl Thread {
           return Ok(InterpretResult::Continue);
         }
         if a.is_string() || b.is_string() {
-          let a = a.as_string(self);
-          let b = b.as_string(self);
+          let a = a.to_aga_string(self);
+          let b = b.to_aga_string(self);
           self.push(Value::String(format!("{a}{b}")));
           return Ok(InterpretResult::Continue);
         }
@@ -990,6 +994,20 @@ impl Thread {
         let b = b.as_number()?;
         Value::Number(a * b)
       }
+      OpCode::Exponential => {
+        let b = self.pop();
+        let a = self.pop();
+        if !a.is_number() || !b.is_number() {
+          Err(format!(
+            "No se pudo operar '{} ^ {}'",
+            a.get_type(),
+            b.get_type()
+          ))?;
+        }
+        let a = a.as_number()?;
+        let b = b.as_number()?;
+        Value::Number(a.pow(b))
+      }
       OpCode::Divide => {
         let b = self.pop();
         let a = self.pop();
@@ -1018,10 +1036,19 @@ impl Thread {
         let b = b.as_number()?;
         Value::Number(a % b)
       }
+      OpCode::Nullish => {
+        let b = self.pop();
+        let a = self.pop();
+        if !a.is_nullish() {
+          a
+        } else {
+          b
+        }
+      }
       OpCode::Or => {
         let b = self.pop();
         let a = self.pop();
-        if a.as_boolean()? {
+        if a.to_boolean()? {
           a
         } else {
           b
@@ -1045,23 +1072,15 @@ impl Thread {
       }
       OpCode::Not => {
         let value = self.pop().as_boolean()?;
-        if value {
-          Value::False
-        } else {
-          Value::True
-        }
+        Value::from(!value)
       }
-      OpCode::AsBoolean => {
-        let value = self.pop().as_boolean()?;
-        if value {
-          Value::True
-        } else {
-          Value::False
-        }
+      OpCode::ToBoolean => {
+        let value = self.pop().to_boolean()?;
+        Value::from(value)
       }
-      OpCode::AsString => Value::String(self.pop().as_string(self)),
+      OpCode::ToString => Value::String(self.pop().to_aga_string(self)),
       OpCode::ConsoleOut => {
-        let value = self.pop().as_string(self);
+        let value = self.pop().to_aga_string(self);
         print!("{value}");
         use std::io::Write as _;
         let _ = std::io::stdout().flush();
@@ -1070,6 +1089,7 @@ impl Thread {
       OpCode::Return => {
         self.call_stack.pop();
         if self.call_stack.is_empty() {
+          // El hilo ha terminado
           return Ok(InterpretResult::Ok);
         }
         self.pop()
@@ -1082,15 +1102,11 @@ impl Thread {
           let b = b.as_number()?;
           if a.is_nan() || b.is_nan() {
             Value::False
-          } else if a == b {
-            Value::True
           } else {
-            Value::False
+            Value::from(a == b)
           }
-        } else if a == b {
-          Value::True
         } else {
-          Value::False
+          Value::from(a == b)
         }
       }
       OpCode::GreaterThan => {
@@ -1103,13 +1119,9 @@ impl Thread {
             b.get_type()
           ))?;
         }
-        let a = a.as_number();
-        let b = b.as_number();
-        if a > b {
-          Value::True
-        } else {
-          Value::False
-        }
+        let a = a.as_number()?;
+        let b = b.as_number()?;
+        Value::from(a > b)
       }
       OpCode::LessThan => {
         let b = self.pop();
@@ -1121,16 +1133,12 @@ impl Thread {
             b.get_type()
           ))?;
         }
-        let a = a.as_number();
-        let b = b.as_number();
-        if a < b {
-          Value::True
-        } else {
-          Value::False
-        }
+        let a = a.as_number()?;
+        let b = b.as_number()?;
+        Value::from(a < b)
       }
       OpCode::Break | OpCode::Continue => Value::Null,
-      OpCode::Null => Err(format!("Byte invalido {}", byte_instruction))?,
+      OpCode::Null => Err(format!("Byte invalido {:?}", byte_instruction))?,
     };
     self.push(value);
     Ok(InterpretResult::Continue)
