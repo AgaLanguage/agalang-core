@@ -679,7 +679,7 @@ impl Compiler {
         let mut lazy_block = Self {
           function: Function::Script {
             chunk: ChunkGroup::new_ref(),
-            path: node.get_file().into(),
+            path: node.get_file(),
             scope: None.into(),
           },
           path: node_expression.location.file_name.to_path_buf(),
