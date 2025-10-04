@@ -11,9 +11,6 @@ impl Big256 {
     Self{digits:vec![]}
   }
   pub fn is_zero(&self) -> bool {
-    if self.digits.is_empty() {
-      return true;
-    }
     self.digits.iter().all(|&x| x == 0)
   }
   fn normalize(&mut self){
@@ -241,10 +238,10 @@ mod tests {
 }
 
 #[allow(clippy::derived_hash_with_manual_eq)]
-#[derive(Clone, Eq, Hash, Debug)]
+#[derive(Clone, Eq, Hash, Debug, Default)]
 pub struct BCDUInt(Vec<u8>);
 impl BCDUInt {
-  pub fn last(&self) -> &u8 {
+  pub fn unit(&self) -> &u8 {
     self.0.last().unwrap_or(&0)
   }
   pub fn is_zero(&self) -> bool {
@@ -330,7 +327,6 @@ impl BCDUInt {
     result
   }
 }
-
 impl fmt::Display for BCDUInt {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     let mut result = String::new();

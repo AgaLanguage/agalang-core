@@ -11,235 +11,91 @@ use crate::{
 
 mod binary;
 pub use binary::BCDUInt as BigUInt;
+mod float;
+pub use float::BigUDecimal as BigUFloat;
 
-const DIVISION_DECIMALS: usize = 100;
 const NAN_NAME: &str = "NeN";
 const INFINITY_NAME: &str = "infinito";
-
-#[derive(Clone, Eq, Hash, Debug)]
-#[allow(clippy::derived_hash_with_manual_eq)]
-pub struct Decimals(Vec<u8>);
-impl Decimals {
-  pub fn is_zero(&self) -> bool {
-    self.0.iter().all(|&x| x == 0)
-  }
-}
-
-impl Display for Decimals {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    let mut result = String::new();
-    for i in 0..self.0.len() {
-      let byte = self.0[i];
-      let (byte_1, byte_0) = ((byte & 0xF0) >> 4, byte & 0x0F);
-      result.push_str(&format!("{:X}{:X}", byte_1, byte_0));
-    }
-    let clear = result.trim_end_matches('0').to_string();
-    if clear.is_empty() {
-      return write!(f, "0");
-    }
-    write!(f, "{}", clear)
-  }
-}
-impl PartialEq for Decimals {
-  fn eq(&self, other: &Self) -> bool {
-    self.to_string() == other.to_string()
-  }
-}
-impl PartialOrd for Decimals {
-  fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-    Some(self.cmp(other))
-  }
-}
-impl Ord for Decimals {
-  fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-    for i in 0..self.0.len() {
-      if self.0[i] != other.0[i] {
-        return self.0[i].cmp(&other.0[i]);
-      }
-    }
-    std::cmp::Ordering::Equal
-  }
-}
-impl From<String> for Decimals {
-  fn from(value: String) -> Self {
-    let mut result = Vec::new();
-    let mut i = 0;
-    while i < value.len() {
-      let char_1 = value.chars().nth(i).unwrap_or('0') as u8 - b'0';
-      if char_1 > 9 {
-        break;
-      }
-      let char_0 = value.chars().nth(i + 1).unwrap_or('0') as u8 - b'0';
-      if char_0 > 9 {
-        break;
-      }
-      i += 2;
-      let byte = (char_1 << 4) | char_0;
-      result.push(byte);
-    }
-    Self(result)
-  }
-}
-
-fn add_float((x_neg, x, x_dec):(&bool,&BigUInt, &Decimals), (y_neg, y, y_dec):(&bool,&BigUInt, &Decimals)) -> (bool, BigUInt, Decimals){
-  if !x_neg && *y_neg {
-          return sub_float((&false, y, y_dec), (&false, x, x_dec))
-        } else if *x_neg && !y_neg {
-          return sub_float((&false, x, x_dec), (&false, y, y_dec))
-        }
-  let mut carry = 0;
-  let z_dec = if x_dec.is_zero() && y_dec.is_zero() {
-    Decimals(vec![])
-  } else if x_dec.is_zero() {
-    y_dec.clone()
-  } else if y_dec.is_zero() {
-    x_dec.clone()
-  } else {
-    let mut result = Vec::new();
-    let max_len = x_dec.0.len().max(y_dec.0.len());
-    for i in 0..max_len {
-      let i = max_len - 1 - i;
-      let a = *x_dec.0.get(i).unwrap_or(&0);
-      let b = *y_dec.0.get(i).unwrap_or(&0);
-      let (a_byte_1, a_byte_0) = ((a & 0xF0) >> 4, a & 0x0F);
-      let (b_byte_1, b_byte_0) = ((b & 0xF0) >> 4, b & 0x0F);
-
-      let sum_0 = a_byte_0 + b_byte_0 + carry;
-      carry = sum_0 / 10;
-      let sum_1 = a_byte_1 + b_byte_1 + carry;
-      carry = sum_1 / 10;
-      let sum = (sum_1 % 10) << 4 | (sum_0 % 10);
-      result.push(sum);
-    }
-    result.reverse();
-    Decimals(result)
-  };
-  (*x_neg, &(x + y) + &BigUInt::from_digits(vec![carry]), z_dec)
-}
-fn sub_float((x_neg, x, x_dec):(&bool, &BigUInt, &Decimals), (y_neg, y, y_dec):(&bool, &BigUInt, &Decimals)) -> (bool, BigUInt, Decimals){
-          if x_neg != y_neg {
-          // x - (-y) = x + y  || -x - y = -(x + y)
-          let (z_neg, z, z_dec) = add_float((&false, x, x_dec), (&false, y, y_dec));
-          return (z_neg, z, z_dec)
-        }
-  let mut x_dec = x_dec.to_string();
-   let mut y_dec = y_dec.to_string();
-   let decimals = x_dec.len().max(y_dec.len());
-   x_dec.extend(std::iter::repeat_n('0', decimals - x_dec.len()));
-   y_dec.extend(std::iter::repeat_n('0', decimals - y_dec.len()));
-
-   let x_full = BigUInt::from(format!("{}{}", x, x_dec));
-   let y_full = BigUInt::from(format!("{}{}", y, y_dec));
-   let (z_neg, z) = match x_full.cmp(&y_full) {
-     std::cmp::Ordering::Greater => (*x_neg, &x_full - &y_full),
-     std::cmp::Ordering::Less => (!y_neg, &y_full - &x_full),
-     std::cmp::Ordering::Equal => return (false, BigUInt::from(0), Decimals(vec![])),
-   };
-
-   let z_str = z.to_string();
-   let z_len = z_str.len();
-
-   let (z, z_dec) = if z_len > decimals {
-     let (int, dec) = z_str.split_at(z_len - decimals);
-     (int.to_string(), dec.to_string())
-   } else {
-     (
-       "0".to_string(),
-       format!("{:0>width$}", z_str, width = decimals),
-     )
-   };
-
-   (z_neg, BigUInt::from(z), Decimals::from(z_dec))
-}
 
 #[allow(clippy::derived_hash_with_manual_eq)]
 #[derive(Clone, Eq, Debug, Hash)]
 pub enum BasicNumber {
   Int(bool, BigUInt),
-  Float(bool, BigUInt, Decimals),
+  Float(bool, BigUFloat),
 }
 impl BasicNumber {
   pub fn is_zero(&self) -> bool {
     match self {
       Self::Int(_, x) => x.is_zero(),
-      Self::Float(_, y_int, y_dec) => y_int.is_zero() && y_dec.to_string() == "0",
+      Self::Float(_, y_int) => y_int.is_zero(),
     }
   }
   pub fn floor(&self) -> Self {
     match self {
       Self::Int(x_neg, x) => Self::Int(*x_neg, x.clone()),
-      Self::Float(x_neg, x_int, x_dec) => {
-        if x_dec.to_string() == "0" {
-          return Self::Int(*x_neg, x_int.clone());
+      Self::Float(x_neg, x) => {
+        let int = x.trunc();
+        if !x.has_decimals() {
+          return Self::Int(*x_neg, int.clone());
         }
         if *x_neg {
-          return Self::Int(*x_neg, x_int - &BigUInt::from(1));
+          return Self::Int(*x_neg, int - &BigUInt::from(1));
         }
-        Self::Int(*x_neg, x_int.clone())
+        Self::Int(*x_neg, int.clone())
       }
     }
   }
   pub fn ceil(&self) -> Self {
     match self {
       Self::Int(x_neg, x) => Self::Int(*x_neg, x.clone()),
-      Self::Float(x_neg, x, x_dec) => {
-        if x_dec.is_zero() {
-          return Self::Int(*x_neg, x.clone());
+      Self::Float(x_neg, x) => {
+        let int = x.trunc();
+        if !x.has_decimals() {
+          return Self::Int(*x_neg, int.clone());
         }
-        if *x > BigUInt::from(0) {
-          return Self::Int(*x_neg, x + &BigUInt::from(1));
+        if !x_neg {
+          return Self::Int(*x_neg, int + &BigUInt::from(1));
         }
-        Self::Int(*x_neg, x.clone())
+        Self::Int(*x_neg, int.clone())
       }
     }
   }
   pub fn round(&self) -> Self {
     match self {
       Self::Int(x_neg, x) => Self::Int(*x_neg, x.clone()),
-      Self::Float(x_neg, x, x_dec) => {
-        if x_dec.is_zero() {
-          return Self::Int(*x_neg, x.clone());
+      Self::Float(x_neg, x) => {
+        let int = x.trunc();
+        if !x.has_decimals() {
+          return Self::Int(*x_neg, int.clone());
         }
-        for (i, char) in x_dec.to_string().chars().enumerate() {
-          let digit = char.to_digit(10).unwrap();
-          if digit > 5 || i > 0 {
-            // 0.5x | x >= 0
-            return Self::Int(*x_neg, x + &1.into());
-          }
-          if digit < 5 {
-            return Self::Int(*x_neg, x - &1.into());
-          }
+        match x.cmp_decimals_half() {
+          std::cmp::Ordering::Greater => Self::Int(*x_neg, int + &1.into()),
+          std::cmp::Ordering::Less => Self::Int(*x_neg, int - &1.into()),
+          // Si es .5 se redondea al par mas cercano
+          std::cmp::Ordering::Equal => Self::Int(
+            *x_neg,
+            int + &if int.unit() % 2 == 0 { 0 } else { 1 }.into(),
+          ),
         }
-        // si el decimal es 0.5 se redondea al par más cercano
-        Self::Int(
-          *x_neg,
-          x
-            + &if x.last() % 2 == 0 {
-              0
-            } else {
-              1
-            }
-            .into(),
-        )
       }
     }
   }
   pub fn trunc(&self) -> Self {
     match self {
       Self::Int(x_neg, x) => Self::Int(*x_neg, x.clone()),
-      Self::Float(x_neg, x, _) => Self::Int(*x_neg, x.clone()),
+      Self::Float(x_neg, x) => Self::Int(*x_neg, x.trunc().clone()),
     }
   }
   pub fn is_int(&self) -> bool {
     match self {
       Self::Int(_, _) => true,
-      Self::Float(_, _, x_dec) => x_dec.is_zero(),
+      Self::Float(_, x) => !x.has_decimals(),
     }
   }
   pub fn is_negative(&self) -> bool {
     match self {
       Self::Int(x_neg, _) => *x_neg,
-      Self::Float(x_neg, _, _) => *x_neg,
+      Self::Float(x_neg, _) => *x_neg,
     }
   }
 }
@@ -247,7 +103,7 @@ impl Display for BasicNumber {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     match self {
       Self::Int(x_neg, x) => write!(f, "{}{}", if *x_neg { "-" } else { "" }, x),
-      Self::Float(x_neg, x, x_dec) => write!(f, "{}{}.{}", if *x_neg { "-" } else { "" }, x, x_dec),
+      Self::Float(x_neg, x) => write!(f, "{}{}", if *x_neg { "-" } else { "" }, x),
     }
   }
 }
@@ -255,9 +111,7 @@ impl PartialEq for BasicNumber {
   fn eq(&self, other: &Self) -> bool {
     match (self, other) {
       (Self::Int(x_neg, x), Self::Int(y_neg, y)) => x_neg == y_neg && x == y,
-      (Self::Float(x_neg, x, x_dec), Self::Float(y_neg, y, y_dec)) => {
-        x_neg == y_neg && x == y && x_dec == y_dec
-      }
+      (Self::Float(x_neg, x), Self::Float(y_neg, y)) => x_neg == y_neg && x == y,
       _ => false,
     }
   }
@@ -279,17 +133,38 @@ impl Add for &BasicNumber {
         }
         BasicNumber::Int(*x_neg, x - y)
       }
-      (BasicNumber::Float(x_neg, x, x_dec), BasicNumber::Float(y_neg, y, y_dec)) => {
-        let (z_neg,z, z_dec) = add_float((x_neg,x, x_dec), (y_neg,y, y_dec));
-        BasicNumber::Float(z_neg, z, z_dec)
+      (BasicNumber::Float(x_neg, x), BasicNumber::Float(y_neg, y)) => {
+        let neg = if x > y {
+          *x_neg
+        } else if x < y {
+          *y_neg
+        } else {
+          false
+        };
+        let value = if x_neg != y_neg { x - y } else { x + y };
+        BasicNumber::Float(neg, value)
       }
-      (BasicNumber::Int(x_neg, x), BasicNumber::Float(y_neg, y, y_dec)) => {
-        let (z_neg,z, z_dec) = add_float((x_neg,x, &Decimals(vec![])), (y_neg,y, y_dec));
-        BasicNumber::Float(z_neg, z, z_dec)
+      (BasicNumber::Int(x_neg, x), BasicNumber::Float(y_neg, y)) => {
+        let neg = if y < x {
+          *x_neg
+        } else if y > x {
+          *y_neg
+        } else {
+          false
+        };
+        let value = if x_neg != y_neg { y - x } else { y + x };
+        BasicNumber::Float(neg, value)
       }
-      (BasicNumber::Float(x_neg, x, x_dec), BasicNumber::Int(y_neg, y)) => {
-        let (z_neg,z, z_dec) = add_float((x_neg,x, x_dec), (y_neg,y, &Decimals(vec![])));
-        BasicNumber::Float(z_neg, z, z_dec)
+      (BasicNumber::Float(x_neg, x), BasicNumber::Int(y_neg, y)) => {
+        let neg = if x > y {
+          *x_neg
+        } else if x < y {
+          *y_neg
+        } else {
+          false
+        };
+        let value = if x_neg != y_neg { x - y } else { x + y };
+        BasicNumber::Float(neg, value)
       }
     }
   }
@@ -314,18 +189,48 @@ impl Sub for &BasicNumber {
         }
       }
 
-      (BasicNumber::Float(x_neg, x, x_dec), BasicNumber::Float(y_neg, y, y_dec)) => {
-        let (z_neg, z, z_dec) = sub_float((x_neg, x, x_dec), (y_neg, y, y_dec));
-        BasicNumber::Float(z_neg, z, z_dec)
+      (BasicNumber::Float(x_neg, x), BasicNumber::Float(y_neg, y)) => {
+        if x_neg != y_neg {
+          // x - (-y) = x + y  || -x - y = -(x + y)
+          return BasicNumber::Float(*x_neg, x + y);
+        }
+        if x == y {
+          return BasicNumber::Int(false, BigUInt::from(0));
+        }
+        if x > y {
+          BasicNumber::Float(*x_neg, x - y)
+        } else {
+          BasicNumber::Float(!y_neg, y - x)
+        }
       }
 
-      (BasicNumber::Int(x_neg, x), BasicNumber::Float(y_neg, y, y_dec)) => {
-        let (z_neg, z, z_dec) = sub_float((x_neg, x, &Decimals(vec![])), (y_neg, y, y_dec));
-        BasicNumber::Float(z_neg, z, z_dec)
+      (BasicNumber::Int(x_neg, x), BasicNumber::Float(y_neg, y)) => {
+        if x_neg != y_neg {
+          // x - (-y) = x + y  || -x - y = -(x + y)
+          return BasicNumber::Float(*x_neg, y + x);
+        }
+        if y == x {
+          return BasicNumber::Int(false, BigUInt::from(0));
+        }
+        if y < x {
+          BasicNumber::Float(*x_neg, y - x)
+        } else {
+          BasicNumber::Float(!y_neg, y - x)
+        }
       }
-      (BasicNumber::Float(x_neg, x, x_dec), BasicNumber::Int(y_neg, y)) => {
-        let (z_neg, z, z_dec) = sub_float((x_neg, x, x_dec), (y_neg, y, &Decimals(vec![])));
-        BasicNumber::Float(z_neg, z, z_dec)
+      (BasicNumber::Float(x_neg, x), BasicNumber::Int(y_neg, y)) => {
+        if x_neg != y_neg {
+          // x - (-y) = x + y  || -x - y = -(x + y)
+          return BasicNumber::Float(*x_neg, x + y);
+        }
+        if x == y {
+          return BasicNumber::Int(false, BigUInt::from(0));
+        }
+        if x > y {
+          BasicNumber::Float(*x_neg, x - y)
+        } else {
+          BasicNumber::Float(!y_neg, x - y)
+        }
       }
     }
   }
@@ -333,93 +238,31 @@ impl Sub for &BasicNumber {
 impl Mul for &BasicNumber {
   type Output = BasicNumber;
   fn mul(self, rhs: Self) -> Self::Output {
-    let (neg, (x, x_dec), (y, y_dec)) = match (self, rhs) {
-      (BasicNumber::Int(x_neg, x), BasicNumber::Int(y_neg, y)) => return BasicNumber::Int(x_neg ^ y_neg, x * y),
-      (BasicNumber::Float(x_neg, x, x_dec), BasicNumber::Float(y_neg, y, y_dec)) => (x_neg ^ y_neg,(x, x_dec), (y, y_dec)),
-      (BasicNumber::Int(x_neg, x), BasicNumber::Float(y_neg, y, y_dec)) => 
-        (x_neg ^ y_neg,( x, &Decimals(vec![])),( y, y_dec)),
-      
-      (BasicNumber::Float(x_neg, x, x_dec), BasicNumber::Int(y_neg, y)) => 
-        (x_neg ^ y_neg, (x, x_dec),( y, &Decimals(vec![]))),
-    };
-            let x_dec = x_dec.to_string();
-        let y_dec = y_dec.to_string();
-        let x_str = format!("{}{}", x, x_dec);
-        let x: BigUInt = x_str.into();
-        let y_str = format!("{}{}", y, y_dec);
-        let y: BigUInt = y_str.into();
-        let mut decimals = x_dec.len() + y_dec.len();
-
-        let result = &x * &y;
-        let result = result.to_string();
-
-        let mut frac_part = String::new();
-        let mut number = result.chars().collect::<Vec<_>>();
-        while decimals > 0 {
-          decimals -= 1;
-          frac_part.push(number.pop().unwrap_or('0'));
-        }
-        let int_part = if number.is_empty() {
-          "0".to_string()
-        } else {
-          number.iter().collect()
-        };
-
-        let frac_part = frac_part.chars().rev().collect::<String>();
-
-        BasicNumber::Float(neg, int_part.into(), frac_part.into())
+    match (self, rhs) {
+      (BasicNumber::Int(x_neg, x), BasicNumber::Int(y_neg, y)) => BasicNumber::Int(x_neg ^ y_neg, x * y),
+      (BasicNumber::Float(x_neg, x), BasicNumber::Float(y_neg, y)) => BasicNumber::Float(x_neg ^ y_neg, x * y),
+      (BasicNumber::Int(x_neg, x), BasicNumber::Float(y_neg, y)) => BasicNumber::Float(x_neg ^ y_neg, y * x),
+      (BasicNumber::Float(x_neg, x), BasicNumber::Int(y_neg, y)) => BasicNumber::Float(x_neg ^ y_neg, x * y),
+    }
   }
 }
 impl Div for &BasicNumber {
   type Output = BasicNumber;
   fn div(self, rhs: Self) -> Self::Output {
-    let (neg, (x, x_dec), (y, y_dec)) = match (self, rhs) {
-      (BasicNumber::Int(x_neg, x), BasicNumber::Int(y_neg, y)) => (x_neg ^ y_neg, (x, &Decimals(vec![])),( y, &Decimals(vec![]))),
-      (BasicNumber::Float(x_neg, x, x_dec), BasicNumber::Float(y_neg, y, y_dec)) => (x_neg ^ y_neg,(x, x_dec), (y, y_dec)),
-      (BasicNumber::Int(x_neg, x), BasicNumber::Float(y_neg, y, y_dec)) => 
-        (x_neg ^ y_neg,( x, &Decimals(vec![])),( y, y_dec)),
-      
-      (BasicNumber::Float(x_neg, x, x_dec), BasicNumber::Int(y_neg, y)) => 
-        (x_neg ^ y_neg, (x, x_dec),( y, &Decimals(vec![]))),
-    };
-    let mut x_dec = x_dec.to_string();
-        let mut y_dec = y_dec.to_string();
-        let max_dec = x_dec.len().max(y_dec.len());
-        x_dec.extend(std::iter::repeat_n(
-          '0',
-          max_dec + DIVISION_DECIMALS - x_dec.len(),
-        ));
-        y_dec.extend(std::iter::repeat_n('0', max_dec - y_dec.len()));
-        let x_str = format!("{}{}", x, x_dec);
-        let y_str = format!("{}{}", y, y_dec);
-        let mut decimals = max_dec + DIVISION_DECIMALS - 1;
-
-        let result = &BigUInt::from(x_str) / &BigUInt::from(y_str);
-        let result = result.to_string();
-
-        let mut frac_part = String::new();
-        let mut number = result.chars().collect::<Vec<_>>();
-        while decimals > 0 {
-          decimals -= 1;
-          frac_part.push(number.pop().unwrap_or('0'));
-        }
-        let int_part = if number.is_empty() {
-          "0".to_string()
-        } else {
-          number.iter().collect()
-        };
-
-        let frac_part = frac_part.chars().rev().collect::<String>();
-
-        BasicNumber::Float(neg, int_part.into(), frac_part.into())
+    match (self, rhs) {
+      (BasicNumber::Int(x_neg, x), BasicNumber::Int(y_neg, y)) => BasicNumber::Int(x_neg ^ y_neg, x / y),
+      (BasicNumber::Float(x_neg, x), BasicNumber::Float(y_neg, y)) => BasicNumber::Float(x_neg ^ y_neg, x / y),
+      (BasicNumber::Int(x_neg, x), BasicNumber::Float(y_neg, y)) => BasicNumber::Float(x_neg ^ y_neg, y / x),
+      (BasicNumber::Float(x_neg, x), BasicNumber::Int(y_neg, y)) => BasicNumber::Float(x_neg ^ y_neg, x / y),
     }
+  }
 }
 impl Neg for BasicNumber {
   type Output = BasicNumber;
   fn neg(self) -> Self::Output {
     match self {
       BasicNumber::Int(x_neg, x) => BasicNumber::Int(!x_neg, x),
-      BasicNumber::Float(x_neg, x, x_dec) => BasicNumber::Float(!x_neg, x, x_dec),
+      BasicNumber::Float(x_neg, x) => BasicNumber::Float(!x_neg, x),
     }
   }
 }
@@ -455,36 +298,50 @@ impl Ord for BasicNumber {
         }
         x.cmp(y)
       }
-      (Self::Float(x_neg, x_int, x_dec), Self::Float(y_neg, y_int, y_dec)) => {
-        if x_int.is_zero() && y_int.is_zero() {
-          return x_dec.cmp(y_dec);
-        }
-        if *x_neg && !*y_neg {
-          return std::cmp::Ordering::Greater;
-        } else if !*x_neg && *y_neg {
+      (Self::Float(x_neg, x), Self::Float(y_neg, y)) => {
+                if *x_neg && !*y_neg {
           return std::cmp::Ordering::Less;
+        } else if !*x_neg && *y_neg {
+          return std::cmp::Ordering::Greater;
         }
-        if x_int == y_int {
-          if *x_neg && *y_neg {
-            return y_dec.cmp(x_dec).reverse();
-          }
-          return x_dec.cmp(y_dec);
+
+        if *x_neg && *y_neg {
+          return x.cmp(y).reverse();
         }
-        x_int.cmp(y_int)
+        x.cmp(y)
       }
-      (Self::Int(x_neg, x_int), y) => Self::Float(*x_neg, x_int.clone(), Decimals(vec![0])).cmp(y),
-      (x, Self::Int(y_neg, y_int)) => Self::Float(*y_neg, y_int.clone(), Decimals(vec![0]))
-        .cmp(x)
-        .reverse(),
+      (Self::Int(x_neg, x), Self::Float(y_neg, y)) => {
+                if *x_neg && !*y_neg {
+          return std::cmp::Ordering::Less;
+        } else if !*x_neg && *y_neg {
+          return std::cmp::Ordering::Greater;
+        }
+
+        let cmp = y.partial_cmp(x).unwrap();
+        if *x_neg && *y_neg {
+          return cmp;
+        }
+        cmp.reverse()
+      },
+      (Self::Float(x_neg, x), Self::Int(y_neg, y)) => {
+                if *x_neg && !*y_neg {
+          return std::cmp::Ordering::Less;
+        } else if !*x_neg && *y_neg {
+          return std::cmp::Ordering::Greater;
+        }
+
+        let cmp = x.partial_cmp(y).unwrap();
+        if *x_neg && *y_neg {
+          return cmp.reverse();
+        }
+        cmp
+      },
     }
   }
 }
 impl From<String> for BasicNumber {
   fn from(value: String) -> Self {
-    let split = value.split('.');
-    let int_part = split.clone().nth(0).unwrap_or("0").to_string();
-    let frac_part = split.clone().nth(1).unwrap_or("0").to_string();
-    Self::Float(false, int_part.into(), frac_part.into())
+    Self::Float(false, value.into())
   }
 }
 #[allow(clippy::derived_hash_with_manual_eq)]
@@ -583,8 +440,8 @@ impl Number {
     i32::from_str_radix(value, radix as u32)
       .map(|v| v.to_string().parse::<Self>().unwrap_or_default())
       .unwrap_or_default()
-    }
-    pub fn pow(&self, exp: Self) -> Self {
+  }
+  pub fn pow(&self, exp: Self) -> Self {
     // TODO: implementar correctamente las potencias. Esta implementacion es muy basica.
     match (self, exp) {
       (Self::NaN, _) | (_, Self::NaN) => Self::NaN,
@@ -594,7 +451,7 @@ impl Number {
         }
         if e.is_int() {
           if let BasicNumber::Int(_, e) = e {
-            if e.last() % 2 == 0 {
+            if e.unit() % 2 == 0 {
               return Self::Infinity;
             } else if matches!(self, Self::NegativeInfinity) {
               return Self::NegativeInfinity;
@@ -627,18 +484,14 @@ impl Number {
           let mut base = x.clone();
           let mut exponent = e;
           while !exponent.is_zero() {
-            if exponent.last() % 2 == 1 {
+            if exponent.unit() % 2 == 1 {
               result = &result * &base;
             }
             base = &base * &base;
             exponent = &exponent / &BigUInt::from(2);
           }
           if e_neg {
-            return Self::Basic(BasicNumber::Float(
-              false,
-              BigUInt::from(0),
-              result.to_string().into(),
-            ));
+            return Self::Basic(BasicNumber::Float(false, BigUFloat::default()));
           }
           return Self::Basic(result);
         }
@@ -703,14 +556,7 @@ impl FromStr for Number {
       };
     }
     if s.contains(".") {
-      let parts: Vec<&str> = s.split(".").collect();
-      let int_part = parts[0].to_string();
-      let frac_part = parts[1].to_string();
-      return Ok(Self::Basic(BasicNumber::Float(
-        false,
-        int_part.into(),
-        frac_part.into(),
-      )));
+      return Ok(Self::Basic(BasicNumber::Float(false, s.to_string().into())));
     }
     if s.chars().all(|c| c.is_ascii_digit()) {
       return Ok(Self::Basic(BasicNumber::Int(false, s.to_string().into())));
@@ -853,10 +699,9 @@ impl Mul for Number {
       (Self::NegativeInfinity, _) => Self::NegativeInfinity,
       (_, Self::NegativeInfinity) => Self::NegativeInfinity,
       (Self::Basic(x), Self::Basic(y)) => Self::Basic(&x * &y),
-      (Self::Complex(a, b), Self::Complex(c, d)) => Self::Complex(
-        &(&a * &c) - &(&b * &d),
-        &(&a * &d) + &(&c * &b),
-      ),
+      (Self::Complex(a, b), Self::Complex(c, d)) => {
+        Self::Complex(&(&a * &c) - &(&b * &d), &(&a * &d) + &(&c * &b))
+      }
       (Self::Basic(x), Self::Complex(a, b)) => {
         if x.is_zero() {
           return Self::Complex(a, b);
@@ -892,10 +737,7 @@ impl Div for Number {
       (Self::Complex(ref a, ref b), Self::Complex(ref c, ref d)) => {
         let conj = &(&(c * c) + &(d * d));
 
-        Self::Complex(
-          &(&(a * c) + &(b * d)) / conj,
-          &(&(b * c) - &(a * d)) / conj,
-        )
+        Self::Complex(&(&(a * c) + &(b * d)) / conj, &(&(b * c) - &(a * d)) / conj)
       }
       (Self::Basic(x), Self::Complex(a, b)) => {
         if x.is_zero() {
