@@ -10,7 +10,7 @@ use crate::{
 };
 
 mod binary;
-pub use binary::BCDUInt as BigUInt;
+pub use binary::Big256 as BigUInt;
 mod float;
 pub use float::BigUDecimal as BigUFloat;
 
@@ -501,11 +501,6 @@ impl Number {
     }
   }
 }
-impl From<&char> for Number {
-  fn from(value: &char) -> Self {
-    Self::Basic(BasicNumber::Int(false, value.to_string().into()))
-  }
-}
 impl FromStr for Number {
   type Err = String;
   fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -559,7 +554,7 @@ impl FromStr for Number {
       return Ok(Self::Basic(BasicNumber::Float(false, s.to_string().into())));
     }
     if s.chars().all(|c| c.is_ascii_digit()) {
-      return Ok(Self::Basic(BasicNumber::Int(false, s.to_string().into())));
+      return Ok(Self::Basic(BasicNumber::Int(false, s.parse()?)));
     }
     Err(format!("No se puede convertir el string '{s}' a un número",))
   }

@@ -1,19 +1,29 @@
-use std::{hash,cmp::Ordering, fmt, ops::{Add, Div, Mul, Rem, Sub, SubAssign}};
+use std::{
+  cmp::Ordering,
+  fmt, hash,
+  ops::{Add, Div, Mul, Sub},
+  str::FromStr,
+};
 
 /// Representa un número en base 256.
 /// Cada elemento del Vec es un "dígito" en base 256.
 /// Formato little-indian (mas facil de manejar)
 #[derive(Clone, Debug)]
-pub struct Big256{digits:Vec<u8>}
+pub struct Big256 {
+  digits: Vec<u8>,
+}
 
 impl Big256 {
+  pub fn unit(&self) -> &u8 {
+    self.digits.last().unwrap_or(&0)
+  }
   pub fn new() -> Self {
-    Self{digits:vec![]}
+    Self { digits: vec![] }
   }
   pub fn is_zero(&self) -> bool {
     self.digits.iter().all(|&x| x == 0)
   }
-  fn normalize(&mut self){
+  fn normalize(&mut self) {
     while self.digits.len() > 1 && *self.digits.last().unwrap() == 0 {
       self.digits.pop();
     }
@@ -21,44 +31,48 @@ impl Big256 {
   pub fn last(&self) -> &u8 {
     self.digits.first().unwrap_or(&0)
   }
-}
-impl From<u8> for Big256 {
-  fn from(value: u8) -> Self {
-    let mut data = Self{digits:vec![value]};
-    data.normalize();
-    data
+  fn shl1(&mut self) {
+    let mut carry = 0;
+    for byte in self.digits.iter_mut() {
+      let new_carry = (*byte & 0x80) >> 7;
+      *byte = (*byte << 1) | carry;
+      carry = new_carry;
+    }
+    if carry != 0 {
+      self.digits.push(carry);
+    }
   }
 }
 impl fmt::Display for Big256 {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // Caso especial: cero
-        if self.digits.iter().all(|&d| d == 0) {
-            return write!(f, "0");
-        }
-
-        // Copiamos los dígitos porque haremos divisiones destructivas
-        let mut digits = self.digits.clone();
-
-        // Vector de caracteres decimales (en orden inverso)
-        let mut decimal_digits = Vec::new();
-
-        // División repetida por 10
-        while digits.iter().any(|&d| d != 0) {
-            let mut carry = 0u16;
-            for d in digits.iter_mut().rev() {
-                let cur = (*d as u16) + (carry << 8);
-                *d = (cur / 10) as u8;
-                carry = cur % 10;
-            }
-            decimal_digits.push((b'0' + carry as u8) as char);
-        }
-
-        // Invertimos y unimos
-        decimal_digits.reverse();
-        let result: String = decimal_digits.into_iter().collect();
-
-        write!(f, "{}", result)
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    // Caso especial: cero
+    if self.digits.iter().all(|&d| d == 0) {
+      return write!(f, "0");
     }
+
+    // Copiamos los dígitos porque haremos divisiones destructivas
+    let mut digits = self.digits.clone();
+
+    // Vector de caracteres decimales (en orden inverso)
+    let mut decimal_digits = Vec::new();
+
+    // División repetida por 10
+    while digits.iter().any(|&d| d != 0) {
+      let mut carry = 0u16;
+      for d in digits.iter_mut().rev() {
+        let cur = (*d as u16) + (carry << 8);
+        *d = (cur / 10) as u8;
+        carry = cur % 10;
+      }
+      decimal_digits.push((b'0' + carry as u8) as char);
+    }
+
+    // Invertimos y unimos
+    decimal_digits.reverse();
+    let result: String = decimal_digits.into_iter().collect();
+
+    write!(f, "{}", result)
+  }
 }
 
 impl Default for Big256 {
@@ -74,14 +88,14 @@ impl PartialEq for Big256 {
 
 impl Eq for Big256 {}
 impl hash::Hash for Big256 {
-    fn hash<H: hash::Hasher>(&self, state: &mut H) {
-        let mut norm = self.clone();
-        norm.normalize();
-        norm.digits.hash(state);
-    }
+  fn hash<H: hash::Hasher>(&self, state: &mut H) {
+    let mut norm = self.clone();
+    norm.normalize();
+    norm.digits.hash(state);
+  }
 }
 
-impl Ord for Big256{
+impl Ord for Big256 {
   fn cmp(&self, other: &Self) -> Ordering {
     let mut a = self.clone();
     let mut b = other.clone();
@@ -136,7 +150,7 @@ impl Sub for &Big256 {
     r
   }
 }
-impl Add for &Big256{
+impl Add for &Big256 {
   type Output = Big256;
   fn add(self, other: Self) -> Self::Output {
     let mut res = Vec::new();
@@ -155,421 +169,277 @@ impl Add for &Big256{
     Self::Output { digits: res }
   }
 }
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn from_u64(mut n: u64) -> Big256 {
-        let mut digits = Vec::new();
-        while n > 0 {
-            digits.push((n & 0xFF) as u8);
-            n >>= 8;
-        }
-        if digits.is_empty() {
-            digits.push(0);
-        }
-        Big256 { digits }
-    }
-
-    fn to_u64(b: &Big256) -> u64 {
-        let mut n = 0u64;
-        for (i, &d) in b.digits.iter().enumerate() {
-            n |= (d as u64) << (8 * i);
-        }
-        n
-    }
-
-    #[test]
-    fn test_add_simple() {
-        let a = from_u64(5);
-        let b = from_u64(7);
-        let res = &a + &b;
-        assert_eq!(to_u64(&res), 12);
-    }
-
-    #[test]
-    fn test_add_with_carry() {
-        let a = from_u64(255);
-        let b = from_u64(1);
-        let res = &a + &b;
-        assert_eq!(to_u64(&res), 256);
-    }
-
-    #[test]
-    fn test_add_multi_byte() {
-        let a = from_u64(500);
-        let b = from_u64(600);
-        let res = &a + &b;
-        assert_eq!(to_u64(&res), 1100);
-    }
-
-    #[test]
-    fn test_sub_simple() {
-        let a = from_u64(10);
-        let b = from_u64(3);
-        let res = &a - &b;
-        assert_eq!(to_u64(&res), 7);
-    }
-
-    #[test]
-    fn test_sub_with_borrow() {
-        let a = from_u64(256);
-        let b = from_u64(1);
-        let res = &a - &b;
-        assert_eq!(to_u64(&res), 255);
-    }
-
-    #[test]
-    fn test_sub_equal() {
-        let a = from_u64(12345);
-        let b = from_u64(12345);
-        let res = &a - &b;
-        assert_eq!(to_u64(&res), 0);
-    }
-
-    #[test]
-    fn test_add_and_sub_inverse() {
-        let a = from_u64(99999);
-        let b = from_u64(12345);
-        let sum = &a + &b;
-        let diff = &sum - &b;
-        assert_eq!(to_u64(&diff), to_u64(&a));
-    }
-}
-
-#[allow(clippy::derived_hash_with_manual_eq)]
-#[derive(Clone, Eq, Hash, Debug, Default)]
-pub struct BCDUInt(Vec<u8>);
-impl BCDUInt {
-  pub fn unit(&self) -> &u8 {
-    self.0.last().unwrap_or(&0)
-  }
-  pub fn is_zero(&self) -> bool {
-    if self.0.is_empty() {
-      return true;
-    }
-    self.0.iter().all(|&x| x == 0)
-  }
-  pub fn trim_leading_zeros(mut self) -> Self {
-    while self.0.len() > 1 && self.0[0] == 0 {
-      self.0.remove(0);
-    }
-    self
-  }
-  pub fn digits(&self) -> Vec<u8> {
-    self
-      .to_string()
-      .chars()
-      .map(|c| c.to_digit(10).unwrap() as u8)
-      .collect()
-  }
-  pub fn from_digits(digits: Vec<u8>) -> Self {
-    let mut vec = Vec::new();
-    let mut i = digits.len();
-    while i > 0 {
-      i -= 1;
-      let low = digits[i];
-      let high = if i == 0 {
-        0
-      } else {
-        i -= 1;
-        digits[i]
-      };
-      vec.push((high << 4) | low);
-    }
-    vec.reverse();
-    Self(vec)
-  }
-  fn compare_digits(a: &[u8], b: &[u8]) -> i8 {
-    if a.len() > b.len() {
-      1
-    } else if a.len() < b.len() {
-      -1
-    } else {
-      for (&x, &y) in a.iter().zip(b) {
-        if x > y {
-          return 1;
-        };
-        if x < y {
-          return -1;
-        };
-      }
-      0
-    }
-  }
-  fn sub_digits(a: &[u8], b: &[u8]) -> Vec<u8> {
-    let mut result = Vec::new();
-    let mut carry = 0;
-    let mut ai = a.len() as isize - 1;
-    let mut bi = b.len() as isize - 1;
-
-    while ai >= 0 {
-      let mut ad = a[ai as usize] as i8 - carry;
-      let bd = if bi >= 0 { b[bi as usize] as i8 } else { 0 };
-
-      if ad < bd {
-        ad += 10;
-        carry = 1;
-      } else {
-        carry = 0;
-      }
-
-      result.push((ad - bd) as u8);
-      ai -= 1;
-      bi -= 1;
-    }
-
-    result.reverse();
-    while result.first() == Some(&0) && result.len() > 1 {
-      result.remove(0);
-    }
-
-    result
-  }
-}
-impl fmt::Display for BCDUInt {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    let mut result = String::new();
-    for i in 0..self.0.len() {
-      let byte = self.0[i];
-      let (byte_1, byte_0) = ((byte & 0xF0) >> 4, byte & 0x0F);
-      result.push_str(&format!("{:X}{:X}", byte_1, byte_0));
-    }
-    let trim_result = result.trim_start_matches('0');
-    write!(
-      f,
-      "{}",
-      if trim_result.is_empty() {
-        "0"
-      } else {
-        trim_result
-      }
-    )
-  }
-}
-impl PartialEq for BCDUInt {
-  fn eq(&self, other: &Self) -> bool {
-    self.to_string() == other.to_string()
-  }
-}
-
-impl SubAssign<&BCDUInt> for BCDUInt {
-  fn sub_assign(&mut self, rhs: &Self) {
-    *self = &*self - rhs;
-  }
-}
-
-impl Add for &BCDUInt {
-  type Output = BCDUInt;
-  fn add(self, rhs: Self) -> Self::Output {
-    let lhs = &self.0;
-    let rhs = &rhs.0;
-
-    let mut result = Vec::new();
-    let mut carry = 0;
-
-    let max_len = lhs.len().max(rhs.len());
-
-    for i in 0..max_len {
-      let a = *lhs.get(lhs.len().wrapping_sub(1 + i)).unwrap_or(&0);
-      let b = *rhs.get(rhs.len().wrapping_sub(1 + i)).unwrap_or(&0);
-
-      // Extraer nibbles altos y bajos
-      let (a1, a0) = ((a >> 4) & 0x0F, a & 0x0F);
-      let (b1, b0) = ((b >> 4) & 0x0F, b & 0x0F);
-
-      let mut sub0 = a0 + b0 + carry;
-      carry = 0;
-      if sub0 >= 10 {
-        sub0 -= 10;
-        carry = 1;
-      }
-
-      let mut sub1 = a1 + b1 + carry;
-      carry = 0;
-      if sub1 >= 10 {
-        sub1 -= 10;
-        carry = 1;
-      }
-
-      // restar 10 es suficiente y menos costoso
-
-      result.push(((sub1) << 4) | sub0);
-    }
-
-    // Eliminar ceros a la izquierda, excepto si es cero solo
-    while result.len() > 1 && *result.last().unwrap() == 0 {
-      result.pop();
-    }
-
-    result.reverse();
-    BCDUInt(result)
-  }
-}
-impl Sub for &BCDUInt {
-  type Output = BCDUInt;
-
-  fn sub(self, rhs: Self) -> Self::Output {
-    let lhs = &self.0;
-    let rhs = &rhs.0;
-
-    let mut result = Vec::new();
-    let mut carry = 0;
-
-    // Asumimos que lhs >= rhs comprobacion
-    let max_len = lhs.len().max(rhs.len());
-
-    for i in 0..max_len {
-      let a = *lhs.get(lhs.len().wrapping_sub(1 + i)).unwrap_or(&0);
-      let b = *rhs.get(rhs.len().wrapping_sub(1 + i)).unwrap_or(&0);
-
-      // Extraer nibbles altos y bajos
-      let (a1, a0) = ((a >> 4) & 0x0F, a & 0x0F);
-      let (b1, b0) = ((b >> 4) & 0x0F, b & 0x0F);
-
-      // Resta del nibble bajo
-      let mut sub0 = a0 as i8 - b0 as i8 - carry;
-      carry = 0;
-      if sub0 < 0 {
-        sub0 += 10;
-        carry = 1;
-      }
-
-      // Resta del nibble alto
-      let mut sub1 = a1 as i8 - b1 as i8 - carry;
-      carry = 0;
-      if sub1 < 0 {
-        sub1 += 10;
-        carry = 1;
-      }
-
-      result.push(((sub1 as u8) << 4) | (sub0 as u8));
-    }
-
-    // Eliminar ceros a la izquierda, excepto si es cero solo
-    while result.len() > 1 && *result.last().unwrap() == 0 {
-      result.pop();
-    }
-
-    result.reverse();
-    BCDUInt(result)
-  }
-}
-impl Mul for &BCDUInt {
-  type Output = BCDUInt;
+impl Mul for &Big256 {
+  type Output = Big256;
 
   fn mul(self, rhs: Self) -> Self::Output {
-    let mut x_digits = self.digits();
-    let mut y_digits = rhs.digits();
-    x_digits.reverse();
-    y_digits.reverse();
+    let mut res = vec![0u16; self.digits.len() + rhs.digits.len()];
 
-    let mut result = vec![0u8; x_digits.len() + y_digits.len()];
-
-    for (i, &x) in x_digits.iter().enumerate() {
-      for (j, &y) in y_digits.iter().enumerate() {
-        result[i + j] += x * y;
-        if result[i + j] >= 10 {
-          result[i + j + 1] += result[i + j] / 10;
-          result[i + j] %= 10;
-        }
+    // Multiplicación base 256
+    for (i, &a) in self.digits.iter().enumerate() {
+      let mut carry = 0u16;
+      for (j, &b) in rhs.digits.iter().enumerate() {
+        let idx = i + j;
+        let prod = a as u16 * b as u16 + res[idx] + carry;
+        res[idx] = prod & 0xFF;
+        carry = prod >> 8;
+      }
+      if carry > 0 {
+        res[i + rhs.digits.len()] += carry;
       }
     }
 
-    while result.len() > 1 && *result.last().unwrap() == 0 {
-      result.pop();
-    }
-    result.reverse();
-
-    BCDUInt::from_digits(result)
+    let digits = res.into_iter().map(|v| v as u8).collect::<Vec<_>>();
+    let mut out = Big256 { digits };
+    out.normalize();
+    out
   }
 }
-impl Div for &BCDUInt {
-  type Output = BCDUInt;
+impl Div for &Big256 {
+  type Output = Big256;
 
   fn div(self, rhs: Self) -> Self::Output {
-    let x_digits = self.digits();
-    let y_digits = rhs.digits();
-    if y_digits.is_empty() || y_digits.iter().all(|&d| d == 0) {
-      panic!("División por cero");
+    // división entre cero no permitida
+    if rhs.digits.iter().all(|&d| d == 0) {
+      panic!("Division by zero");
     }
 
-    let mut result = Vec::new();
-    let mut remainder = Vec::new();
+    let mut dividend = self.clone();
+    let mut divisor = rhs.clone();
+    dividend.normalize();
+    divisor.normalize();
 
-    for digit in x_digits {
-      remainder.push(digit);
-      while remainder.first() == Some(&0) && remainder.len() > 1 {
-        remainder.remove(0);
-      }
-
-      let mut count = 0;
-      while BCDUInt::compare_digits(&remainder, &y_digits) >= 0 {
-        remainder = BCDUInt::sub_digits(&remainder, &y_digits);
-        count += 1;
-      }
-
-      result.push(count);
+    // si dividend < divisor → resultado 0
+    if dividend < divisor {
+      return Big256 { digits: vec![0] };
     }
 
-    while result.first() == Some(&0) && result.len() > 1 {
-      result.remove(0);
-    }
+    let mut quotient = Big256 {
+      digits: vec![0; dividend.digits.len()],
+    };
+    let mut remainder = Big256 { digits: vec![0] };
 
-    BCDUInt::from_digits(result)
-  }
-}
-impl Rem for &BCDUInt {
-  type Output = BCDUInt;
-  fn rem(self, rhs: Self) -> Self::Output {
-    let div = &(self / rhs);
-    let mul = &(rhs * div);
-    self - mul
-  }
-}
-impl PartialOrd for BCDUInt {
-  fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-    Some(self.cmp(other))
-  }
-}
-impl Ord for BCDUInt {
-  fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-    let x_digits = self.digits();
-    let y_digits = other.digits();
-    let x_len = x_digits.len();
-    let y_len = y_digits.len();
-    if x_len > y_len {
-      return std::cmp::Ordering::Greater;
-    } else if x_len < y_len {
-      return std::cmp::Ordering::Less;
-    }
-    let max = x_len.max(y_len);
-    for i in 0..max {
-      let x = if x_len > i { x_digits[i] } else { 0 };
-      let y = if y_len > i { y_digits[i] } else { 0 };
-      let value = x.cmp(&y);
-      if value != std::cmp::Ordering::Equal {
-        return value;
+    let total_bits = dividend.digits.len() * 8;
+
+    // recorremos los bits de más significativo a menos
+    for i in (0..total_bits).rev() {
+      // shift left del resto 1 bit
+      remainder.shl1();
+
+      // añadir el bit i del dividendo al LSB del remainder
+      let byte_index = i / 8;
+      let bit_index = i % 8;
+      let bit = (dividend.digits[byte_index] >> bit_index) & 1;
+      remainder.digits[0] |= bit;
+
+      // si remainder >= divisor, restamos divisor y ponemos 1 en cociente
+      if remainder >= divisor {
+        remainder = &remainder - &divisor;
+
+        // colocar el 1 en la posición correcta del cociente
+        let q_byte = i / 8;
+        let q_bit = i % 8;
+        if q_byte >= quotient.digits.len() {
+          quotient.digits.resize(q_byte + 1, 0);
+        }
+        quotient.digits[q_byte] |= 1 << q_bit;
       }
     }
-    std::cmp::Ordering::Equal
+
+    quotient.normalize();
+    quotient
   }
 }
 
-impl From<String> for BCDUInt {
+impl FromStr for Big256 {
+  type Err = String;
+
+  fn from_str(s: &str) -> Result<Self, Self::Err> {
+    let s = s.trim();
+    if s.is_empty() {
+      return Err("Cannot parse empty string".to_string());
+    }
+
+    let mut digits = vec![0u8];
+
+    for c in s.chars() {
+      if !c.is_ascii_digit() {
+        return Err(format!("Invalid character '{}'", c));
+      }
+
+      // Malabares binarios
+      let val = (c as u8 - b'0') as u16;
+
+      // Multiplicamos el numero actual por la base
+      let mut carry = val;
+      for d in digits.iter_mut() {
+        let tmp = (*d as u16) * 10 + carry;
+        *d = (tmp & 0xFF) as u8;
+        carry = tmp >> 8;
+      }
+      if carry > 0 {
+        digits.push(carry as u8);
+      }
+    }
+
+    let mut res = Big256 { digits };
+    res.normalize();
+    Ok(res)
+  }
+}
+impl From<String> for Big256 {
   fn from(value: String) -> Self {
-    let digits = value.chars().map(|c| c as u8 - b'0').collect();
-    Self::from_digits(digits)
+    value.parse().unwrap()
   }
 }
-impl From<u8> for BCDUInt {
+impl From<u8> for Big256 {
   fn from(value: u8) -> Self {
-    if value > 99 {
-      panic!("Value must be between 0 and 99");
+    let mut data = Self {
+      digits: vec![value],
+    };
+    data.normalize();
+    data
+  }
+}
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use std::str::FromStr;
+
+  fn from_u64(mut n: u64) -> Big256 {
+    let mut digits = Vec::new();
+    while n > 0 {
+      digits.push((n & 0xFF) as u8);
+      n >>= 8;
     }
-    let high = value / 10;
-    let low = value % 10;
-    let byte = (high << 4) | low;
-    BCDUInt(vec![byte])
+    if digits.is_empty() {
+      digits.push(0);
+    }
+    Big256 { digits }
+  }
+
+  fn to_u64(b: &Big256) -> u64 {
+    let mut n = 0u64;
+    for (i, &d) in b.digits.iter().enumerate() {
+      n |= (d as u64) << (8 * i);
+    }
+    n
+  }
+
+  #[test]
+  fn test_add_simple() {
+    let a = from_u64(5);
+    let b = from_u64(7);
+    let res = &a + &b;
+    assert_eq!(to_u64(&res), 12);
+  }
+
+  #[test]
+  fn test_add_with_carry() {
+    let a = from_u64(255);
+    let b = from_u64(1);
+    let res = &a + &b;
+    assert_eq!(to_u64(&res), 256);
+  }
+
+  #[test]
+  fn test_add_multi_byte() {
+    let a = from_u64(500);
+    let b = from_u64(600);
+    let res = &a + &b;
+    assert_eq!(to_u64(&res), 1100);
+  }
+
+  #[test]
+  fn test_sub_simple() {
+    let a = from_u64(10);
+    let b = from_u64(3);
+    let res = &a - &b;
+    assert_eq!(to_u64(&res), 7);
+  }
+
+  #[test]
+  fn test_sub_with_borrow() {
+    let a = from_u64(256);
+    let b = from_u64(1);
+    let res = &a - &b;
+    assert_eq!(to_u64(&res), 255);
+  }
+
+  #[test]
+  fn test_sub_equal() {
+    let a = from_u64(12345);
+    let b = from_u64(12345);
+    let res = &a - &b;
+    assert_eq!(to_u64(&res), 0);
+  }
+
+  #[test]
+  fn test_add_and_sub_inverse() {
+    let a = from_u64(99999);
+    let b = from_u64(12345);
+    let sum = &a + &b;
+    let diff = &sum - &b;
+    assert_eq!(to_u64(&diff), to_u64(&a));
+  }
+
+  #[test]
+  fn test_mul_simple() {
+    let a = &from_u64(12);
+    let b = &from_u64(3);
+    let r = a * b;
+    assert_eq!(to_u64(&r), 36);
+  }
+
+  #[test]
+  fn test_mul_large() {
+    let a = &from_u64(1234);
+    let b = &from_u64(5678);
+    let r = a * b;
+    assert_eq!(to_u64(&r), 1234 * 5678);
+  }
+
+  #[test]
+  fn test_div_simple() {
+    let a = &from_u64(10);
+    let b = &from_u64(2);
+    let r = a / b;
+    assert_eq!(to_u64(&r), 5);
+  }
+
+  #[test]
+  fn test_div_large() {
+    let a = &from_u64(123456789);
+    let b = &from_u64(123);
+    let r = a / b;
+    assert_eq!(to_u64(&r), 123456789 / 123);
+  }
+
+  #[test]
+  fn test_div_by_larger() {
+    let a = &from_u64(100);
+    let b = &from_u64(1000);
+    let r = a / b;
+    assert_eq!(to_u64(&r), 0);
+  }
+
+  #[test]
+  #[should_panic]
+  fn test_div_zero() {
+    let a = &from_u64(42);
+    let b = &from_u64(0);
+    let _ = a / b;
+  }
+
+  #[test]
+  fn test_fromstr_simple() {
+    let n = Big256::from_str("12345").unwrap();
+    assert_eq!(n.to_string(), "12345");
+  }
+
+  #[test]
+  fn test_fromstr_leading_zeros() {
+    let n = Big256::from_str("000123").unwrap();
+    assert_eq!(n.to_string(), "123");
   }
 }

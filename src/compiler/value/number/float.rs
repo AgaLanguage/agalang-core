@@ -416,7 +416,7 @@ mod decimal {
       result.reverse();
       Decimals(result)
     };
-    (&(x + y) + &BigUInt::from_digits(vec![carry]), z_dec)
+    (&(x + y) + &BigUInt::from(carry), z_dec)
   }
   fn sub_float(
     (x, x_dec): (&BigUInt, &Decimals),
