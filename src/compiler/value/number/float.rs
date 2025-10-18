@@ -3,11 +3,12 @@ use super::BigUInt;
 use std::{
   cmp::Ordering,
   fmt::Display,
+  hash,
   ops::{Add, Div, Mul, Sub},
   str::FromStr,
 };
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Default)]
+#[derive(Clone, Debug, Default)]
 /// Representa una estructura decimal
 /// Presicion de 255 digitos
 /// Representa un número decimal como `mantissa * 10^(-exponent)`.
@@ -319,9 +320,27 @@ impl Ord for BigUDecimal {
     lhs.mantissa.cmp(&rhs.mantissa)
   }
 }
+
+impl PartialEq for BigUDecimal {
+  fn eq(&self, other: &Self) -> bool {
+    self.cmp(other) == Ordering::Equal
+  }
+}
+impl Eq for BigUDecimal {}
+impl hash::Hash for BigUDecimal {
+  fn hash<H: hash::Hasher>(&self, state: &mut H) {
+    let mut norm = self.clone();
+    norm.normalize();
+    norm.mantissa.hash(state);
+    norm.exponent.hash(state);
+  }
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
+  use std::collections::hash_map::DefaultHasher;
+  use std::hash::{Hash, Hasher};
 
   fn dec(s: &str) -> BigUDecimal {
     s.parse().unwrap()
@@ -329,6 +348,56 @@ mod tests {
 
   fn int(n: u64) -> BigUInt {
     n.to_string().parse().unwrap()
+  }
+
+  fn hash_value<T: Hash>(v: &T) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    v.hash(&mut hasher);
+    hasher.finish()
+  }
+
+  #[test]
+  fn test_hash_basic() {
+    let a = dec("1.0");
+    let b = dec("10.00");
+    let c = dec("1.00");
+
+    // Normalizamos manualmente para que coincida con hash
+    let mut a_norm = a.clone();
+    a_norm.normalize();
+    let mut b_norm = b.clone();
+    b_norm.normalize();
+    let mut c_norm = c.clone();
+    c_norm.normalize();
+
+    let ha = hash_value(&a);
+    let hb = hash_value(&b);
+    let hc = hash_value(&c);
+
+    // Hash de números equivalentes después de normalize deberían ser iguales
+    assert_eq!(ha, hc, "Hashes de 1.0 y 1.00 deben ser iguales");
+    assert_ne!(ha, hb, "Hashes de 1.0 y 10.00 no deben ser iguales");
+  }
+
+  #[test]
+  fn test_hash_in_hashmap() {
+    use std::collections::HashMap;
+
+    let mut map = HashMap::new();
+    let a = dec("1.0");
+    let b = dec("1.00");
+
+    map.insert(a.clone(), "uno");
+    // b debe reemplazar a
+    map.insert(b.clone(), "uno-normalizado");
+
+    assert_eq!(
+      map.len(),
+      1,
+      "Solo debe haber una clave tras insertar equivalente"
+    );
+    assert_eq!(map.get(&a).unwrap(), &"uno-normalizado");
+    assert_eq!(map.get(&b).unwrap(), &"uno-normalizado");
   }
 
   #[test]
