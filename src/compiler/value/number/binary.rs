@@ -20,7 +20,7 @@ impl Big256 {
   pub fn is_zero(&self) -> bool {
     self.digits.iter().all(|&x| x == 0)
   }
-  fn normalize(&mut self) {
+  pub fn normalize(&mut self) {
     while self.digits.len() > 1 && *self.digits.last().unwrap() == 0 {
       self.digits.pop();
     }
