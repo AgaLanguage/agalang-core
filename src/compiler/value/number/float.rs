@@ -21,6 +21,11 @@ pub struct BigUDecimal {
 }
 
 impl BigUDecimal {
+  pub fn new(mantissa: BigUInt, exponent: u8) -> Self {
+    let mut d = Self { mantissa, exponent };
+    d.normalize();
+    d
+  }
   pub fn is_zero(&self) -> bool {
     self.mantissa.is_zero()
   }
@@ -113,10 +118,7 @@ impl FromStr for BigUDecimal {
     let value = format!("{int_part}{dec_part}").parse()?;
     let exponent = dec_part.len() as u8;
 
-    Ok(BigUDecimal {
-      mantissa: value,
-      exponent,
-    })
+    Ok(BigUDecimal::new(value, exponent))
   }
 }
 impl From<String> for BigUDecimal {
@@ -174,12 +176,7 @@ impl Add for &BigUDecimal {
 
     let mantissa = &lhs.mantissa + &rhs.mantissa;
 
-    let mut data = BigUDecimal {
-      mantissa,
-      exponent: lhs.exponent,
-    };
-    data.normalize();
-    data
+    BigUDecimal::new(mantissa, lhs.exponent)
   }
 }
 impl Sub for &BigUDecimal {
@@ -190,12 +187,7 @@ impl Sub for &BigUDecimal {
 
     let mantissa = &lhs.mantissa - &rhs.mantissa;
 
-    let mut data = BigUDecimal {
-      mantissa,
-      exponent: lhs.exponent,
-    };
-    data.normalize();
-    data
+    BigUDecimal::new(mantissa, lhs.exponent)
   }
 }
 impl Mul for &BigUDecimal {
@@ -219,9 +211,7 @@ impl Mul for &BigUDecimal {
       mantissa = &mantissa / &divisor;
     }
 
-    let mut data = BigUDecimal { mantissa, exponent };
-    data.normalize();
-    data
+    BigUDecimal::new(mantissa, exponent)
   }
 }
 impl Div for &BigUDecimal {
@@ -246,9 +236,7 @@ impl Div for &BigUDecimal {
       mantissa = &mantissa / &divisor;
     }
 
-    let mut data = BigUDecimal { mantissa, exponent };
-    data.normalize();
-    data
+    BigUDecimal::new(mantissa, exponent)
   }
 }
 
@@ -329,10 +317,8 @@ impl PartialEq for BigUDecimal {
 impl Eq for BigUDecimal {}
 impl hash::Hash for BigUDecimal {
   fn hash<H: hash::Hasher>(&self, state: &mut H) {
-    let mut norm = self.clone();
-    norm.normalize();
-    norm.mantissa.hash(state);
-    norm.exponent.hash(state);
+    self.mantissa.hash(state);
+    self.exponent.hash(state);
   }
 }
 

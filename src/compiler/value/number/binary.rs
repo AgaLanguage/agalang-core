@@ -14,6 +14,11 @@ pub struct Big256 {
 }
 
 impl Big256 {
+  pub fn new(digits: Vec<u8>) -> Self{
+    let mut d = Self { digits };
+    d.normalize();
+    d
+  }
   pub fn unit(&self) -> &u8 {
     self.digits.first().unwrap_or(&0)
   }
@@ -74,7 +79,7 @@ impl fmt::Display for Big256 {
 
 impl Default for Big256 {
   fn default() -> Self {
-    Self{ digits: vec![0] }
+    Self::new(vec![0])
   }
 }
 impl PartialEq for Big256 {
@@ -86,9 +91,7 @@ impl PartialEq for Big256 {
 impl Eq for Big256 {}
 impl hash::Hash for Big256 {
   fn hash<H: hash::Hasher>(&self, state: &mut H) {
-    let mut norm = self.clone();
-    norm.normalize();
-    norm.digits.hash(state);
+    self.digits.hash(state);
   }
 }
 
@@ -142,9 +145,7 @@ impl Sub for &Big256 {
       }
       res.push(diff as u8);
     }
-    let mut r = Self::Output { digits: res };
-    r.normalize();
-    r
+    Big256::new(res)
   }
 }
 impl Add for &Big256 {
@@ -163,7 +164,7 @@ impl Add for &Big256 {
     if carry > 0 {
       res.push(carry as u8);
     }
-    Self::Output { digits: res }
+    Big256::new(res)
   }
 }
 impl Mul for &Big256 {
@@ -187,9 +188,7 @@ impl Mul for &Big256 {
     }
 
     let digits = res.into_iter().map(|v| v as u8).collect::<Vec<_>>();
-    let mut out = Big256 { digits };
-    out.normalize();
-    out
+    Big256::new(digits)
   }
 }
 impl Div for &Big256 {
@@ -208,13 +207,13 @@ impl Div for &Big256 {
 
     // si dividend < divisor → resultado 0
     if dividend < divisor {
-      return Big256 { digits: vec![0] };
+      return Big256::default();
     }
 
     let mut quotient = Big256 {
       digits: vec![0; dividend.digits.len()],
     };
-    let mut remainder = Big256 { digits: vec![0] };
+    let mut remainder = Big256::default();
 
     let total_bits = dividend.digits.len() * 8;
 
@@ -278,10 +277,7 @@ impl FromStr for Big256 {
         digits.push(carry as u8);
       }
     }
-
-    let mut res = Big256 { digits };
-    res.normalize();
-    Ok(res)
+    Ok(Big256::new(digits))
   }
 }
 impl From<String> for Big256 {
@@ -291,7 +287,7 @@ impl From<String> for Big256 {
 }
 impl<T> From<T> for Big256 where T: super::traits::ToDigits {
   fn from(value: T) -> Self {
-    Self { digits: value.to_digits() }
+    Self::new(value.to_digits())
   }
 }
 
