@@ -292,15 +292,12 @@ impl From<String> for Big256 {
     value.parse().unwrap()
   }
 }
-impl From<u8> for Big256 {
-  fn from(value: u8) -> Self {
-    let mut data = Self {
-      digits: vec![value],
-    };
-    data.normalize();
-    data
+impl<T> From<T> for Big256 where T: super::traits::ToDigits {
+  fn from(value: T) -> Self {
+    Self { digits: value.to_digits() }
   }
 }
+
 #[cfg(test)]
 mod tests {
   use super::*;

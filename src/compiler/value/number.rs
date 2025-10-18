@@ -9,6 +9,7 @@ use crate::{
   Encode, StructTag,
 };
 
+mod traits;
 mod binary;
 pub use binary::Big256 as BigUInt;
 mod float;
@@ -39,7 +40,7 @@ impl BasicNumber {
           return Self::Int(*x_neg, int.clone());
         }
         if *x_neg {
-          return Self::Int(*x_neg, int - &BigUInt::from(1));
+          return Self::Int(*x_neg, int - &BigUInt::from(1u8));
         }
         Self::Int(*x_neg, int.clone())
       }
@@ -54,7 +55,7 @@ impl BasicNumber {
           return Self::Int(*x_neg, int.clone());
         }
         if !x_neg {
-          return Self::Int(*x_neg, int + &BigUInt::from(1));
+          return Self::Int(*x_neg, int + &BigUInt::from(1u8));
         }
         Self::Int(*x_neg, int.clone())
       }
@@ -69,12 +70,12 @@ impl BasicNumber {
           return Self::Int(*x_neg, int.clone());
         }
         match x.cmp_decimals_half() {
-          std::cmp::Ordering::Greater => Self::Int(*x_neg, int + &1.into()),
-          std::cmp::Ordering::Less => Self::Int(*x_neg, int - &1.into()),
+          std::cmp::Ordering::Greater => Self::Int(*x_neg, int + &1u8.into()),
+          std::cmp::Ordering::Less => Self::Int(*x_neg, int - &1u8.into()),
           // Si es .5 se redondea al par mas cercano
           std::cmp::Ordering::Equal => Self::Int(
             *x_neg,
-            int + &if int.unit() % 2 == 0 { 0 } else { 1 }.into(),
+            int + &(int.unit() & 1).into(),
           ),
         }
       }
@@ -126,7 +127,7 @@ impl Add for &BasicNumber {
           return BasicNumber::Int(*x_neg, x + y);
         }
         if (x.is_zero() && y.is_zero()) || (x == y) {
-          return BasicNumber::Int(false, BigUInt::from(0));
+          return BasicNumber::Int(false, BigUInt::from(0u8));
         }
         if y > x {
           return BasicNumber::Int(*y_neg, y - x);
@@ -180,7 +181,7 @@ impl Sub for &BasicNumber {
           return BasicNumber::Int(*x_neg, x + y);
         }
         if x == y {
-          return BasicNumber::Int(false, BigUInt::from(0));
+          return BasicNumber::Int(false, BigUInt::from(0u8));
         }
         if x > y {
           BasicNumber::Int(*x_neg, x - y)
@@ -195,7 +196,7 @@ impl Sub for &BasicNumber {
           return BasicNumber::Float(*x_neg, x + y);
         }
         if x == y {
-          return BasicNumber::Int(false, BigUInt::from(0));
+          return BasicNumber::Int(false, BigUInt::from(0u8));
         }
         if x > y {
           BasicNumber::Float(*x_neg, x - y)
@@ -210,7 +211,7 @@ impl Sub for &BasicNumber {
           return BasicNumber::Float(*x_neg, y + x);
         }
         if y == x {
-          return BasicNumber::Int(false, BigUInt::from(0));
+          return BasicNumber::Int(false, BigUInt::from(0u8));
         }
         if y < x {
           BasicNumber::Float(*x_neg, y - x)
@@ -224,7 +225,7 @@ impl Sub for &BasicNumber {
           return BasicNumber::Float(*x_neg, x + y);
         }
         if x == y {
-          return BasicNumber::Int(false, BigUInt::from(0));
+          return BasicNumber::Int(false, BigUInt::from(0u8));
         }
         if x > y {
           BasicNumber::Float(*x_neg, x - y)
@@ -447,7 +448,7 @@ impl Number {
       (Self::NaN, _) | (_, Self::NaN) => Self::NaN,
       (Self::Infinity, Self::Basic(e)) | (Self::NegativeInfinity, Self::Basic(e)) => {
         if e.is_negative() || e.is_zero() {
-          return Self::Basic(BasicNumber::Int(false, BigUInt::from(0)));
+          return Self::Basic(BasicNumber::Int(false, BigUInt::from(0u8)));
         }
         if e.is_int() {
           if let BasicNumber::Int(_, e) = e {
@@ -471,16 +472,16 @@ impl Number {
           return Self::NaN;
         }
         if x.is_zero() {
-          return Self::Basic(BasicNumber::Int(false, BigUInt::from(0)));
+          return Self::Basic(BasicNumber::Int(false, BigUInt::from(0u8)));
         }
         if e.is_zero() {
-          return Self::Basic(BasicNumber::Int(false, BigUInt::from(1)));
+          return Self::Basic(BasicNumber::Int(false, BigUInt::from(1u8)));
         }
         if !e.is_int() {
           return Self::NaN;
         }
         if let BasicNumber::Int(e_neg, e) = e {
-          let mut result = BasicNumber::Int(false, BigUInt::from(1));
+          let mut result = BasicNumber::Int(false, BigUInt::from(1u8));
           let mut base = x.clone();
           let mut exponent = e;
           while !exponent.is_zero() {
@@ -488,7 +489,7 @@ impl Number {
               result = &result * &base;
             }
             base = &base * &base;
-            exponent = &exponent / &BigUInt::from(2);
+            exponent = &exponent / &BigUInt::from(2u8);
           }
           if e_neg {
             return Self::Basic(BasicNumber::Float(false, BigUFloat::default()));
@@ -536,14 +537,14 @@ impl FromStr for Number {
 
       return if i_exp == 1 {
         Ok(Self::Complex(
-          BasicNumber::Int(false, BigUInt::from(0)),
+          BasicNumber::Int(false, BigUInt::from(0u8)),
           number,
         ))
       } else if i_exp == 2 {
         Ok(Self::Basic(-number))
       } else if i_exp == 3 {
         Ok(Self::Complex(
-          BasicNumber::Int(false, BigUInt::from(0)),
+          BasicNumber::Int(false, BigUInt::from(0u8)),
           -number,
         ))
       } else {
@@ -559,27 +560,14 @@ impl FromStr for Number {
     Err(format!("No se puede convertir el string '{s}' a un número",))
   }
 }
-impl From<usize> for Number {
-  fn from(value: usize) -> Self {
-    Self::Basic(BasicNumber::Int(false, value.to_string().into()))
-  }
-}
-impl From<u16> for Number {
-  fn from(value: u16) -> Self {
-    Self::Basic(BasicNumber::Int(false, value.to_string().into()))
-  }
-}
-impl From<u128> for Number {
-  fn from(value: u128) -> Self {
-    Self::Basic(BasicNumber::Int(false, value.to_string().into()))
+impl<T> From<T> for Number where T: traits::ToDigits {
+  fn from(value: T) -> Self {
+    Self::Basic(BasicNumber::Int(false, value.into()))
   }
 }
 impl From<i32> for Number {
   fn from(value: i32) -> Self {
-    Self::Basic(BasicNumber::Int(
-      value.is_negative(),
-      value.abs().to_string().into(),
-    ))
+    Self::Basic(BasicNumber::Int(value.is_negative(), value.unsigned_abs().into()))
   }
 }
 impl From<Number> for Result<usize, String> {
@@ -725,9 +713,9 @@ impl Div for Number {
       (Self::NaN, _) => Self::NaN,
       (_, Self::NaN) => Self::NaN,
       (Self::Infinity, _) => Self::Infinity,
-      (_, Self::Infinity) => Self::Basic(BasicNumber::Int(false, BigUInt::from(0))),
+      (_, Self::Infinity) => Self::Basic(BasicNumber::Int(false, BigUInt::from(0u8))),
       (Self::NegativeInfinity, _) => Self::NegativeInfinity,
-      (_, Self::NegativeInfinity) => Self::Basic(BasicNumber::Int(false, BigUInt::from(0))),
+      (_, Self::NegativeInfinity) => Self::Basic(BasicNumber::Int(false, BigUInt::from(0u8))),
       (Self::Basic(x), Self::Basic(y)) => Self::Basic(&x / &y),
       (Self::Complex(ref a, ref b), Self::Complex(ref c, ref d)) => {
         let conj = &(&(c * c) + &(d * d));
@@ -800,11 +788,11 @@ impl Ord for Number {
         }
       }
       (Self::Basic(x), Self::Complex(a, b)) => {
-        Self::Complex(x.clone(), BasicNumber::Int(false, BigUInt::from(0)))
+        Self::Complex(x.clone(), BasicNumber::Int(false, BigUInt::from(0u8)))
           .cmp(&Self::Complex(a.clone(), b.clone()))
       }
       (Self::Complex(a, b), Self::Basic(x)) => Self::Complex(a.clone(), b.clone()).cmp(
-        &Self::Complex(x.clone(), BasicNumber::Int(false, BigUInt::from(0))),
+        &Self::Complex(x.clone(), BasicNumber::Int(false, BigUInt::from(0u8))),
       ),
     }
   }

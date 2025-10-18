@@ -433,7 +433,7 @@ mod decimal {
     let z = match x_full.cmp(&y_full) {
       Ordering::Greater => &x_full - &y_full,
       Ordering::Less => &y_full - &x_full,
-      Ordering::Equal => return (BigUInt::from(0), Decimals(vec![])),
+      Ordering::Equal => return (BigUInt::from(0u8), Decimals(vec![])),
     };
 
     let z_str = z.to_string();

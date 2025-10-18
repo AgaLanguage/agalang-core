@@ -27,19 +27,18 @@ mod c_time {
     pub tm_isdst: c_int,
   }
 
-  unsafe extern "C" {
+  extern "C" {
     #[link_name = "_time64"]
-    pub unsafe fn time(t: *mut TimeT) -> TimeT;
+    pub fn time(t: *mut TimeT) -> TimeT;
     #[link_name = "_localtime64_s"]
-    pub unsafe fn localtime_s(tmDest: *mut Tm, sourceTime: *const TimeT) -> c_int;
+    pub fn localtime_s(tmDest: *mut Tm, sourceTime: *const TimeT) -> c_int;
     #[link_name = "_gmtime64_s"]
-    pub unsafe fn gmtime_s(destTime: *mut Tm, srcTime: *const TimeT) -> c_int;
+    pub fn gmtime_s(destTime: *mut Tm, srcTime: *const TimeT) -> c_int;
   }
 }
 
 #[cfg(unix)]
 mod c_time {
-
   pub use std::os::raw::{c_int};
   #[cfg(all(target_arch = "aarch64", target_pointer_width = "32"))]
   pub type TimeT = i32;
@@ -60,11 +59,11 @@ mod c_time {
     pub tm_isdst: c_int,
   }
 
-  unsafe extern "C" {
+  extern "C" {
     #[cfg_attr(target_os = "netbsd", link_name = "__time50")]
     #[cfg_attr(any(target_env = "musl", target_env = "ohos"), allow(deprecated))]
     #[cfg_attr(gnu_time_bits64, link_name = "__time64")]
-    pub unsafe fn time(t: *mut TimeT) -> TimeT;
+    pub fn time(t: *mut TimeT) -> TimeT;
     #[cfg_attr(target_os = "netbsd", link_name = "__localtime_r50")]
     #[cfg_attr(any(target_env = "musl", target_env = "ohos"), allow(deprecated))]
     #[cfg_attr(gnu_time_bits64, link_name = "__localtime64_r")]
