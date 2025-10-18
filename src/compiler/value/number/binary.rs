@@ -15,7 +15,7 @@ pub struct Big256 {
 
 impl Big256 {
   pub fn unit(&self) -> &u8 {
-    self.digits.last().unwrap_or(&0)
+    self.digits.first().unwrap_or(&0)
   }
   pub fn is_zero(&self) -> bool {
     self.digits.iter().all(|&x| x == 0)
@@ -318,6 +318,12 @@ mod tests {
       n |= (d as u64) << (8 * i);
     }
     n
+  }
+
+  #[test]
+  fn test_unit() {
+    assert_eq!(*from_u64(1124).unit(), 100);
+    assert_eq!(*from_u64(43208).unit(), 200);
   }
 
   #[test]
