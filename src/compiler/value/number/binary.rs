@@ -17,9 +17,6 @@ impl Big256 {
   pub fn unit(&self) -> &u8 {
     self.digits.last().unwrap_or(&0)
   }
-  pub fn new() -> Self {
-    Self { digits: vec![] }
-  }
   pub fn is_zero(&self) -> bool {
     self.digits.iter().all(|&x| x == 0)
   }
@@ -77,7 +74,7 @@ impl fmt::Display for Big256 {
 
 impl Default for Big256 {
   fn default() -> Self {
-    Self::new()
+    Self{ digits: vec![0] }
   }
 }
 impl PartialEq for Big256 {

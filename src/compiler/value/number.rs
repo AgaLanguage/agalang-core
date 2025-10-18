@@ -40,7 +40,7 @@ impl BasicNumber {
           return Self::Int(*x_neg, int.clone());
         }
         if *x_neg {
-          return Self::Int(*x_neg, int - &BigUInt::from(1u8));
+          return Self::Int(*x_neg, &int - &BigUInt::from(1u8));
         }
         Self::Int(*x_neg, int.clone())
       }
@@ -55,7 +55,7 @@ impl BasicNumber {
           return Self::Int(*x_neg, int.clone());
         }
         if !x_neg {
-          return Self::Int(*x_neg, int + &BigUInt::from(1u8));
+          return Self::Int(*x_neg, &int + &BigUInt::from(1u8));
         }
         Self::Int(*x_neg, int.clone())
       }
@@ -70,12 +70,12 @@ impl BasicNumber {
           return Self::Int(*x_neg, int.clone());
         }
         match x.cmp_decimals_half() {
-          std::cmp::Ordering::Greater => Self::Int(*x_neg, int + &1u8.into()),
-          std::cmp::Ordering::Less => Self::Int(*x_neg, int - &1u8.into()),
+          std::cmp::Ordering::Greater => Self::Int(*x_neg, &int + &1u8.into()),
+          std::cmp::Ordering::Less => Self::Int(*x_neg, &int - &1u8.into()),
           // Si es .5 se redondea al par mas cercano
           std::cmp::Ordering::Equal => Self::Int(
             *x_neg,
-            int + &(int.unit() & 1).into(),
+            &int + &(int.unit() & 1).into(),
           ),
         }
       }
@@ -552,7 +552,7 @@ impl FromStr for Number {
       };
     }
     if s.contains(".") {
-      return Ok(Self::Basic(BasicNumber::Float(false, s.to_string().into())));
+      return Ok(Self::Basic(BasicNumber::Float(false, s.parse()?)));
     }
     if s.chars().all(|c| c.is_ascii_digit()) {
       return Ok(Self::Basic(BasicNumber::Int(false, s.parse()?)));
