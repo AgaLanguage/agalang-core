@@ -1,8 +1,7 @@
 use std::{
   cmp::Ordering,
   fmt, hash,
-  ops::{Add, Div, Mul, Sub},
-  str::FromStr,
+  ops::{Add, Div, DivAssign, Mul, MulAssign, Rem, Sub, SubAssign},
 };
 
 /// Representa un número en base 256.
@@ -14,7 +13,7 @@ pub struct Big256 {
 }
 
 impl Big256 {
-  pub fn new(digits: Vec<u8>) -> Self{
+  pub fn new(digits: Vec<u8>) -> Self {
     let mut d = Self { digits };
     d.normalize();
     d
@@ -230,7 +229,7 @@ impl Div for &Big256 {
 
       // si remainder >= divisor, restamos divisor y ponemos 1 en cociente
       if remainder >= divisor {
-        remainder = &remainder - &divisor;
+        remainder -= &divisor;
 
         // colocar el 1 en la posición correcta del cociente
         let q_byte = i / 8;
@@ -246,30 +245,86 @@ impl Div for &Big256 {
     quotient
   }
 }
+impl Rem for &Big256 {
+  type Output = Big256;
 
-impl FromStr for Big256 {
-  type Err = String;
+  fn rem(self, other: Self) -> Self::Output {
+    assert!(!other.is_zero(), "division by zero");
 
+    // Si self < other, el residuo es self
+    if self < other {
+      return self.clone();
+    }
+
+    // Clonamos valores
+    let mut dividend = self.clone();
+    let divisor = other.clone();
+
+    // Repetimos resta hasta que dividend < divisor
+    while dividend >= divisor {
+      dividend -= &divisor;
+    }
+
+    dividend
+  }
+}
+
+impl SubAssign<&Big256> for Big256 {
+  fn sub_assign(&mut self, rhs: &Self) {
+    *self = &*self - rhs
+  }
+}
+impl DivAssign<&Big256> for Big256 {
+  fn div_assign(&mut self, rhs: &Big256) {
+    *self = &*self / rhs
+  }
+}
+impl MulAssign<&Big256> for Big256 {
+  fn mul_assign(&mut self, rhs: &Big256) {
+    *self = &*self * rhs
+  }
+}
+
+impl std::str::FromStr for Big256 {
+  type Err = super::NumberError;
   fn from_str(s: &str) -> Result<Self, Self::Err> {
-    let s = s.trim();
+    use super::traits::FromStrRadix;
+    Self::from_str_radix(s, 10)
+  }
+}
+impl super::traits::FromStrRadix for Big256 {
+  fn from_str_radix(src: &str, radix: u8) -> Result<Self, super::NumberError> {
+    if !(2..=36).contains(&radix) {
+      return Err(super::NumberError::Radix(radix));
+    }
+    let s = src.trim();
     if s.is_empty() {
-      return Err("Cannot parse empty string".to_string());
+      return Err(super::NumberError::Empty);
     }
 
     let mut digits = vec![0u8];
 
     for c in s.chars() {
       if !c.is_ascii_digit() {
-        return Err(format!("Invalid character '{}'", c));
+        return Err(super::NumberError::InvalidCharacter(c));
       }
 
       // Malabares binarios
-      let val = (c as u8 - b'0') as u16;
+      let val = match c {
+        '0'..='9' => c as u8 - b'0',
+        'a'..='z' => c as u8 - b'a' + 10,
+        'A'..='Z' => c as u8 - b'A' + 10,
+        _ => return Err(super::NumberError::InvalidCharacter(c)),
+      };
+
+      if val >= radix {
+        return Err(super::NumberError::InvalidDigit(c, radix));
+      }
 
       // Multiplicamos el numero actual por la base
-      let mut carry = val;
+      let mut carry = val as u16;
       for d in digits.iter_mut() {
-        let tmp = (*d as u16) * 10 + carry;
+        let tmp = (*d as u16) * (radix as u16) + carry;
         *d = (tmp & 0xFF) as u8;
         carry = tmp >> 8;
       }
@@ -280,12 +335,11 @@ impl FromStr for Big256 {
     Ok(Big256::new(digits))
   }
 }
-impl From<String> for Big256 {
-  fn from(value: String) -> Self {
-    value.parse().unwrap()
-  }
-}
-impl<T> From<T> for Big256 where T: super::traits::ToDigits {
+
+impl<T> From<T> for Big256
+where
+  T: super::traits::ToDigits,
+{
   fn from(value: T) -> Self {
     Self::new(value.to_digits())
   }
@@ -293,9 +347,8 @@ impl<T> From<T> for Big256 where T: super::traits::ToDigits {
 
 #[cfg(test)]
 mod tests {
-  use super::*;
-  use std::str::FromStr;
 
+  use super::*;
   fn from_u64(mut n: u64) -> Big256 {
     let mut digits = Vec::new();
     while n > 0 {
@@ -429,13 +482,13 @@ mod tests {
 
   #[test]
   fn test_fromstr_simple() {
-    let n = Big256::from_str("12345").unwrap();
+    let n: Big256 = "12345".parse().unwrap();
     assert_eq!(n.to_string(), "12345");
   }
 
   #[test]
   fn test_fromstr_leading_zeros() {
-    let n = Big256::from_str("000123").unwrap();
+    let n: Big256 = "000123".parse().unwrap();
     assert_eq!(n.to_string(), "123");
   }
 }

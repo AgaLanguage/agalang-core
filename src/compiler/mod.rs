@@ -7,6 +7,7 @@ pub use chunk::{ChunkGroup, OpCode};
 pub use value::*;
 
 use crate::agal_parser::{Node, NodeFunction};
+use crate::compiler::traits::{AsNumber as _, FromStrRadix as _};
 use crate::{Decode, StructTag};
 
 const OBJECT_MEMBER: u8 = 0b0;
@@ -108,10 +109,11 @@ impl Compiler {
     match node {
       Node::Number(node_number) => {
         let number: Number = if node_number.base == 10u8 {
-          node_number.value.parse().unwrap()
+          node_number.value.as_number()
         } else {
-          Number::from_str_radix(&node_number.value, node_number.base)
-        };
+          node_number.value.as_radix(node_number.base)
+        }
+        .unwrap();
         self.set_constant(Value::Number(number), node_number.location.start.line);
       }
       Node::Byte(node_byte) => {

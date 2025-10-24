@@ -1,3 +1,5 @@
+use crate::compiler::traits::AsNumber;
+
 use super::BigUInt;
 
 use std::{
@@ -5,7 +7,6 @@ use std::{
   fmt::Display,
   hash,
   ops::{Add, Div, Mul, Sub},
-  str::FromStr,
 };
 
 #[derive(Clone, Debug, Default)]
@@ -29,28 +30,40 @@ impl BigUDecimal {
   pub fn is_zero(&self) -> bool {
     self.mantissa.is_zero()
   }
+  /// Retorna 10^n como BigUInt (optimización para evitar strings)
+  fn pow10(n: u8) -> BigUInt {
+    if n == 0 {
+      return 1u8.into();
+    }
+    let mut result = BigUInt::from(1u8);
+    let ten = BigUInt::from(10u8);
+    for _ in 0..n {
+      result *= &ten;
+    }
+    result
+  }
   /// Compara la parte decimal de `self` con X.5
   pub fn cmp_decimals_half(&self) -> Ordering {
-    if !self.has_decimals() {
+    // Se normaliza en la creacion
+    if self.exponent == 0 {
       return Ordering::Less; // no hay parte decimal
     }
 
-    let mantissa_string = self.mantissa.to_string();
+    // parte fraccionaria = mantissa % 10^exponent
+    let pow10 = Self::pow10(self.exponent);
+    let frac_part = &self.mantissa % &pow10;
 
-    let dec_part_str = if mantissa_string.len() >= self.exponent as usize {
-      &mantissa_string[(mantissa_string.len() - self.exponent as usize)..]
-    } else {
-      &mantissa_string
-    };
-    let dec_len = dec_part_str.len();
-    if dec_len == 0 {
+    // mitad = 5 * 10^(exponent - 1)
+    if self.exponent == 0 {
       return Ordering::Less;
     }
-    let dec_value: BigUInt = dec_part_str.parse().unwrap();
-    let half = &format!("5{}", "0".repeat(self.exponent as usize - 1))
-      .parse()
-      .unwrap();
-    dec_value.cmp(half)
+    let half = if self.exponent == 1 {
+      BigUInt::from(5u8)
+    } else {
+      &BigUInt::from(5u8) * &Self::pow10(self.exponent - 1)
+    };
+
+    frac_part.cmp(&half)
   }
   /// Compara si tiene decimales.
   pub fn has_decimals(&self) -> bool {
@@ -67,10 +80,10 @@ impl BigUDecimal {
     let len = s.len();
     let dec = self.exponent as usize;
     if dec >= len { "0" } else { &s[..(len - dec)] }
-      .to_string()
-      .into()
+      .parse()
+      .unwrap()
   }
-  fn normalize(&mut self) {
+  pub fn normalize(&mut self) {
     if self.mantissa.is_zero() {
       // Si la mantissa es cero, reseteamos el exponente
       self.exponent = 0;
@@ -101,29 +114,31 @@ impl BigUDecimal {
   }
 }
 
-impl FromStr for BigUDecimal {
-  type Err = String;
-
+impl std::str::FromStr for BigUDecimal {
+  type Err = super::NumberError;
   fn from_str(s: &str) -> Result<Self, Self::Err> {
+    if s.is_empty() {
+      return Err(super::NumberError::Empty);
+    }
     let parts: Vec<&str> = s.split(".").collect();
-    if parts.len() != 2 {
-      return Err(format!("Invalid format '{s}'"));
+    if parts.len() > 2 {
+      return Err(super::NumberError::InvalidCharacter('.'));
     }
     let int_part = parts[0];
-    let mut dec_part = parts[1];
+    let mut dec_part = *parts.get(1).unwrap_or(&"0");
     if dec_part.len() > 255 {
       dec_part = &dec_part[..255]
     }
 
-    let value = format!("{int_part}{dec_part}").parse()?;
+    let value = format!("{int_part}{dec_part}").as_number()?;
     let exponent = dec_part.len() as u8;
 
     Ok(BigUDecimal::new(value, exponent))
   }
 }
-impl From<String> for BigUDecimal {
-  fn from(value: String) -> Self {
-    value.parse().unwrap()
+impl From<f64> for BigUDecimal {
+  fn from(value: f64) -> Self {
+    value.to_string().parse().unwrap()
   }
 }
 
@@ -208,7 +223,7 @@ impl Mul for &BigUDecimal {
     if rest > 0 {
       let divisor_str = format!("1{}", "0".repeat(rest));
       let divisor: BigUInt = divisor_str.parse().unwrap();
-      mantissa = &mantissa / &divisor;
+      mantissa /= &divisor;
     }
 
     BigUDecimal::new(mantissa, exponent)
@@ -233,7 +248,7 @@ impl Div for &BigUDecimal {
     if rest > 0 {
       let divisor_str = format!("1{}", "0".repeat(rest));
       let divisor: BigUInt = divisor_str.parse().unwrap();
-      mantissa = &mantissa / &divisor;
+      mantissa /= &divisor;
     }
 
     BigUDecimal::new(mantissa, exponent)

@@ -756,7 +756,7 @@ impl Thread {
           }
           let key = key.as_number()?;
           let index = match key {
-            Number::Basic(n) => n,
+            Number::Real(n) => n,
             Number::Complex(_, _) => {
               Err("El indice no puede ser un valor complejo (asignar propiedad)".to_string())?
             }
@@ -818,7 +818,7 @@ impl Thread {
           }
           let key = key.as_number()?;
           let index = match key {
-            Number::Basic(n) => n,
+            Number::Real(n) => n,
             Number::Complex(_, _) => {
               Err("El indice no puede ser un valor complejo (obtener propiedad)".to_string())?
             }

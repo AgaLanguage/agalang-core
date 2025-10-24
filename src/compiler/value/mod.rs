@@ -8,7 +8,7 @@ mod object;
 mod promise;
 pub use class::{Class, Instance};
 pub use function::*;
-pub use number::Number;
+pub use number::*;
 pub use object::*;
 pub use promise::{Promise, PromiseData, PROMISE_TYPE};
 

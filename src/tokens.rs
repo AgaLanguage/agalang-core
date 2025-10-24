@@ -4,7 +4,10 @@ use crate::{
   MultiRefHash, ToJSON,
 };
 use std::{
-  collections::{HashMap, HashSet}, ops::Deref, path::PathBuf, rc::Rc
+  collections::{HashMap, HashSet},
+  ops::Deref,
+  path::PathBuf,
+  rc::Rc,
 };
 
 trait Resolvable {
@@ -1966,6 +1969,11 @@ pub fn print_tokens(node: Node) {
   println!(
     "{{\"file\":{},\"mod\":{}}}",
     tokens.clone().resolve(&tokens).to_json(),
-    DataType::Class { props: RefHash::new(module), instance_props: Default::default(), name: node.get_file().to_string_lossy().to_string() }.to_json()
+    DataType::Class {
+      props: RefHash::new(module),
+      instance_props: Default::default(),
+      name: node.get_file().to_string_lossy().to_string()
+    }
+    .to_json()
   )
 }

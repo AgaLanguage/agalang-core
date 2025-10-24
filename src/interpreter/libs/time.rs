@@ -7,12 +7,11 @@ const ZONE: &str = "ZONA";
 
 #[cfg(windows)]
 mod c_time {
-  pub use std::os::raw::{c_int};
+  pub use std::os::raw::c_int;
   #[cfg(all(target_arch = "x86", target_env = "gnu"))]
   pub type TimeT = i32;
   #[cfg(not(all(target_arch = "x86", target_env = "gnu")))]
   pub type TimeT = i64;
-
 
   #[repr(C)]
   pub struct Tm {
@@ -39,12 +38,11 @@ mod c_time {
 
 #[cfg(unix)]
 mod c_time {
-  pub use std::os::raw::{c_int};
+  pub use std::os::raw::c_int;
   #[cfg(all(target_arch = "aarch64", target_pointer_width = "32"))]
   pub type TimeT = i32;
   #[cfg(not(all(target_arch = "aarch64", target_pointer_width = "32")))]
   pub type TimeT = i64;
-
 
   #[repr(C)]
   pub struct Tm {
@@ -73,16 +71,16 @@ mod c_time {
     #[cfg_attr(gnu_time_bits64, link_name = "__gmtime64_r")]
     pub fn gmtime_r(time_p: *const TimeT, result: *mut Tm) -> *mut Tm;
   }
-  pub unsafe fn localtime_s(result: *mut Tm, time_p: *const TimeT){
+  pub unsafe fn localtime_s(result: *mut Tm, time_p: *const TimeT) {
     localtime_r(time_p, result);
   }
-  pub unsafe fn gmtime_s(result: *mut Tm, time_p: *const TimeT){
+  pub unsafe fn gmtime_s(result: *mut Tm, time_p: *const TimeT) {
     gmtime_r(time_p, result);
   }
 }
 
 mod native_time {
-  use super::c_time::{TimeT, Tm, time, localtime_s, gmtime_s};
+  use super::c_time::{gmtime_s, localtime_s, time, TimeT, Tm};
 
   const SECONDS_IN_DAY: i32 = 86400;
 
@@ -139,7 +137,7 @@ pub fn lib_value() -> Value {
     ZONE,
     Value::Object(
       {
-        let offset = unsafe {native_time::get_utc_offset_secs()};
+        let offset = unsafe { native_time::get_utc_offset_secs() };
 
         // Convertir a horas y minutos
         let hours = offset / 3600;
