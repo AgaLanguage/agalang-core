@@ -102,6 +102,11 @@ pub enum Value {
   #[default]
   Never,
 }
+impl Default for &Value {
+  fn default() -> Self {
+    &Value::Never
+  }
+}
 impl Value {
   pub fn get_type(&self) -> &str {
     match self {
@@ -137,7 +142,7 @@ impl Value {
   pub fn is_nullish(&self) -> bool {
     match self {
       Self::Never | Self::Null => true,
-      Self::Ref(RefValue(r)) | Self::Iterator(r) => r.read().is_number(),
+      Self::Ref(RefValue(r)) | Self::Iterator(r) => r.read().is_nullish(),
       _ => false,
     }
   }
@@ -180,14 +185,14 @@ impl Value {
     match self {
       Self::Promise(promise) => promise.clone(),
       Self::Ref(RefValue(r)) => r.read().as_promise(),
-      Self::Lazy(lazy) => lazy.get().clone().unwrap_or_default().as_promise(),
+      Self::Lazy(lazy) => lazy.get().as_ref().unwrap_or_default().as_promise(),
       v => v.clone().into(),
     }
   }
 
-  pub fn as_number(&self) -> Result<Number, String> {
+  pub fn as_number(&self) -> Result<&Number, String> {
     match self {
-      Self::Number(x) => x.clone_ok(),
+      Self::Number(x) => Ok(x),
       val => Err(format!(
         "Se esperaba un '{NUMBER_TYPE}' pero se recibio un {}",
         val.get_type()
@@ -198,7 +203,7 @@ impl Value {
     match self {
       Self::True => Ok(true),
       Self::Null | Self::Never | Self::False => Ok(false),
-      Self::Lazy(l) => l.get().clone().unwrap_or_default().as_boolean(),
+      Self::Lazy(l) => l.get().as_ref().unwrap_or_default().as_boolean(),
       val => Err(format!(
         "Se esperaba un '{BOOLEAN_TYPE}' pero se recibio un {}",
         val.get_type()

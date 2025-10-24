@@ -1068,7 +1068,7 @@ impl Thread {
         if !value.is_number() {
           Err(format!("No se pudo operar '-{}'", value.get_type()))?
         }
-        Value::Number(-value.as_number()?)
+        Value::Number(-value.as_number()?.clone())
       }
       OpCode::Not => {
         let value = self.pop().as_boolean()?;

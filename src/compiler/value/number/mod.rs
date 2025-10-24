@@ -16,7 +16,7 @@ mod float;
 pub use float::BigUDecimal as BigUFloat;
 
 mod real;
-use real::RealNumber;
+pub use real::RealNumber;
 
 const NAN_NAME: &str = "NeN";
 const INFINITY_NAME: &str = "infinito";
@@ -113,7 +113,7 @@ impl Number {
       Self::Complex(x, y) => x.is_zero() && y.is_zero(),
     }
   }
-  pub fn pow(&self, exp: Self) -> Self {
+  pub fn pow(&self, exp: &Self) -> Self {
     // TODO: implementar correctamente las potencias. Esta implementacion es muy basica.
     match (self, exp) {
       (Self::NaN, _) | (_, Self::NaN) => Self::NaN,
@@ -154,7 +154,7 @@ impl Number {
         if let RealNumber::Int(y_neg, y) = y {
           let mut result = RealNumber::Int(false, BigUInt::from(1u8));
           let mut base = x.clone();
-          let mut exponent = y;
+          let mut exponent = y.clone();
           while !exponent.is_zero() {
             if exponent.unit() & 1 == 1 {
               result = &result * &base;
@@ -162,7 +162,7 @@ impl Number {
             base = &base * &base;
             exponent /= &BigUInt::from(2u8);
           }
-          if y_neg {
+          if *y_neg {
             return Self::Real(RealNumber::Float(false, BigUFloat::default()));
           }
           return Self::Real(result);
@@ -361,8 +361,7 @@ impl std::fmt::Debug for Number {
 impl std::str::FromStr for Number {
   type Err = NumberError;
   fn from_str(s: &str) -> Result<Self, Self::Err> {
-    use traits::FromStrRadix;
-    Self::from_str_radix(s, 10)
+    Ok(Self::Real(RealNumber::from_str(s)?))
   }
 }
 impl FromStrRadix for Number {

@@ -377,8 +377,18 @@ impl Ord for RealNumber {
 impl std::str::FromStr for RealNumber {
   type Err = super::NumberError;
   fn from_str(s: &str) -> Result<Self, Self::Err> {
-    use super::traits::FromStrRadix;
-    Self::from_str_radix(s, 10)
+    let s = s.trim();
+    if s.is_empty() {
+      return Err(super::NumberError::Empty);
+    }
+    let (is_negative, value) = if s.starts_with("-") {
+      (true, s.trim_start_matches("-"))
+    } else if s.starts_with("+") {
+      (false, s.trim_start_matches("+"))
+    } else {
+      (false, s)
+    };
+    Ok(RealNumber::Float(is_negative, value.parse()?).into_normalize())
   }
 }
 impl super::traits::FromStrRadix for RealNumber {
