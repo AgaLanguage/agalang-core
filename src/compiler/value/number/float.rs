@@ -108,9 +108,7 @@ impl BigUDecimal {
     Self { mantissa, exponent }
   }
   fn to_absolute(&self, exponent: u8) -> BigUInt {
-    let mut s = self.mantissa.to_string();
-    s.extend(std::iter::repeat_n('0', exponent as usize));
-    s.parse().unwrap()
+    &self.mantissa * &Self::pow10(exponent)
   }
 }
 
@@ -214,16 +212,14 @@ impl Mul for &BigUDecimal {
     // Malabares para el exponente
     let pre_exponent: u16 = self.exponent as u16 + rhs.exponent as u16;
     let (exponent, rest) = if pre_exponent > 255 {
-      (255u8, (pre_exponent - 255) as usize)
+      (255u8, (pre_exponent - 255) as u8)
     } else {
       (pre_exponent as u8, 0)
     };
 
     // Truncamos mantissa si hay exceso de decimales
     if rest > 0 {
-      let divisor_str = format!("1{}", "0".repeat(rest));
-      let divisor: BigUInt = divisor_str.parse().unwrap();
-      mantissa /= &divisor;
+      mantissa /= &BigUDecimal::pow10(rest);
     }
 
     BigUDecimal::new(mantissa, exponent)
@@ -239,16 +235,14 @@ impl Div for &BigUDecimal {
     // Malabares para el exponente
     let pre_exponent: u16 = 0xFF + self.exponent as u16 - rhs.exponent as u16;
     let (exponent, rest) = if pre_exponent > 255 {
-      (255u8, (pre_exponent - 255) as usize)
+      (255u8, (pre_exponent - 255) as u8)
     } else {
       (pre_exponent as u8, 0)
     };
 
     // Truncamos mantissa si hay exceso de decimales
     if rest > 0 {
-      let divisor_str = format!("1{}", "0".repeat(rest));
-      let divisor: BigUInt = divisor_str.parse().unwrap();
-      mantissa /= &divisor;
+      mantissa /= &BigUDecimal::pow10(rest);
     }
 
     BigUDecimal::new(mantissa, exponent)
@@ -348,7 +342,7 @@ mod tests {
   }
 
   fn int(n: u64) -> BigUInt {
-    n.to_string().parse().unwrap()
+    n.into()
   }
 
   fn hash_value<T: Hash>(v: &T) -> u64 {

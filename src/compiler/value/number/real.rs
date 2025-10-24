@@ -1,11 +1,11 @@
 use std::fmt::Display;
+use std::hash::Hash;
 use std::ops::{Add, Div, Mul, Neg, Rem, Sub};
 
 use super::binary::Big256 as BigUInt;
 use super::float::BigUDecimal as BigUFloat;
 
-#[allow(clippy::derived_hash_with_manual_eq)]
-#[derive(Clone, Eq, Debug, Hash)]
+#[derive(Clone, Eq, Debug)]
 pub enum RealNumber {
   Int(bool, BigUInt),
   Float(bool, BigUFloat),
@@ -121,6 +121,22 @@ impl PartialEq for RealNumber {
 impl Default for RealNumber {
   fn default() -> Self {
     RealNumber::Int(false, BigUInt::from(0u8))
+  }
+}
+impl Hash for RealNumber {
+  fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+    match self {
+      Self::Int(neg, val) => {
+        0u8.hash(state);
+        neg.hash(state);
+        val.hash(state);
+      }
+      Self::Float(neg, val) => {
+        1u8.hash(state);
+        neg.hash(state);
+        val.hash(state);
+      }
+    }
   }
 }
 
@@ -550,7 +566,6 @@ mod tests {
     let s = format!("{}", a);
     assert_eq!(s, "-42");
 
-    #[deny(clippy::approx_constant)]
     let f = RealNumber::Float(false, BigUFloat::from(std::f64::consts::PI));
     let s_f = format!("{}", f);
     assert_eq!(s_f, "3141592653589793E-15");

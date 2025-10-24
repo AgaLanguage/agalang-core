@@ -1,5 +1,6 @@
 use std::{
   fmt::Display,
+  hash::{Hash, Hasher},
   ops::{Add, Div, Mul, Neg, Rem, Sub},
 };
 
@@ -58,8 +59,7 @@ macro_rules! op_number_real_complex {
   };
 }
 
-#[allow(clippy::derived_hash_with_manual_eq)]
-#[derive(Clone, Eq, Default, Hash)]
+#[derive(Clone, Eq, Default)]
 pub enum Number {
   #[default]
   NaN,
@@ -223,8 +223,25 @@ impl PartialEq for Number {
     self.to_string() == other.to_string()
   }
 }
+impl Hash for Number {
+  fn hash<H: Hasher>(&self, state: &mut H) {
+    match self {
+      Number::NaN => 0u8.hash(state),
+      Number::Infinity => 1u8.hash(state),
+      Number::NegativeInfinity => 2u8.hash(state),
+      Number::Real(r) => {
+        3u8.hash(state);
+        r.hash(state);
+      }
+      Number::Complex(re, im) => {
+        4u8.hash(state);
+        re.hash(state);
+        im.hash(state);
+      }
+    }
+  }
+}
 
-// TODO: Validar operaciones. Tengo mis dudas.
 impl Add for &Number {
   type Output = Number;
   fn add(self, rhs: Self) -> Self::Output {
