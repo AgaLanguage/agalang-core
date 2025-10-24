@@ -38,6 +38,25 @@ impl std::fmt::Debug for NumberError {
     write!(f, "{data}")
   }
 }
+macro_rules! op_number_real_complex {
+  ($num:expr, $op:ident) => {
+    match $num {
+      Number::NaN => Number::NaN,
+      Number::Infinity => Number::Infinity,
+      Number::NegativeInfinity => Number::NegativeInfinity,
+      Number::Real(x) => Number::Real(x.$op()),
+      Number::Complex(x, y) => {
+        let x = x.$op();
+        let y = y.$op();
+        if y.is_zero() {
+          Number::Real(x)
+        } else {
+          Number::Complex(x, y)
+        }
+      }
+    }
+  };
+}
 
 #[allow(clippy::derived_hash_with_manual_eq)]
 #[derive(Clone, Eq, Default, Hash)]
@@ -50,69 +69,36 @@ pub enum Number {
   Complex(RealNumber, RealNumber),
 }
 impl Number {
-  pub fn ceil(&self) -> Self {
-    match self {
-      Self::NaN => Self::NaN,
-      Self::Infinity => Self::Infinity,
-      Self::NegativeInfinity => Self::NegativeInfinity,
-      Self::Real(x) => Self::Real(x.ceil()),
-      Self::Complex(x, y) => {
-        let x = x.ceil();
-        let y = y.ceil();
-        if y.is_zero() {
-          return Self::Real(x);
-        }
-        Self::Complex(x, y)
-      }
+  pub fn normalize(&mut self) {
+    if let Self::Real(real) = self {
+      real.normalize();
+      return;
     }
+    if let Self::Complex(real, imaginary) = self {
+      real.normalize();
+      if imaginary.is_zero() {
+        let new_real = std::mem::take(real);
+        *self = Self::Real(new_real);
+        return;
+      }
+      imaginary.normalize();
+    }
+  }
+  fn into_normalize(mut self) -> Self {
+    self.normalize();
+    self
+  }
+  pub fn ceil(&self) -> Self {
+    op_number_real_complex!(self, ceil)
   }
   pub fn floor(&self) -> Self {
-    match self {
-      Self::NaN => Self::NaN,
-      Self::Infinity => Self::Infinity,
-      Self::NegativeInfinity => Self::NegativeInfinity,
-      Self::Real(x) => Self::Real(x.floor()),
-      Self::Complex(x, y) => {
-        let x = x.floor();
-        let y = y.floor();
-        if y.is_zero() {
-          return Self::Real(x);
-        }
-        Self::Complex(x, y)
-      }
-    }
+    op_number_real_complex!(self, floor)
   }
   pub fn trunc(&self) -> Self {
-    match self {
-      Self::NaN => Self::NaN,
-      Self::Infinity => Self::Infinity,
-      Self::NegativeInfinity => Self::NegativeInfinity,
-      Self::Real(x) => Self::Real(x.trunc()),
-      Self::Complex(x, y) => {
-        let x = x.trunc();
-        let y = y.trunc();
-        if y.is_zero() {
-          return Self::Real(x);
-        }
-        Self::Complex(x, y)
-      }
-    }
+    op_number_real_complex!(self, trunc)
   }
   pub fn round(&self) -> Self {
-    match self {
-      Self::NaN => Self::NaN,
-      Self::Infinity => Self::Infinity,
-      Self::NegativeInfinity => Self::NegativeInfinity,
-      Self::Real(x) => Self::Real(x.round()),
-      Self::Complex(x, y) => {
-        let x = x.round();
-        let y = y.round();
-        if y.is_zero() {
-          return Self::Real(x);
-        }
-        Self::Complex(x, y)
-      }
-    }
+    op_number_real_complex!(self, round)
   }
   pub const fn is_nan(&self) -> bool {
     matches!(self, Self::NaN)
@@ -238,142 +224,79 @@ impl PartialEq for Number {
   }
 }
 
-impl Add for Number {
-  type Output = Self;
+// TODO: Validar operaciones. Tengo mis dudas.
+impl Add for &Number {
+  type Output = Number;
   fn add(self, rhs: Self) -> Self::Output {
     match (self, rhs) {
-      (Self::NaN, _) => Self::NaN,
-      (_, Self::NaN) => Self::NaN,
-      (Self::Infinity, _) => Self::Infinity,
-      (_, Self::Infinity) => Self::Infinity,
-      (Self::NegativeInfinity, _) => Self::NegativeInfinity,
-      (_, Self::NegativeInfinity) => Self::NegativeInfinity,
-      (Self::Real(x), Self::Real(y)) => Self::Real(&x + &y),
-      (Self::Complex(x, y), Self::Complex(a, b)) => Self::Complex(&x + &a, &y + &b),
-      (Self::Real(x), Self::Complex(a, b)) => {
-        if x.is_zero() {
-          return Self::Complex(a, b);
-        }
-        if a.is_zero() && b.is_zero() {
-          return Self::Real(x);
-        }
-        Self::Complex(&x + &a, b)
-      }
-      (Self::Complex(a, b), Self::Real(x)) => {
-        if x.is_zero() {
-          return Self::Complex(a, b);
-        }
-        if a.is_zero() && b.is_zero() {
-          return Self::Real(x);
-        }
-        Self::Complex(&a + &x, b)
-      }
+      (Number::NaN, _) => Number::NaN,
+      (_, Number::NaN) => Number::NaN,
+      (Number::Infinity, _) => Number::Infinity,
+      (_, Number::Infinity) => Number::Infinity,
+      (Number::NegativeInfinity, _) => Number::NegativeInfinity,
+      (_, Number::NegativeInfinity) => Number::NegativeInfinity,
+      (Number::Real(x), Number::Real(y)) => Number::Real(x + y),
+      (Number::Complex(x, y), Number::Complex(a, b)) => Number::Complex(x + a, y + b),
+      (Number::Real(x), Number::Complex(a, b)) => Number::Complex(x + a, b.clone()),
+      (Number::Complex(a, b), Number::Real(x)) => Number::Complex(a + x, b.clone()),
     }
+    .into_normalize()
   }
 }
-impl Sub for Number {
-  type Output = Self;
+impl Sub for &Number {
+  type Output = Number;
   fn sub(self, rhs: Self) -> Self::Output {
     match (self, rhs) {
-      (Self::NaN, _) => Self::NaN,
-      (_, Self::NaN) => Self::NaN,
-      (_, Self::Infinity) => Self::NegativeInfinity,
-      (Self::NegativeInfinity, _) => Self::NegativeInfinity,
-      (Self::Infinity, _) => Self::Infinity,
-      (_, Self::NegativeInfinity) => Self::Infinity,
-      (Self::Real(x), Self::Real(y)) => Self::Real(&x - &y),
-      (Self::Complex(x, y), Self::Complex(a, b)) => Self::Complex(&x - &a, &y - &b),
-      (Self::Real(x), Self::Complex(a, b)) => {
-        if x.is_zero() {
-          return Self::Complex(a, b);
-        }
-        if a.is_zero() && b.is_zero() {
-          return Self::Real(x);
-        }
-        Self::Complex(&x - &a, b)
-      }
-      (Self::Complex(a, b), Self::Real(x)) => {
-        if x.is_zero() {
-          return Self::Complex(a, b);
-        }
-        if a.is_zero() && b.is_zero() {
-          return Self::Real(x);
-        }
-        Self::Complex(&a - &x, b)
-      }
+      (Number::NaN, _) => Number::NaN,
+      (_, Number::NaN) => Number::NaN,
+      (_, Number::Infinity) => Number::NegativeInfinity,
+      (Number::NegativeInfinity, _) => Number::NegativeInfinity,
+      (Number::Infinity, _) => Number::Infinity,
+      (_, Number::NegativeInfinity) => Number::Infinity,
+      (Number::Real(x), Number::Real(y)) => Number::Real(x - y),
+      (Number::Complex(x, y), Number::Complex(a, b)) => Number::Complex(x - a, y - b),
+      (Number::Real(x), Number::Complex(a, b)) => Number::Complex(x - a, -b.clone()),
+      (Number::Complex(a, b), Number::Real(x)) => Number::Complex(a - x, b.clone()),
     }
+    .into_normalize()
   }
 }
-impl Mul for Number {
-  type Output = Self;
+impl Mul for &Number {
+  type Output = Number;
   fn mul(self, rhs: Self) -> Self::Output {
-    match (self, rhs) {
-      (Self::NaN, _) => Self::NaN,
-      (_, Self::NaN) => Self::NaN,
-      (Self::Infinity, _) => Self::Infinity,
-      (_, Self::Infinity) => Self::Infinity,
-      (Self::NegativeInfinity, _) => Self::NegativeInfinity,
-      (_, Self::NegativeInfinity) => Self::NegativeInfinity,
-      (Self::Real(x), Self::Real(y)) => Self::Real(&x * &y),
-      (Self::Complex(a, b), Self::Complex(c, d)) => {
-        Self::Complex(&(&a * &c) - &(&b * &d), &(&a * &d) + &(&c * &b))
-      }
-      (Self::Real(x), Self::Complex(a, b)) => {
-        if x.is_zero() {
-          return Self::Complex(a, b);
-        }
-        if a.is_zero() && b.is_zero() {
-          return Self::Real(x);
-        }
-        Self::Complex(&x * &a, &x * &b)
-      }
-      (Self::Complex(a, b), Self::Real(x)) => {
-        if x.is_zero() {
-          return Self::Complex(a, b);
-        }
-        if a.is_zero() && b.is_zero() {
-          return Self::Real(x);
-        }
-        Self::Complex(&a * &x, &b * &x)
-      }
-    }
+    let (a, b, c, d) = match (self, rhs) {
+      (Number::NaN, _) | (_, Number::NaN) => return Number::NaN,
+      (Number::Infinity, _) => return Number::Infinity,
+      (_, Number::Infinity) => return Number::Infinity,
+      (Number::NegativeInfinity, _) => return Number::NegativeInfinity,
+      (_, Number::NegativeInfinity) => return Number::NegativeInfinity,
+      (Number::Real(x), Number::Real(y)) => return Number::Real(x * y),
+      (Number::Complex(a, b), Number::Complex(c, d)) => (a, b, c, d),
+      (Number::Real(x), Number::Complex(a, b)) => (x, &Default::default(), a, b),
+      (Number::Complex(a, b), Number::Real(x)) => (a, b, x, &Default::default()),
+    };
+    Number::Complex(&(a * c) - &(b * d), &(a * d) + &(c * b)).into_normalize()
   }
 }
-impl Div for Number {
-  type Output = Self;
+impl Div for &Number {
+  type Output = Number;
   fn div(self, rhs: Self) -> Self::Output {
-    match (self, rhs) {
-      (Self::NaN, _) => Self::NaN,
-      (_, Self::NaN) => Self::NaN,
-      (Self::Infinity, _) => Self::Infinity,
-      (_, Self::Infinity) => Self::Real(RealNumber::Int(false, BigUInt::from(0u8))),
-      (Self::NegativeInfinity, _) => Self::NegativeInfinity,
-      (_, Self::NegativeInfinity) => Self::Real(RealNumber::Int(false, BigUInt::from(0u8))),
-      (Self::Real(x), Self::Real(y)) => Self::Real(&x / &y),
-      (Self::Complex(ref a, ref b), Self::Complex(ref c, ref d)) => {
-        let conj = &(&(c * c) + &(d * d));
+    let (a, b, c, d) = match (self, rhs) {
+      (Number::NaN, _) | (_, Number::NaN) => return Number::NaN,
+      (Number::Infinity, _) => return Number::Infinity,
+      (_, Number::Infinity) => return Number::Real(RealNumber::Int(false, BigUInt::from(0u8))),
+      (Number::NegativeInfinity, _) => return Number::NegativeInfinity,
+      (_, Number::NegativeInfinity) => {
+        return Number::Real(RealNumber::Int(false, BigUInt::from(0u8)))
+      }
+      (Number::Real(x), Number::Real(y)) => return Number::Real(x / y),
+      (Number::Complex(a, b), Number::Complex(c, d)) => (a, b, c, d),
+      (Number::Real(x), Number::Complex(a, b)) => (x, &Default::default(), a, b),
+      (Number::Complex(a, b), Number::Real(x)) => (a, b, x, &Default::default()),
+    };
+    let conj = &(&(c * c) + &(d * d));
 
-        Self::Complex(&(&(a * c) + &(b * d)) / conj, &(&(b * c) - &(a * d)) / conj)
-      }
-      (Self::Real(x), Self::Complex(a, b)) => {
-        if x.is_zero() {
-          return Self::Complex(a, b);
-        }
-        if a.is_zero() && b.is_zero() {
-          return Self::Real(x);
-        }
-        Self::Complex(&x / &a, b)
-      }
-      (Self::Complex(a, b), Self::Real(x)) => {
-        if x.is_zero() {
-          return Self::Complex(a, b);
-        }
-        if a.is_zero() && b.is_zero() {
-          return Self::Real(x);
-        }
-        Self::Complex(&a / &x, b)
-      }
-    }
+    Number::Complex(&(&(a * c) + &(b * d)) / conj, &(&(b * c) - &(a * d)) / conj).into_normalize()
   }
 }
 impl Neg for Number {
@@ -388,12 +311,12 @@ impl Neg for Number {
     }
   }
 }
-impl Rem for Number {
+impl Rem for &Number {
   type Output = Number;
   fn rem(self, rhs: Self) -> Self::Output {
-    let div = (self.clone() / rhs.clone()).trunc();
-    let mul = rhs * div;
-    self - mul
+    let div = (self / rhs).trunc();
+    let mul = rhs * &div;
+    self - &mul
   }
 }
 impl PartialOrd for Number {

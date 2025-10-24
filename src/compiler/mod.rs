@@ -7,7 +7,7 @@ pub use chunk::{ChunkGroup, OpCode};
 pub use value::*;
 
 use crate::agal_parser::{Node, NodeFunction};
-use crate::compiler::traits::{AsNumber as _, FromStrRadix as _};
+use crate::compiler::traits::AsNumber as _;
 use crate::{Decode, StructTag};
 
 const OBJECT_MEMBER: u8 = 0b0;

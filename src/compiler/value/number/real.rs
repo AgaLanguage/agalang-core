@@ -118,6 +118,11 @@ impl PartialEq for RealNumber {
     self.cmp(other) == std::cmp::Ordering::Equal
   }
 }
+impl Default for RealNumber {
+  fn default() -> Self {
+    RealNumber::Int(false, BigUInt::from(0u8))
+  }
+}
 
 impl Add for &RealNumber {
   type Output = RealNumber;
