@@ -6,7 +6,7 @@ use std::{
 
 /// Representa un número en base 256.
 /// Cada elemento del Vec es un "dígito" en base 256.
-/// Formato little-indian (mas facil de manejar)
+/// Formato little-endian (mas facil de manejar)
 #[derive(Clone, Debug)]
 pub struct Big256 {
   digits: Vec<u8>,
@@ -29,9 +29,6 @@ impl Big256 {
       self.digits.pop();
     }
   }
-  pub fn last(&self) -> &u8 {
-    self.digits.first().unwrap_or(&0)
-  }
   fn shl1(&mut self) {
     let mut carry = 0;
     for byte in self.digits.iter_mut() {
@@ -43,7 +40,7 @@ impl Big256 {
       self.digits.push(carry);
     }
   }
-  /// Retorna 10^n como BigUInt O(log n)
+  /// Retorna 10^n como BigUInt
   pub fn pow10(n: u8) -> Self {
     let mut result = Self::from(1u8);
     let mut base = Self::from(10u8);
@@ -147,70 +144,98 @@ impl Sub for &Big256 {
   type Output = Big256;
 
   fn sub(self, other: Self) -> Self::Output {
+    let a32 = bytes_to_u32_vec(&self.digits);
+    let b32 = bytes_to_u32_vec(&other.digits);
     let mut res = Vec::new();
-    let mut borrow = 0i16;
-    for i in 0..self.digits.len() {
-      let a = self.digits[i] as i16;
-      let b = *other.digits.get(i).unwrap_or(&0) as i16;
-      let mut diff = a - b - borrow;
+    let mut borrow = 0u64;
+    for i in 0..a32.len().max(b32.len()) {
+      let a = *a32.get(i).unwrap_or(&0) as i64;
+      let b = *b32.get(i).unwrap_or(&0) as i64;
+      let mut diff = a - b - (borrow as i64);
       if diff < 0 {
-        diff += 256;
+        diff += (1u64 << 32) as i64; // pedimos prestado del siguiente bloque
         borrow = 1;
       } else {
         borrow = 0;
       }
-      res.push(diff as u8);
+      res.push(diff as u32);
     }
-    Big256::new(res)
+
+    // Reconstruye el vector de bytes desde los u32
+    let mut res_bytes = Vec::new();
+    for block in res {
+      res_bytes.extend_from_slice(&block.to_le_bytes());
+    }
+
+    Big256::new(res_bytes)
   }
 }
 impl Add for &Big256 {
   type Output = Big256;
   fn add(self, other: Self) -> Self::Output {
-    let mut res = Vec::new();
-    let mut carry = 0u16;
-    let n = self.digits.len().max(other.digits.len());
-    for i in 0..n {
-      let a = *self.digits.get(i).unwrap_or(&0) as u16;
-      let b = *other.digits.get(i).unwrap_or(&0) as u16;
+    // Convierte los bytes en bloques de u32
+    let a32 = bytes_to_u32_vec(&self.digits);
+    let b32 = bytes_to_u32_vec(&other.digits);
+    let mut res_blocks = Vec::new();
+    let mut carry = 0u64;
+    for i in 0..a32.len().max(b32.len()) {
+      let a = *a32.get(i).unwrap_or(&0) as u64;
+      let b = *b32.get(i).unwrap_or(&0) as u64;
       let sum = a + b + carry;
-      res.push((sum & 0xFF) as u8);
-      carry = sum >> 8;
+      res_blocks.push((sum & 0xFFFF_FFFF) as u32); // 32 bits
+      carry = sum >> 32;
     }
     if carry > 0 {
-      res.push(carry as u8);
+      res_blocks.push(carry as u32);
     }
-    Big256::new(res)
+
+    // Reconstruye el vector de bytes desde los u32
+    let mut res_bytes = Vec::new();
+    for block in res_blocks {
+      res_bytes.extend_from_slice(&block.to_le_bytes());
+    }
+
+    Big256::new(res_bytes)
   }
 }
 impl Mul for &Big256 {
   type Output = Big256;
 
   fn mul(self, rhs: Self) -> Self::Output {
-    let mut res = vec![0u16; self.digits.len() + rhs.digits.len()];
+    let a32 = bytes_to_u32_vec(&self.digits);
+    let b32 = bytes_to_u32_vec(&rhs.digits);
 
-    // Multiplicación base 256
-    for (i, &a) in self.digits.iter().enumerate() {
-      let mut carry = 0u16;
-      for (j, &b) in rhs.digits.iter().enumerate() {
+    let mut res = vec![0u32; a32.len() + b32.len()];
+
+    for (i, &a) in a32.iter().enumerate() {
+      let mut carry = 0u32;
+      for (j, &b) in b32.iter().enumerate() {
         let idx = i + j;
-        let prod = a as u16 * b as u16 + res[idx] + carry;
-        res[idx] = prod & 0xFF;
-        carry = prod >> 8;
+        let prod = res[idx] as u64 + a as u64 * b as u64 + carry as u64;
+        res[idx] = (prod & 0xFFFF_FFFF) as u32;
+        carry = (prod >> 32) as u32;
       }
       if carry > 0 {
-        res[i + rhs.digits.len()] += carry;
+        res[i + b32.len()] += carry;
       }
     }
 
-    let digits = res.into_iter().map(|v| v as u8).collect::<Vec<_>>();
-    Big256::new(digits)
+    // convertir a bytes y recortar ceros sobrantes
+    let mut out = Vec::new();
+    for n in res {
+      out.extend_from_slice(&n.to_le_bytes());
+    }
+
+    // recortamos al tamaño mínimo requerido para no perder dígitos
+    let digits_len = self.digits.len() + rhs.digits.len();
+    Big256::new(out.into_iter().take(digits_len).collect())
   }
 }
 impl Div for &Big256 {
   type Output = Big256;
 
   fn div(self, rhs: Self) -> Self::Output {
+    // Esta realmente resta, y eso ya esta optimzado en u32
     // división entre cero no permitida
     if rhs.digits.iter().all(|&d| d == 0) {
       panic!("Division by zero");
@@ -362,6 +387,33 @@ where
   }
 }
 
+fn bytes_to_u32_vec(data: &[u8]) -> Vec<u32> {
+  let slice_len = data.len() - (data.len() % 4);
+  // Solo por seguridad no quiero romper algo
+  let slice = if slice_len == 0 {
+    &[]
+  } else {
+    unsafe {
+      let slice = &data[0..slice_len];
+      // Como se queja clippy con sus "buenas practicas"
+      &*core::ptr::slice_from_raw_parts(slice as *const [u8] as *const [u8; 4], slice_len / 4)
+    }
+  };
+  let remainder = &data[slice_len..];
+
+  let mut vec_of_chunks: Vec<[u8; 4]> = slice.to_vec();
+
+  // Copia los bytes sobrantes al último chunk
+  if !remainder.is_empty() {
+    let mut last = [0; 4];
+    last[..remainder.len()].copy_from_slice(remainder);
+    vec_of_chunks.push(last);
+  }
+
+  // Convertimos los chunks en u32
+  vec_of_chunks.into_iter().map(u32::from_le_bytes).collect()
+}
+
 #[cfg(test)]
 mod tests {
 
@@ -459,10 +511,18 @@ mod tests {
 
   #[test]
   fn test_mul_large() {
-    let a = &from_u64(1234);
-    let b = &from_u64(5678);
+    let digits = 50;
+    let a = &Big256 {
+      digits: vec![1; digits],
+    };
+    let b = &from_u64(4);
     let r = a * b;
-    assert_eq!(to_u64(&r), 1234 * 5678);
+    assert_eq!(
+      r,
+      Big256 {
+        digits: vec![4; digits]
+      }
+    );
   }
 
   #[test]
