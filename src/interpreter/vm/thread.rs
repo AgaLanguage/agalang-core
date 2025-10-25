@@ -756,7 +756,7 @@ impl Thread {
           }
           let key = key.as_number()?;
           let index = match key {
-            Number::Basic(n) => n,
+            Number::Real(n) => n,
             Number::Complex(_, _) => {
               Err("El indice no puede ser un valor complejo (asignar propiedad)".to_string())?
             }
@@ -818,7 +818,7 @@ impl Thread {
           }
           let key = key.as_number()?;
           let index = match key {
-            Number::Basic(n) => n,
+            Number::Real(n) => n,
             Number::Complex(_, _) => {
               Err("El indice no puede ser un valor complejo (obtener propiedad)".to_string())?
             }
@@ -1068,7 +1068,7 @@ impl Thread {
         if !value.is_number() {
           Err(format!("No se pudo operar '-{}'", value.get_type()))?
         }
-        Value::Number(-value.as_number()?)
+        Value::Number(-value.as_number()?.clone())
       }
       OpCode::Not => {
         let value = self.pop().as_boolean()?;

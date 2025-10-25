@@ -217,7 +217,11 @@ impl Function {
         } else {
           name.to_string()
         },
-        location.file_name.to_string_lossy().to_string().set_color(Color::Cyan),
+        location
+          .file_name
+          .to_string_lossy()
+          .to_string()
+          .set_color(Color::Cyan),
         (location.start.line + 1)
           .to_string()
           .set_color(Color::Yellow),

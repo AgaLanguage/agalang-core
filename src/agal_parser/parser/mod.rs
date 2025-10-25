@@ -60,7 +60,10 @@ pub fn node_error(error: &ast::NodeError, source: &str) -> super::ErrorTypes {
     message.to_string(),
     format!(
       "{}{cyan_arrow} {}:{}:{}",
-      str_init, error.location.file_name.to_string_lossy().to_string(), line, column_node
+      str_init,
+      error.location.file_name.to_string_lossy(),
+      line,
+      column_node
     ),
     format!("{} {cyan_line}", str_init),
     format!("{} {cyan_line} {}", COLOR.apply(&str_line), data_line),

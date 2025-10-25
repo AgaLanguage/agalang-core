@@ -117,7 +117,8 @@ impl Encode for PathBuf {
       .encode()
       .on_error(|e| format!("No se pudo codificar la ruta: {e}"))
   }
-}impl Encode for Box<Path> {
+}
+impl Encode for Box<Path> {
   fn encode(&self) -> Result<Vec<u8>, String> {
     self
       .to_string_lossy()

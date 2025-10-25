@@ -54,7 +54,10 @@ fn token_error(token: &util::Token<TokenType>, source: &str) -> ErrorTypes {
     token.value.to_string(),
     format!(
       "{}{cyan_arrow} {}:{}:{}",
-      str_init, token.location.file_name.display(), line, column
+      str_init,
+      token.location.file_name.display(),
+      line,
+      column
     ),
     format!("{} {cyan_line}", str_init),
     format!("{} {cyan_line} {}", COLOR.apply(&str_line), data_line),
