@@ -388,18 +388,9 @@ where
 }
 
 fn bytes_to_u32_vec(data: &[u8]) -> Vec<u32> {
-  let slice_len = data.len() - (data.len() % 4);
-  // Solo por seguridad no quiero romper algo
-  let slice = if slice_len == 0 {
-    &[]
-  } else {
-    unsafe {
-      let slice = &data[0..slice_len];
-      // Como se queja clippy con sus "buenas practicas"
-      &*core::ptr::slice_from_raw_parts(slice as *const [u8] as *const [u8; 4], slice_len / 4)
-    }
-  };
-  let remainder = &data[slice_len..];
+  // 5099645a8fdd91ca10be690a60ddd13e01d75cbb
+  // Esto reemplaza mi magia del otro commit :/
+  let (slice, remainder) = data.as_chunks::<4>();
 
   let mut vec_of_chunks: Vec<[u8; 4]> = slice.to_vec();
 
