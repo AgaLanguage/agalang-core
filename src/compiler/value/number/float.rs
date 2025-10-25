@@ -30,18 +30,6 @@ impl BigUDecimal {
   pub fn is_zero(&self) -> bool {
     self.mantissa.is_zero()
   }
-  /// Retorna 10^n como BigUInt (optimización para evitar strings)
-  fn pow10(n: u8) -> BigUInt {
-    if n == 0 {
-      return 1u8.into();
-    }
-    let mut result = BigUInt::from(1u8);
-    let ten = BigUInt::from(10u8);
-    for _ in 0..n {
-      result *= &ten;
-    }
-    result
-  }
   /// Compara la parte decimal de `self` con X.5
   pub fn cmp_decimals_half(&self) -> Ordering {
     // Se normaliza en la creacion
@@ -50,7 +38,7 @@ impl BigUDecimal {
     }
 
     // parte fraccionaria = mantissa % 10^exponent
-    let pow10 = Self::pow10(self.exponent);
+    let pow10 = BigUInt::pow10(self.exponent);
     let frac_part = &self.mantissa % &pow10;
 
     // mitad = 5 * 10^(exponent - 1)
@@ -60,7 +48,7 @@ impl BigUDecimal {
     let half = if self.exponent == 1 {
       BigUInt::from(5u8)
     } else {
-      &BigUInt::from(5u8) * &Self::pow10(self.exponent - 1)
+      &BigUInt::from(5u8) * &BigUInt::pow10(self.exponent - 1)
     };
 
     frac_part.cmp(&half)
@@ -108,7 +96,7 @@ impl BigUDecimal {
     Self { mantissa, exponent }
   }
   fn to_absolute(&self, exponent: u8) -> BigUInt {
-    &self.mantissa * &Self::pow10(exponent)
+    &self.mantissa * &BigUInt::pow10(exponent)
   }
 }
 
@@ -219,7 +207,7 @@ impl Mul for &BigUDecimal {
 
     // Truncamos mantissa si hay exceso de decimales
     if rest > 0 {
-      mantissa /= &BigUDecimal::pow10(rest);
+      mantissa /= &BigUInt::pow10(rest);
     }
 
     BigUDecimal::new(mantissa, exponent)
@@ -242,7 +230,7 @@ impl Div for &BigUDecimal {
 
     // Truncamos mantissa si hay exceso de decimales
     if rest > 0 {
-      mantissa /= &BigUDecimal::pow10(rest);
+      mantissa /= &BigUInt::pow10(rest);
     }
 
     BigUDecimal::new(mantissa, exponent)

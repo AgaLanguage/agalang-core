@@ -43,6 +43,23 @@ impl Big256 {
       self.digits.push(carry);
     }
   }
+  /// Retorna 10^n como BigUInt O(log n)
+  pub fn pow10(n: u8) -> Self {
+    let mut result = Self::from(1u8);
+    let mut base = Self::from(10u8);
+    let mut exp = n;
+
+    while exp > 0 {
+      if exp % 2 == 1 {
+        result *= &base;
+      }
+
+      base = &base * &base;
+      exp /= 2;
+    }
+
+    result
+  }
 }
 impl fmt::Display for Big256 {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
