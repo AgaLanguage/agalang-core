@@ -5,7 +5,10 @@ use std::{
 };
 
 use crate::{
-  compiler::value::number::traits::{AsNumber as _, FromStrRadix},
+  compiler::{
+    traits::{BaseConstants as _, Trigonometry as _},
+    value::number::traits::{AsNumber as _, FromStrRadix},
+  },
   util::{OnError, OnSome},
   StructTag,
 };
@@ -18,6 +21,7 @@ pub use float::BigUDecimal as BigUFloat;
 
 mod real;
 pub use real::RealNumber;
+use traits::Constants;
 
 const NAN_NAME: &str = "NeN";
 const INFINITY_NAME: &str = "infinito";
@@ -69,6 +73,18 @@ pub enum Number {
   Complex(RealNumber, RealNumber),
 }
 impl Number {
+  pub fn abs(&self) -> Self {
+    match self {
+      Self::NaN => Self::NaN,
+      Self::Infinity | Self::NegativeInfinity => Self::Infinity,
+      Self::Real(real) => Self::Real(real.abs()),
+      Self::Complex(real, imag) => {
+        let r2 = real * real;
+        let i2 = imag * imag;
+        Self::Real(r2.hypot(&i2))
+      }
+    }
+  }
   pub fn normalize(&mut self) {
     if let Self::Real(real) = self {
       real.normalize();
@@ -113,63 +129,18 @@ impl Number {
       Self::Complex(x, y) => x.is_zero() && y.is_zero(),
     }
   }
-  pub fn pow(&self, exp: &Self) -> Self {
-    // TODO: implementar correctamente las potencias. Esta implementacion es muy basica.
-    match (self, exp) {
-      (Self::NaN, _) | (_, Self::NaN) => Self::NaN,
-      (Self::Infinity, Self::Real(e)) | (Self::NegativeInfinity, Self::Real(e)) => {
-        if e.is_negative() || e.is_zero() {
-          return Self::Real(RealNumber::Int(false, BigUInt::from(0u8)));
-        }
-        if e.is_int() {
-          if let RealNumber::Int(_, e) = e {
-            if e.unit() % 2 == 0 {
-              return Self::Infinity;
-            } else if matches!(self, Self::NegativeInfinity) {
-              return Self::NegativeInfinity;
-            } else {
-              return Self::Infinity;
-            }
-          }
-        }
-        Self::Infinity
-      }
-      (Self::Infinity, _) | (Self::NegativeInfinity, _) => Self::NaN,
-      (Self::Real(x), Self::Real(y)) => {
-        if x.is_zero() && y.is_negative() {
-          return Self::Infinity;
-        }
-        if x.is_zero() && y.is_zero() {
-          return Self::NaN;
-        }
-        if x.is_zero() {
-          return Self::Real(RealNumber::Int(false, BigUInt::from(0u8)));
-        }
-        if y.is_zero() {
-          return Self::Real(RealNumber::Int(false, BigUInt::from(1u8)));
-        }
-        if !y.is_int() {
-          todo!("No se ha implementado la potencia x^y cuando y no es entero")
-        }
-        if let RealNumber::Int(y_neg, y) = y {
-          let mut result = RealNumber::Int(false, BigUInt::from(1u8));
-          let mut base = x.clone();
-          let mut exponent = y.clone();
-          while !exponent.is_zero() {
-            if exponent.unit() & 1 == 1 {
-              result = &result * &base;
-            }
-            base = &base * &base;
-            exponent /= &BigUInt::from(2u8);
-          }
-          if *y_neg {
-            return Self::Real(RealNumber::Float(false, BigUFloat::default()));
-          }
-          return Self::Real(result);
-        }
-        Self::NaN
-      }
-      (_, _) => Self::NaN,
+  pub fn is_one(&self) -> bool {
+    match self {
+      Self::NaN | Self::Infinity | Self::NegativeInfinity => false,
+      Self::Real(x) => x.is_one(),
+      Self::Complex(x, y) => x.is_one() && y.is_zero(),
+    }
+  }
+  pub const fn is_negative(&self) -> bool {
+    match self {
+      Self::NaN | Self::Infinity => false,
+      Self::NegativeInfinity => true,
+      Self::Real(x) | Self::Complex(x, _) => x.is_negative(),
     }
   }
 }
@@ -316,6 +287,175 @@ impl Div for &Number {
     Number::Complex(&(&(a * c) + &(b * d)) / conj, &(&(b * c) - &(a * d)) / conj).into_normalize()
   }
 }
+impl traits::Pow for &Number {
+  type Output = Number;
+  fn pow(self, exp: Self) -> Self::Output {
+    use Number::*;
+    // TODO: implementar correctamente las potencias. Esta implementacion es muy basica.
+    match (self, exp) {
+      (NaN, _) | (_, NaN) => NaN,
+      (Infinity | NegativeInfinity, Infinity) => Infinity,
+      (Infinity | NegativeInfinity, NegativeInfinity) => Real(RealNumber::default()),
+      (Infinity | NegativeInfinity, n) => {
+        if n.is_zero() {
+          return Real(1u8.into());
+        }
+        if n < &Real(Default::default()) {
+          return Real(RealNumber::Int(false, BigUInt::from(0u8)));
+        }
+        Infinity
+      }
+      (n, Infinity | NegativeInfinity) => {
+        if n.is_zero() {
+          return if exp.is_negative() {
+            Real(0u8.into())
+          } else {
+            return Infinity;
+          };
+        }
+        if n < &Real(Default::default()) {
+          return Real(RealNumber::Int(false, BigUInt::from(0u8)));
+        }
+        let abs = n.abs();
+        let one = Real(1u8.into());
+        match abs.cmp(&one) {
+          std::cmp::Ordering::Equal => one,
+          std::cmp::Ordering::Greater => {
+            if exp.is_negative() {
+              Real(0u8.into())
+            } else {
+              Infinity
+            }
+          }
+          std::cmp::Ordering::Less => {
+            if exp.is_negative() {
+              Infinity
+            } else {
+              Real(0u8.into())
+            }
+          }
+        }
+      }
+      (a, b) if a.is_zero() && b.is_zero() => NaN,
+      (Real(a), Real(b)) => {
+        let (an, a, bn, b) = match (a, b) {
+          // ambos enteros
+          (a, RealNumber::Int(bn, bi)) => {
+            if a.is_zero() {
+              return Real(RealNumber::Int(false, BigUInt::default()));
+            }
+            if bi.is_zero() {
+              return Real(RealNumber::Int(false, BigUInt::from(1u8)));
+            }
+            let (neg, res) = match a {
+              RealNumber::Int(an, ai) => (an, BigUFloat::new(ai.pow(bi), 0u8)),
+              RealNumber::Float(an, af) => (an, af.pow(bi)),
+            };
+            let res = if *bn {
+              BigUFloat::from(1.0).div(&res)
+            } else {
+              res
+            };
+            return Real(RealNumber::Float(*neg && bi.is_odd(), res));
+          }
+          // cualquier combinación con floats
+          (RealNumber::Float(an, af), RealNumber::Float(bn, bf)) => (an, af, bn, bf),
+          (RealNumber::Int(an, ai), RealNumber::Float(bn, bf)) => {
+            (an, &BigUFloat::new(ai.clone(), 0), bn, bf)
+          }
+        };
+
+        let a_pow_b = RealNumber::Float(false, a.clone()).pow(&RealNumber::Float(false, b.clone()));
+        // Si base negativa y exponente no entero => resultado complejo
+        if *an && b.has_decimals() {
+          // (-x)^y = x^y * e^(iπy)
+          let pi_b = RealNumber::Float(false, BigUFloat::pi().mul(b));
+          let imag = pi_b.sin();
+          let real = pi_b.cos();
+          return Complex(a_pow_b.mul(&real), a_pow_b.mul(&imag));
+        }
+
+        let res = if *bn {
+          RealNumber::from(1u8).div(&a_pow_b)
+        } else {
+          a_pow_b
+        };
+        let real = if *an && b.is_odd() {
+          -res
+        }else {res};
+
+        Real(real)
+      }
+      (Real(a), Complex(br, bi)) => {
+        // a^(rb + i ib) = a^rb * e^(i * ib * ln(a))
+        if a.is_negative() {
+          // para base negativa, extendemos a forma polar compleja
+          let theta = &RealNumber::pi(); // arg(-x) = π
+          let ln_r = a.abs().ln();
+          let (re, im) = (
+            ln_r.mul(&br.add(&bi.mul(theta).neg())),
+            ln_r.mul(&bi.add(&br.mul(theta))),
+          );
+          Complex(re.exp(), im.exp())
+        } else {
+          let ln_r = a.ln();
+          let e_pow_re = ln_r.mul(br).exp();
+          let imag_part = bi.mul(&ln_r);
+          let cos_i = imag_part.cos();
+          let sin_i = imag_part.sin();
+          Complex(e_pow_re.mul(&cos_i), e_pow_re.mul(&sin_i))
+        }
+      }
+      (Complex(a, b), Real(r)) => {
+        // (a + bi)^r = e^{r ln(a+bi)}
+        let lnz = complex_ln(a, b);
+        let re = lnz.0.mul(r);
+        let im = lnz.1.mul(r);
+        complex_exp(&re, &im)
+        
+      }
+      (Complex(a, b), Complex(c, d)) => {
+        // (a + bi)^(c + di) = e^{(c + di) * ln(a + bi)}
+        let lnz = complex_ln(a, b);
+        let re = c.mul(&lnz.0).sub(&d.mul(&lnz.1));
+        let im = c.mul(&lnz.1).add(&d.mul(&lnz.0));
+        complex_exp(&re, &im)
+      }
+    }
+  }
+}
+impl Constants for Number {
+  type Base = BigUFloat;
+}
+impl From<BigUFloat> for Number {
+  fn from(value: BigUFloat) -> Self {
+    Self::Real(value.into())
+  }
+}
+
+impl Add<RealNumber> for &Number {
+  type Output = Number;
+  fn add(self, rhs: RealNumber) -> Self::Output {
+    self + &Number::Real(rhs)
+  }
+}
+
+// Funciones auxiliares
+fn complex_ln(a: &RealNumber, b: &RealNumber) -> (RealNumber, RealNumber) {
+  // ln(a + bi) = ln(|z|) + i*atan(b/a)
+  let r = a.hypot(b);
+  let theta = b.atan2(a);
+  (r.ln(), theta)
+}
+
+fn complex_exp(re: &RealNumber, im: &RealNumber) -> Number {
+  // e^(x + iy) = e^x (cos y + i sin y)
+  let ex = re.exp();
+  let cos_y = im.cos();
+  let sin_y = im.sin();
+  Number::Complex(ex.mul(&cos_y), ex.mul(&sin_y))
+}
+
 impl Neg for Number {
   type Output = Self;
   fn neg(self) -> Self::Output {

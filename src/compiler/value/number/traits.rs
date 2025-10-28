@@ -51,6 +51,49 @@ where
   }
 }
 
+pub trait Pow<Rhs = Self>
+where
+  Self: Sized,
+{
+  type Output;
+  fn pow(self, rhs: Rhs) -> Self::Output;
+  fn pow_safe(self, rhs: Rhs) -> Option<Self::Output> {
+    Some(self.pow(rhs))
+  }
+}
+pub trait BaseConstants {
+  fn pi() -> Self;
+  fn tau() -> Self;
+  fn euler() -> Self;
+  fn ln10() -> Self;
+  fn epsilon() -> Self;
+}
+pub trait Constants: Sized {
+  type Base: BaseConstants + Into<Self>;
+
+  fn pi() -> Self {
+    Self::Base::pi().into()
+  }
+  fn tau() -> Self {
+    Self::Base::tau().into()
+  }
+  fn euler() -> Self {
+    Self::Base::euler().into()
+  }
+  fn ln10() -> Self {
+    Self::Base::ln10().into()
+  }
+  fn epsilon() -> Self {
+    Self::Base::epsilon().into()
+  }
+}
+
+pub trait Trigonometry: Sized {
+  fn sin(&self) -> Self;
+  fn cos(&self) -> Self;
+  fn tan(&self) -> Self;
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;

@@ -13,6 +13,9 @@ pub struct Big256 {
 }
 
 impl Big256 {
+  pub fn len(&self) -> usize {
+    self.digits.len()
+  }
   pub fn new(digits: Vec<u8>) -> Self {
     let mut d = Self { digits };
     d.normalize();
@@ -23,6 +26,9 @@ impl Big256 {
   }
   pub fn is_zero(&self) -> bool {
     self.digits.iter().all(|&x| x == 0)
+  }
+  pub fn is_one(&self) -> bool {
+    self.digits.len() == 1 && self.digits[0] == 1
   }
   pub fn normalize(&mut self) {
     while self.digits.len() > 1 && *self.digits.last().unwrap() == 0 {
@@ -41,7 +47,7 @@ impl Big256 {
     }
   }
   /// Retorna 10^n como BigUInt
-  pub fn pow10(n: u8) -> Self {
+  pub fn from_pow10(n: u8) -> Self {
     let mut result = Self::from(1u8);
     let mut base = Self::from(10u8);
     let mut exp = n;
@@ -52,10 +58,24 @@ impl Big256 {
       }
 
       base = &base * &base;
-      exp /= 2;
+      exp >>= 1;
     }
 
     result
+  }
+  pub fn is_odd(&self) -> bool {
+    self.unit() & 1 == 1
+  }
+  pub fn div2_inplace(&mut self) {
+    let mut carry = 0;
+    for d in self.digits.iter_mut().rev() {
+      let new_carry = *d & 1;
+      *d = (*d >> 1) | (carry << 7);
+      carry = new_carry;
+    }
+    while self.digits.last() == Some(&0) {
+      self.digits.pop();
+    }
   }
 }
 impl fmt::Display for Big256 {
@@ -144,8 +164,13 @@ impl Sub for &Big256 {
   type Output = Big256;
 
   fn sub(self, other: Self) -> Self::Output {
-    let a32 = bytes_to_u32_vec(&self.digits);
-    let b32 = bytes_to_u32_vec(&other.digits);
+    let (a, b) = match self.cmp(other) {
+      Ordering::Equal => return Default::default(),
+      Ordering::Greater => (self, other),
+      Ordering::Less => (other, self)
+    };
+    let a32 = bytes_to_u32_vec(&a.digits);
+    let b32 = bytes_to_u32_vec(&b.digits);
     let mut res = Vec::new();
     let mut borrow = 0u64;
     for i in 0..a32.len().max(b32.len()) {
@@ -310,6 +335,34 @@ impl Rem for &Big256 {
     dividend
   }
 }
+impl super::traits::Pow for &Big256 {
+  type Output = Big256;
+  fn pow(self, rhs: Self) -> Self::Output {
+    assert!(!(self.is_zero() && rhs.is_zero()), "0^0 is undetermined");
+    // 0^1 = 0, etc.
+    if self.is_zero() {
+      return Default::default();
+    }
+    // 1^0 = 1, etc.
+    if rhs.is_zero() {
+      return Big256::from(1u8);
+    }
+
+    let mut result = Big256::from(1u8);
+    let mut b = self.clone();
+    let mut e = rhs.clone();
+
+    while !e.is_zero() {
+      if e.is_odd() {
+        result = &result * &b;
+      }
+      b = &b * &b;
+      e.div2_inplace();
+    }
+
+    result
+  }
+}
 
 impl SubAssign<&Big256> for Big256 {
   fn sub_assign(&mut self, rhs: &Self) {
@@ -386,6 +439,11 @@ where
     Self::new(value.to_digits())
   }
 }
+impl super::traits::ToDigits for &Big256 {
+  fn to_digits(self) -> Vec<u8> {
+    self.digits.clone()
+  }
+}
 
 fn bytes_to_u32_vec(data: &[u8]) -> Vec<u32> {
   // 5099645a8fdd91ca10be690a60ddd13e01d75cbb
@@ -408,6 +466,8 @@ fn bytes_to_u32_vec(data: &[u8]) -> Vec<u32> {
 #[cfg(test)]
 mod tests {
 
+  use crate::compiler::traits::Pow as _;
+
   use super::*;
   fn from_u64(mut n: u64) -> Big256 {
     let mut digits = Vec::new();
@@ -427,12 +487,6 @@ mod tests {
       n |= (d as u64) << (8 * i);
     }
     n
-  }
-
-  #[test]
-  fn test_unit() {
-    assert_eq!(*from_u64(1124).unit(), 100);
-    assert_eq!(*from_u64(43208).unit(), 200);
   }
 
   #[test]
@@ -558,5 +612,37 @@ mod tests {
   fn test_fromstr_leading_zeros() {
     let n: Big256 = "000123".parse().unwrap();
     assert_eq!(n.to_string(), "123");
+  }
+  #[test]
+  fn test_pow_basic() {
+    // 0^0 -> debe panic
+    let zero = Big256::from(0u8);
+    let one = Big256::from(1u8);
+    let result = std::panic::catch_unwind(|| zero.pow(&zero));
+    assert!(result.is_err(), "Expected panic");
+
+    // 0^1 = 0
+    assert_eq!((&zero).pow(&one), zero);
+
+    // 1^0 = 1
+    assert_eq!((&one).pow(&zero), one);
+
+    // 1^5 = 1
+    assert_eq!((&one).pow(&Big256::from(5u8)), one);
+
+    // 2^0 = 1
+    let two = Big256::from(2u8);
+    assert_eq!((&two).pow(&zero), one);
+
+    // 2^3 = 8
+    assert_eq!((&two).pow(&Big256::from(3u8)), Big256::from(8u8));
+
+    // 3^4 = 81
+    let three = Big256::from(3u8);
+    assert_eq!((&three).pow(&Big256::from(4u8)), Big256::from(81u8));
+
+    // 5^10 = 9765625
+    let five = Big256::from(5u8);
+    assert_eq!((&five).pow(&Big256::from(10u8)), Big256::from(9765625u64));
   }
 }

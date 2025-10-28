@@ -1,9 +1,11 @@
+use std::borrow::Cow;
 use std::fmt::Display;
 use std::hash::Hash;
 use std::ops::{Add, Div, Mul, Neg, Rem, Sub};
 
 use super::binary::Big256 as BigUInt;
 use super::float::BigUDecimal as BigUFloat;
+use super::traits::Constants as _;
 
 #[derive(Clone, Eq, Debug)]
 pub enum RealNumber {
@@ -11,6 +13,186 @@ pub enum RealNumber {
   Float(bool, BigUFloat),
 }
 impl RealNumber {
+  pub fn to_float<'a>(&'a self) -> Cow<'a, BigUFloat> {
+    match self {
+      Self::Float(_, float) => Cow::Borrowed(float),
+      Self::Int(_, int) => Cow::Owned(BigUFloat::from(int)),
+    }
+  }
+  pub fn atan2(&self, x: &Self) -> Self {
+    let zero = Self::default();
+    let pi = Self::pi();
+
+    if x.is_zero() {
+      if self.is_zero() {
+        panic!("atan2(0,0) is undefined");
+      }
+      let mut r = pi.div(&Self::from(2u8));
+      if self.is_negative() {
+        r = -r;
+      }
+      return r;
+    }
+
+    let mut atan_val = self.div(x).arctan(); // implementa arctan con series
+
+    if x.lt(&zero) {
+      if self.ge(&zero) {
+        atan_val = atan_val.add(&pi); // x<0, y>=0
+      } else {
+        atan_val = atan_val.sub(&pi); // x<0, y<0
+      }
+    }
+
+    atan_val
+  }
+  /// Arctan usando serie de Taylor
+  pub fn arctan(&self) -> Self {
+    let one = &Self::from(1u8);
+    let two = &Self::from(2u8);
+    let pi = &Self::pi();
+
+    // --- Caso negativo ---
+    if self.is_negative() {
+      return -self.clone().neg().arctan();
+    }
+
+    // --- Caso x > 1 ---
+    if self > one {
+      return &(pi / two) - &(one / self).arctan();
+    }
+
+    // --- Reducción de rango para x > 0.5 ---
+    let half = one / two;
+    let (y, offset) = if self > &half {
+      // Fórmula: atan(x) = π/4 + atan((x - 1) / (x + 1))
+      (&(self - one) / &(self + one), pi / &Self::from(4u8))
+    } else {
+      (self.clone(), Self::default())
+    };
+
+    // --- Serie de Taylor ---
+    let mut term = y.clone();
+    let mut result = y.clone();
+    let y2 = &y * &y;
+    let epsilon = Self::epsilon();
+
+    let mut n = Self::from(3u8);
+    loop {
+      term = &-term * &y2;
+      let delta = &term / &n;
+      result = &result + &delta;
+
+      if delta.abs() < epsilon {
+        break;
+      }
+
+      n = &n + two;
+    }
+
+    &result + &offset
+  }
+
+  /// Calcula e^x con alta precisión usando serie de Taylor
+  pub fn exp(&self) -> Self {
+    // Casos especiales
+    if self.is_zero() {
+      return Self::Int(false, BigUInt::from(1u8));
+    }
+
+    let one = Self::Int(false, BigUInt::from(1u8));
+    let eps = Self::epsilon(); // precisión objetivo
+
+    let mut term = one.clone(); // x^n / n!
+    let mut sum = one.clone(); // resultado acumulado
+    let mut n = 1u32;
+
+    loop {
+      // term *= x / n
+      term = term.mul(self).div(&Self::Int(false, BigUInt::from(n)));
+
+      // detener si el término es menor al umbral de precisión
+      if term.abs().lt(&eps) {
+        break;
+      }
+
+      sum = sum.add(&term);
+      n += 1;
+
+      // límite de seguridad (previene loops infinitos)
+      if n > 4096 {
+        eprintln!("Warning: exp() reached iteration limit");
+        break;
+      }
+    }
+
+    sum
+  }
+  /// Calcula el logaritmo natural (ln) del número real.
+  pub fn ln(&self) -> Self {
+    match self {
+      // ln(0) = -∞
+      n if n.is_zero() => panic!("ln(0) → -∞"),
+      // ln(1) = 0
+      n if n.is_one() => Self::default(),
+
+      // enteros positivos
+      Self::Int(false, n) => {
+        let val = BigUFloat::new(n.clone(), 0);
+        Self::Float(false, val).ln()
+      }
+
+      // flotantes positivos
+      Self::Float(false, val) => {
+        // Si x < 1, usa ln(x) = -ln(1/x)
+        if val.lt_one() {
+          let inv = &BigUFloat::from(1.0) / val;
+          return Self::Float(false, inv).ln().neg();
+        }
+
+        // Estimación inicial basada en la magnitud (10^exp ≈ x)
+        let mut y = &val.get_exponent().into() * &Self::ln10();
+
+        let val = Self::Float(false, val.clone());
+        let one = Self::Int(false, BigUInt::from(1u8));
+        let tol = Self::Float(false, BigUFloat::from(1e-80));
+
+        // Iteración Newton-Raphson: y_{n+1} = y - (e^y - x) / e^y
+        for _ in 0..128 {
+          let e_y = y.exp();
+          let delta = one.sub(&val.div(&e_y));
+          y = y.sub(&delta);
+
+          if delta.abs().lt(&tol) {
+            break;
+          }
+        }
+
+        y
+      }
+
+      // Negativos → resultado complejo (no implementado)
+      _ => panic!("ln(x) indefinido para x ≤ 0 (resultado complejo)"),
+    }
+  }
+  /// Calcula la hipotenusa (magnitud) √(a² + b²)
+  pub fn hypot(&self, other: &Self) -> Self {
+    Self::Float(false, {
+      let a: &BigUFloat = &self.to_float();
+      let b: &BigUFloat = &other.to_float();
+
+      let a2 = a * a;
+      let b2 = b * b;
+
+      a2.add(&b2).sqrt()
+    })
+  }
+  pub fn abs(&self) -> Self {
+    match self {
+      Self::Int(_, x) => Self::Int(false, x.clone()),
+      Self::Float(_, y_int) => Self::Float(false, y_int.clone()),
+    }
+  }
   pub fn normalize(&mut self) {
     if self.is_zero() {
       *self = Self::Int(false, BigUInt::from(0u8));
@@ -33,6 +215,12 @@ impl RealNumber {
     match self {
       Self::Int(_, x) => x.is_zero(),
       Self::Float(_, y_int) => y_int.is_zero(),
+    }
+  }
+  pub fn is_one(&self) -> bool {
+    match self {
+      Self::Int(neg, x) => !*neg && x.is_one(),
+      Self::Float(neg, y_int) => !*neg && y_int.is_one(),
     }
   }
   pub fn floor(&self) -> Self {
@@ -137,6 +325,15 @@ impl Hash for RealNumber {
         val.hash(state);
       }
     }
+  }
+}
+
+impl super::traits::Constants for RealNumber {
+  type Base = BigUFloat;
+}
+impl From<BigUFloat> for RealNumber {
+  fn from(value: BigUFloat) -> Self {
+    Self::Float(false, value)
   }
 }
 
@@ -283,21 +480,9 @@ impl Mul for &RealNumber {
 impl Div for &RealNumber {
   type Output = RealNumber;
   fn div(self, rhs: Self) -> Self::Output {
-    match (self, rhs) {
-      (RealNumber::Int(x_neg, x), RealNumber::Int(y_neg, y)) => {
-        RealNumber::Int(x_neg ^ y_neg, x / y)
-      }
-      (RealNumber::Float(x_neg, x), RealNumber::Float(y_neg, y)) => {
-        RealNumber::Float(x_neg ^ y_neg, x / y)
-      }
-      (RealNumber::Int(x_neg, x), RealNumber::Float(y_neg, y)) => {
-        RealNumber::Float(x_neg ^ y_neg, y / x)
-      }
-      (RealNumber::Float(x_neg, x), RealNumber::Int(y_neg, y)) => {
-        RealNumber::Float(x_neg ^ y_neg, x / y)
-      }
-    }
-    .into_normalize()
+    let neg = self.is_negative() ^ rhs.is_negative();
+    let val = self.to_float().as_ref() / rhs.to_float().as_ref();
+    RealNumber::Float(neg, val).into_normalize()
   }
 }
 impl Neg for RealNumber {
@@ -429,11 +614,274 @@ impl super::traits::FromStrRadix for RealNumber {
     ))
   }
 }
+impl super::traits::Trigonometry for RealNumber {
+  fn sin(&self) -> Self {
+    // Normalización del ángulo: reduce x dentro de [-π, π]
+    let pi = Self::pi();
+    let two_pi = Self::tau();
+    let mut x = self % &two_pi;
+    if x.gt(&pi) {
+      x = x.sub(&two_pi);
+    }
+
+    let mut term = x.clone(); // primer término: x
+    let mut result = term.clone();
+    let mut n = 1u64;
+
+    loop {
+      // term *= -x² / ((2n)*(2n+1))
+      let x2 = x.mul(&x);
+      let denom = Self::from((2 * n) * (2 * n + 1));
+      term = term.mul(&x2.neg()).div(&denom);
+      result = result.add(&term);
+
+      if term.abs().lt(&Self::epsilon()) {
+        break;
+      }
+
+      n += 1;
+    }
+
+    result
+  }
+
+  fn cos(&self) -> Self {
+    // Normalización del ángulo: reduce x dentro de [-π, π]
+    let pi = Self::pi();
+    let two_pi = Self::tau();
+    let mut x = self.clone().rem(&two_pi);
+    if x.gt(&pi) {
+      x = x.sub(&two_pi);
+    }
+
+    let mut term = Self::from(1u8);
+    let mut result = term.clone();
+    let mut n = 1u64;
+
+    loop {
+      // term *= -x² / ((2n-1)*(2n))
+      let x2 = x.mul(&x);
+      let denom = Self::from((2 * n - 1) * (2 * n));
+      term = term.mul(&x2.neg()).div(&denom);
+      result = result.add(&term);
+
+      if term.abs().lt(&Self::epsilon()) {
+        break;
+      }
+
+      n += 1;
+    }
+
+    result
+  }
+  fn tan(&self) -> Self {
+    &self.sin() / &self.cos()
+  }
+}
+impl super::traits::Pow for &RealNumber {
+  type Output = RealNumber;
+  fn pow(self, rhs: Self) -> Self::Output {
+    self.pow_safe(rhs).unwrap()
+  }
+  fn pow_safe(self, rhs: Self) -> Option<Self::Output> {
+    if self.is_zero() {
+      if rhs.is_zero() {
+        None?;
+      }
+      return Default::default();
+    }
+
+    // Caso especial: x^0 = 1
+    if rhs.is_zero() {
+      return Some(RealNumber::from(1u8));
+    }
+
+    // General: x^y = exp(y * ln(x))
+    let ln_x = self.ln();
+    let y_ln_x = rhs.mul(&ln_x);
+    Some(y_ln_x.exp())
+  }
+}
+impl<T> From<T> for RealNumber
+where
+  T: super::traits::ToDigits,
+{
+  fn from(value: T) -> Self {
+    Self::Int(false, value.into())
+  }
+}
+impl From<f64> for RealNumber {
+  fn from(value: f64) -> Self {
+    Self::Float(value.is_sign_negative(), value.abs().into())
+  }
+}
+impl From<i8> for RealNumber {
+  fn from(value: i8) -> Self {
+    RealNumber::Int(value.is_negative(), value.unsigned_abs().into())
+  }
+}
 
 #[cfg(test)]
 mod tests {
+  use crate::compiler::traits::{Pow as _, Trigonometry as _};
+
   use super::*;
 
+  // Comparación aproximada
+  fn approx_eq(a: &RealNumber, b: &RealNumber, tol: f64) -> bool {
+    let diff = (a.sub(b)).abs();
+    println!("{a}\n{b}\n");
+    diff < RealNumber::from(tol)
+  }
+
+  // --- ARCTAN ---
+
+  #[test]
+  fn test_arctan_basic_values() {
+    let zero = RealNumber::from(0.0);
+    let one = RealNumber::from(1.0);
+
+    let atan0 = zero.arctan();
+    let atan1 = one.arctan();
+
+    assert!(approx_eq(&atan0, &RealNumber::from(0.0), 1e-20));
+    // atan(1) = π/4
+    let pi = RealNumber::pi();
+    let pi_over_4 = pi.div(&RealNumber::from(4u8));
+    assert!(approx_eq(&atan1, &pi_over_4, 1e-15));
+  }
+
+  #[test]
+  fn test_arctan_negative_and_large() {
+    let neg_one = RealNumber::from(-1.0);
+    let atan_neg1 = neg_one.arctan();
+    let pi = RealNumber::pi();
+    let pi_over_4 = pi.div(&RealNumber::from(4u8));
+    assert!(approx_eq(&atan_neg1, &pi_over_4.neg(), 1e-255));
+
+    // atan(10) ≈ 1.4711276743 (≈ π/2 - atan(0.1))
+    let ten = RealNumber::from(10.0);
+    let atan10 = ten.arctan();
+    let expected = "1.471127674303734591852875571761730851855306377183238262471963519343880455695553844893404788236772162411515656847813754353978995238212134203072377631978956655893898827937824051553659510535022596710919843933276664239361549950957670584150625425647342719081338".parse().unwrap();
+    assert!(approx_eq(&atan10, &expected, 1e-253));
+  }
+
+  // --- ATAN2 ---
+
+  #[test]
+  fn test_atan2_quadrants() {
+    let zero = RealNumber::from(0.0);
+    let one = RealNumber::from(1.0);
+    let neg_one = RealNumber::from(-1.0);
+    let pi = RealNumber::pi();
+
+    // (y, x) = (1, 1) → π/4
+    let q1 = one.atan2(&one);
+    assert!(approx_eq(&q1, &pi.div(&RealNumber::from(4u8)), 1e-15));
+
+    // (1, -1) → 3π/4
+    let q2 = one.atan2(&neg_one);
+    assert!(approx_eq(
+      &q2,
+      &pi.mul(&RealNumber::from(3u8)).div(&RealNumber::from(4u8)),
+      1e-15
+    ));
+
+    // (-1, -1) → -3π/4
+    let q3 = neg_one.atan2(&neg_one);
+    assert!(approx_eq(
+      &q3,
+      &pi.mul(&RealNumber::from(-3i8)).div(&RealNumber::from(4u8)),
+      1e-15
+    ));
+
+    // (-1, 1) → -π/4
+    let q4 = neg_one.atan2(&one);
+    assert!(approx_eq(
+      &q4,
+      &pi.clone().neg().div(&RealNumber::from(4u8)),
+      1e-15
+    ));
+
+    // (1, 0) → π/2
+    let qy = one.atan2(&zero);
+    assert!(approx_eq(&qy, &pi.div(&RealNumber::from(2u8)), 1e-15));
+
+    // (-1, 0) → -π/2
+    let qn = neg_one.atan2(&zero);
+    assert!(approx_eq(&qn, &pi.neg().div(&RealNumber::from(2u8)), 1e-15));
+  }
+
+  #[test]
+  #[should_panic(expected = "atan2(0,0) is undefined")]
+  fn test_atan2_zero_zero_panics() {
+    let zero = RealNumber::from(0.0);
+    let _ = zero.atan2(&zero);
+  }
+
+  // --- HYPOT ---
+
+  #[test]
+  fn test_hypot_basic() {
+    let a = RealNumber::from(3.0);
+    let b = RealNumber::from(4.0);
+    let h = a.hypot(&b);
+    let expected = RealNumber::from(5.0);
+    assert!(approx_eq(&h, &expected, 1e-15));
+  }
+
+  // --- SIN / COS / TAN ---
+
+  #[test]
+  fn test_sin_cos_tan_relations() {
+    let pi = RealNumber::pi();
+
+    // sin(π/2) = 1
+    let sin_half_pi = pi.div(&RealNumber::from(2u8)).sin();
+    assert!(approx_eq(&sin_half_pi, &RealNumber::from(1.0), 1e-15));
+
+    // cos(π/2) = 0
+    let cos_half_pi = pi.div(&RealNumber::from(2u8)).cos();
+    assert!(approx_eq(&cos_half_pi, &RealNumber::from(0.0), 1e-12));
+
+    // tan(π/4) = 1
+    let tan_pi_4 = pi.div(&RealNumber::from(4u8)).tan();
+    assert!(approx_eq(&tan_pi_4, &RealNumber::from(1.0), 1e-12));
+
+    // sin²(x) + cos²(x) ≈ 1
+    let angle = RealNumber::from(1.0);
+    let s = angle.sin();
+    let c = angle.cos();
+    let identity = s.mul(&s).add(&c.mul(&c));
+    assert!(approx_eq(&identity, &RealNumber::from(1.0), 1e-12));
+  }
+
+  // --- EXP / LN / POW coherence ---
+
+  #[test]
+  fn test_exp_ln_inverse() {
+    let nums = [0.5, 1.0, 2.0, 10.0];
+    for &n in &nums {
+      let x = RealNumber::from(n);
+      let ln_x = x.ln();
+      let exp_ln_x = ln_x.exp();
+      assert!(approx_eq(&x, &exp_ln_x, 1e-12), "exp(ln({n})) != {n}");
+    }
+  }
+
+  #[test]
+  fn test_pow_functionality() {
+    let two = RealNumber::from(2.0);
+    let three = RealNumber::from(3.0);
+    let pow_val = (&two).pow(&three);
+    assert!(approx_eq(&pow_val, &RealNumber::from(8.0), 1e-15));
+
+    // raíz cuadrada como exponente fraccionario
+    let nine = RealNumber::from(9.0);
+    let half = RealNumber::from(0.5);
+    let sqrt9 = (&nine).pow(&half);
+    assert!(approx_eq(&sqrt9, &RealNumber::from(3.0), 1e-12));
+  }
   #[test]
   fn test_creation_int_float() {
     let int_val = RealNumber::Int(false, BigUInt::from(42u8));

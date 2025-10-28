@@ -1006,6 +1006,7 @@ impl Thread {
         }
         let a = a.as_number()?;
         let b = b.as_number()?;
+        use crate::compiler::traits::Pow as _;
         Value::Number(a.pow(b))
       }
       OpCode::Divide => {
